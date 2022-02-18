@@ -660,6 +660,36 @@ public abstract class Type {
     }
 
     /**
+     * For schema change, convert data type to string,
+     * get the size of string representation
+     */
+    public Integer getColumnStringRepSize() {
+        if (!isScalarType()) return null;
+        if (isScalarType(PrimitiveType.FLOAT)) {
+            return 24; // see be/src/gutil/strings/numbers.h
+        }
+        if (isScalarType(PrimitiveType.DOUBLE)) {
+            return 32; // see be/src/gutil/strings/numbers.h kDoubleToBufferSize
+        }
+        if (isNumericType()) {
+            Integer size = getPrecision() + 1; // +1 for minus symbol
+            if (isScalarType(PrimitiveType.DECIMALV2)) {
+                size += 1; // +1 for decimal point
+            }
+            return size;
+        }
+        ScalarType t = (ScalarType) this;
+        switch (t.getPrimitiveType()) {
+            case CHAR:
+            case VARCHAR:
+            case STRING:
+                return t.getLength();
+            default:
+                return null;
+        }
+    }
+
+    /**
      * JDBC data type description
      * For numeric types, returns the maximum precision for this type.
      * For non-numeric types, returns null.
@@ -676,6 +706,8 @@ public abstract class Type {
                 return 10;
             case BIGINT:
                 return 19;
+            case LARGEINT:
+                return 39;
             case FLOAT:
                 return 7;
             case DOUBLE:
