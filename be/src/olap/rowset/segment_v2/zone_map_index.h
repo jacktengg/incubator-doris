@@ -35,7 +35,9 @@ namespace doris {
 namespace fs {
 class WritableBlock;
 }
-
+namespace vectorized {
+    class IColumn;
+}
 namespace segment_v2 {
 
 struct ZoneMap {
@@ -79,6 +81,9 @@ public:
 
     void add_values(const void* values, size_t count);
 
+    // values are in engine format
+    void vadd_values(const vectorized::IColumn& column, size_t offset, size_t count);
+
     void add_nulls(uint32_t count) { _page_zone_map.has_null = true; }
 
     // mark the end of one data page so that we can finalize the corresponding zone map
@@ -102,6 +107,8 @@ private:
         zone_map->has_not_null = false;
         zone_map->pass_all = false;
     }
+
+    void _add_value(const void* val);
 
     Field* _field;
     // memory will be managed by MemPool

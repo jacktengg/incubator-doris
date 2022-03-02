@@ -27,6 +27,9 @@
 #include "runtime/mem_pool.h"
 #include "runtime/mem_tracker.h"
 
+#include "vec/columns/column_string.h"
+#include "vec/columns/column_vector.h"
+
 namespace doris {
 
 namespace segment_v2 {
@@ -54,6 +57,54 @@ void ZoneMapIndexWriter::add_values(const void* values, size_t count) {
             _field->type_info()->direct_copy_may_cut(_page_zone_map.max_value, vals);
         }
         vals += _field->size();
+    }
+}
+
+void ZoneMapIndexWriter::_add_value(const void* val) {
+    if (_field->compare(_page_zone_map.min_value, val) > 0) {
+        _field->type_info()->direct_copy_may_cut(_page_zone_map.min_value, val);
+    }
+    if (_field->compare(_page_zone_map.max_value, val) < 0) {
+        _field->type_info()->direct_copy_may_cut(_page_zone_map.max_value, val);
+    }
+}
+void ZoneMapIndexWriter::vadd_values(const vectorized::IColumn& column, size_t offset, size_t count) {
+    if (count > 0) {
+        _page_zone_map.has_not_null = true;
+    }
+    if (column.is_column_string()) {
+        // const vectorized::ColumnString& str_column =
+        //     assert_cast<const vectorized::ColumnString&>(column);
+        // offsets = column_string.get_offsets().data();
+        // chars = column_string.get_chars().data();
+
+    } else if (column.is_date) {
+        for (int i = 0; i < count; ++i) {
+            auto data_item = column.get_data_at(i);
+            vectorized::Date *vdate = (vectorized::Date*)(data_item.data);
+            TypeTraits<OLAP_FIELD_TYPE_DATE>::CppType date((uint32_t)(*vdate));
+            _add_value(&date);
+        }
+    } else if (column.is_date_time) {
+        for (int i = 0; i < count; ++i) {
+            auto data_item = column.get_data_at(i);
+            TypeTraits<OLAP_FIELD_TYPE_DATETIME>::CppType datetime(*data_item.data);
+            _add_value(&datetime);
+        }
+    } else if (column.is_column_decimal()) {
+        for (int i = 0; i < count; ++i) {
+            auto data_item = column.get_data_at(i);
+            DecimalV2Value *vdec = (DecimalV2Value*)(data_item.data);
+            TypeTraits<OLAP_FIELD_TYPE_DECIMAL>::CppType dec;
+            dec.integer = vdec->int_value();
+            dec.fraction = vdec->frac_value();
+            _add_value(&dec);
+        }
+    } else {
+        for (int i = 0; i < count; ++i) {
+            auto data_item = column.get_data_at(i);
+            _add_value(data_item.data);
+        }
     }
 }
 
