@@ -37,6 +37,7 @@
 #include "util/thrift_util.h"
 #include "util/uid_util.h"
 #include "vec/runtime/vdata_stream_mgr.h"
+#include "vec/core/block.h"
 
 namespace doris {
 
@@ -128,6 +129,11 @@ void PInternalServiceImpl<T>::tablet_writer_add_block(google::protobuf::RpcContr
             SCOPED_RAW_TIMER(&execution_time_ns);
             brpc::Controller* cntl = static_cast<brpc::Controller*>(cntl_base);
             attachment_transfer_request_block<PTabletWriterAddBlockRequest>(request, cntl);
+            if (request->has_block()) {
+                vectorized::Block block(request->block());
+                auto str = block.dump_data();
+                std::cout << str;
+            }
             auto st = _exec_env->load_channel_mgr()->add_block(*request, response);
             if (!st.ok()) {
                 LOG(WARNING) << "tablet writer add block failed, message=" << st.get_error_msg()

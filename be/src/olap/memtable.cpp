@@ -199,7 +199,7 @@ void MemTable::_aggregate_two_rowInBlock(RowInBlock new_row, RowInBlock row_in_s
                     ++cid) {
         auto dst_cell = row_in_skiplist.cell(&_input_mutable_block, cid);
         auto src_cell = new_row.cell(&_input_mutable_block, cid);
-        _schema->column(cid)->agg_update(&dst_cell, &src_cell, _table_mem_pool.get());
+        _schema->column(cid)->agg_update(&dst_cell, src_cell, _table_mem_pool.get());
     }
     
 }
@@ -213,6 +213,24 @@ vectorized::Block MemTable::collect_skiplist_results()
     return _output_mutable_block.to_block();
 }
 
+void dump(const vectorized::Block& block, int64_t tablet_id) {
+    std::ofstream out;
+    std::string file_name("/mnt/disk1/tjp/stream_load_test/dump.txt");
+    file_name += std::to_string(tablet_id);
+    out.open(file_name);
+    for (size_t row_num = 0; row_num < block.rows(); ++row_num) {
+        for (size_t i = 0; i < block.columns(); ++i) {
+            if (block.get_by_position(i).column) {
+                out << block.get_by_position(i).to_string(row_num);
+            }
+            if (i != block.columns() - 1) {
+                out << ", ";
+            }
+        }
+        out << "\n";
+    }
+    out.close();
+}
 OLAPStatus MemTable::_vflush(){
     VLOG_CRITICAL << "begin to flush memtable for tablet: " << _tablet_id
                   << ", memsize: " << memory_usage() << ", rows: " << _rows;
@@ -221,6 +239,7 @@ OLAPStatus MemTable::_vflush(){
     {
         SCOPED_RAW_TIMER(&duration_ns);
         vectorized::Block block = collect_skiplist_results();
+        dump(block, _tablet_id);
         OLAPStatus st = _rowset_writer->add_block(&block);
         RETURN_NOT_OK(st);
         _flush_size = block.allocated_bytes();
