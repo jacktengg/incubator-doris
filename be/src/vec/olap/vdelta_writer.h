@@ -30,7 +30,7 @@ public:
     static OLAPStatus open(WriteRequest* req, const std::shared_ptr<MemTracker>& parent,
                             VDeltaWriter** writer);
 
-    virtual OLAPStatus write_block(const vectorized::Block* block, const std::vector<int>& row_idxs) override;
+    virtual OLAPStatus write_block(std::shared_ptr<vectorized::MutableBlock> block, const std::vector<int>& row_idxs) override;
 
 protected:
     virtual void _reset_mem_table() override;

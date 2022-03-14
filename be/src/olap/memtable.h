@@ -54,6 +54,10 @@ public:
     void insert(const Tuple* tuple);
     //insert tuple from (row_pos) to (row_pos+num_rows)
     void insert(const vectorized::Block* block, size_t row_pos, size_t num_rows);
+
+    void insert(std::shared_ptr<vectorized::MutableBlock> block, size_t row_pos, size_t num_rows) {
+        // TODO
+    }
     
     /// Flush
     OLAPStatus flush();
