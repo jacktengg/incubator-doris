@@ -106,7 +106,7 @@ OLAPStatus Merger::vmerge_rowsets(TabletSharedPtr tablet, ReaderType reader_type
     reader_params.origin_return_columns = &reader_params.return_columns;
     RETURN_NOT_OK(reader.init(reader_params));
     
-    vectorized::Block block = schema.create_block(reader_params.return_columns);
+    vectorized::Block block = schema.create_block(reader_params.return_columns, nullptr);
     size_t output_rows = 0;
     while (true) {
         bool eof = false;

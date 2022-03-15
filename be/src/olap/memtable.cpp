@@ -97,7 +97,7 @@ void MemTable::insert(const vectorized::Block* block, size_t row_pos, size_t num
     size_t oldsize = block->allocated_bytes();
     _input_mutable_block.add_rows(block, row_pos, num_rows);
     size_t newsize = block->allocated_bytes();
-    _mem_tracker->Consume(newsize - oldsize);
+    _mem_tracker->consume(newsize - oldsize);
 
     for(int i = 0; i < num_rows; i++){       
         insert_one_row_from_block(RowInBlock(cursor_in_mutableblock + i));
@@ -239,9 +239,10 @@ OLAPStatus MemTable::_vflush(){
     {
         SCOPED_RAW_TIMER(&duration_ns);
         vectorized::Block block = collect_skiplist_results();
-        dump(block, _tablet_id);
+        // dump(block, _tablet_id);
         OLAPStatus st = _rowset_writer->add_block(&block);
         RETURN_NOT_OK(st);
+        RETURN_NOT_OK(_rowset_writer->flush());
         _flush_size = block.allocated_bytes();
     }
     DorisMetrics::instance()->memtable_flush_total->increment(1);

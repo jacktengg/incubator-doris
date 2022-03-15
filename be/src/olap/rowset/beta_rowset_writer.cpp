@@ -110,6 +110,7 @@ OLAPStatus BetaRowsetWriter::add_block(const vectorized::Block* block) {
                       segment_capacity_in_rows <= 0)) {
         // no space for another signle row, need flush now
         RETURN_NOT_OK(_flush_segment_writer(&_segment_writer));
+        RETURN_NOT_OK(_create_segment_writer(&_segment_writer));
         refresh_segment_capacity();
     }
 
@@ -135,6 +136,7 @@ OLAPStatus BetaRowsetWriter::add_block(const vectorized::Block* block) {
             if (segment_capacity_in_bytes < row_avg_size_in_bytes ||
                 segment_capacity_in_rows <= 0) {
                 RETURN_NOT_OK(_flush_segment_writer(&_segment_writer));
+                RETURN_NOT_OK(_create_segment_writer(&_segment_writer));
                 refresh_segment_capacity();
             }
             row_offset += input_row_num;

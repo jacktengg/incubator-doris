@@ -38,8 +38,8 @@ const uint32_t k_segment_magic_length = 4;
 
 SegmentWriter::SegmentWriter(fs::WritableBlock* wblock, uint32_t segment_id,
                              const TabletSchema* tablet_schema, const SegmentWriterOptions& opts, std::shared_ptr<MemTracker> parent)
-        : _segment_id(segment_id), _tablet_schema(tablet_schema), _opts(opts), _wblock(wblock), _mem_tracker(MemTracker::CreateTracker(
-                -1, "Segment-" + std::to_string(segment_id), parent, false)), _olap_data_convertor(tablet_schema) {
+        : _segment_id(segment_id), _tablet_schema(tablet_schema), _opts(opts), _wblock(wblock), _mem_tracker(MemTracker::create_tracker(
+                -1, "Segment-" + std::to_string(segment_id), parent)), _olap_data_convertor(tablet_schema) {
     CHECK_NOTNULL(_wblock);
     size_t num_short_key_column = _tablet_schema->num_short_key_columns();
     for (size_t cid = 0; cid < num_short_key_column; ++cid) {
