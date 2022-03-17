@@ -292,7 +292,7 @@ OLAPStatus DeltaWriter::close_wait(google::protobuf::RepeatedPtrField<PTabletInf
     // Cannot directly DCHECK_EQ(_mem_tracker->consumption(), 0);
     // In allocate/free of mem_pool, the consume_cache of _mem_tracker will be called,
     // and _untracked_mem must be flushed first.
-    MemTracker::memory_leak_check(_mem_tracker.get());
+    //MemTracker::memory_leak_check(_mem_tracker.get());
 
     // use rowset meta manager to save meta
     _cur_rowset = _rowset_writer->build();
