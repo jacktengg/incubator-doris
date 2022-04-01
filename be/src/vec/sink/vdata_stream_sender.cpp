@@ -524,6 +524,8 @@ Status VDataStreamSender::serialize_block(Block* src, PBlock* dest, int num_rece
         SCOPED_TIMER(_serialize_batch_timer);
         dest->Clear();
         size_t uncompressed_bytes = 0, compressed_bytes = 0;
+        src->materialize_columns();
+
         RETURN_IF_ERROR(src->serialize(dest, &uncompressed_bytes, &compressed_bytes, &_column_values_buffer));
         COUNTER_UPDATE(_bytes_sent_counter, compressed_bytes * num_receivers);
         COUNTER_UPDATE(_uncompressed_bytes_counter, uncompressed_bytes * num_receivers);

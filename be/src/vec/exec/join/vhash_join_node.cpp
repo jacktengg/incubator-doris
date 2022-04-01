@@ -164,13 +164,16 @@ struct ProcessHashTableProbe {
               _probe_block(join_node->_probe_block),
               _probe_index(join_node->_probe_index),
               _probe_raw_ptrs(join_node->_probe_columns),
-              _items_counts(join_node->_items_counts),
+              // _items_counts(join_node->_items_counts),
               _build_block_offsets(join_node->_build_block_offsets),
               _build_block_rows(join_node->_build_block_rows),
               _rows_returned_counter(join_node->_rows_returned_counter),
               _search_hashtable_timer(join_node->_search_hashtable_timer),
               _build_side_output_timer(join_node->_build_side_output_timer),
-              _probe_side_output_timer(join_node->_probe_side_output_timer) {}
+              _probe_side_output_timer(join_node->_probe_side_output_timer),
+              _probe_do_process_resize_timer(join_node->_probe_do_process_resize_timer),
+              _probe_do_process_swap_timer(join_node->_probe_do_process_swap_timer),
+              _probe_do_process_to_block_timer(join_node->_probe_do_process_to_block_timer)  {}
 
     // output build side result column
     void build_side_output_column(MutableColumns& mcol, int column_offset, int column_length, int size) {
@@ -209,14 +212,81 @@ struct ProcessHashTableProbe {
             }
         }
     }
+    void build_side_output_column_unmaterialized(MutableBlock& mutable_block, int column_offset, int column_length, int size) {
+        if (0 == size)
+            return;
+        constexpr auto is_semi_anti_join = JoinOpType::value == TJoinOp::RIGHT_ANTI_JOIN ||
+                                           JoinOpType::value == TJoinOp::RIGHT_SEMI_JOIN ||
+                                           JoinOpType::value == TJoinOp::LEFT_ANTI_JOIN ||
+                                           JoinOpType::value == TJoinOp::LEFT_SEMI_JOIN;
 
-    // output probe side result column
-    void probe_side_output_column(MutableColumns& mcol, int column_length, int size) {
-        for (int i = 0; i < column_length; ++i) {
-            auto& column = _probe_block.get_by_position(i).column;
-            column->replicate(&_items_counts[0], size, *mcol[i]);
+        // constexpr auto probe_all = JoinOpType::value == TJoinOp::LEFT_OUTER_JOIN ||
+        //                            JoinOpType::value == TJoinOp::FULL_OUTER_JOIN;
+
+        if constexpr (!is_semi_anti_join) {
+            if (_build_blocks.size() == 1) {
+                // Block new_block = _build_blocks[0].clone_shallow();
+                // MutableBlock tmp_mutable_block(&new_block);
+
+                // tmp_mutable_block.update_ref_row_indice(
+                //     std::make_shared<IndiceArray>(std::move(_build_block_rows)));
+
+                // auto& mcol = mutable_block.mutable_columns();
+                // for (int i = 0; i < column_length; i++) {
+                //     mcol[i + column_offset] = std::move(tmp_mutable_block.mutable_columns()[i]);
+                // }
+
+                // mutable_block.add_ref_row_indices(tmp_mutable_block.get_ref_row_indices());
+
+                Block new_block = _build_blocks[0].get_unmaterialized_block(
+                    std::make_shared<IndiceArray>(std::move(_build_block_rows)));
+
+                auto mutated_columns = std::move(new_block.mutate_columns());
+                auto& mcol = mutable_block.mutable_columns();
+                for (int i = 0; i < column_length; i++) {
+                    mcol[i + column_offset] = std::move(mutated_columns[i]);
+                }
+                mutable_block.add_ref_row_indices(new_block.get_ref_row_indices());
+            } else {
+                // TODO
+                assert(0);
+            }
         }
     }
+
+    // output probe side result column
+    // void probe_side_output_column(MutableColumns& mcol, int column_length, int size) {
+    //     for (int i = 0; i < column_length; ++i) {
+    //         auto& column = _probe_block.get_by_position(i).column;
+    //         column->replicate(&_items_counts[0], size, *mcol[i]);
+    //     }
+    // }
+
+    void probe_side_output_column_unmaterialized(MutableBlock& mutable_block, int column_length, int size) {
+        if (0 == size)
+            return;
+        // Block new_block = _probe_block.clone_shallow();
+        // MutableBlock tmp_mutable_block(&new_block);
+
+        // tmp_mutable_block.update_ref_row_indice(
+        //     std::make_shared<IndiceArray>(std::move(_probe_block_rows)));
+
+        // auto& mcol = mutable_block.mutable_columns();
+        // for (int i = 0; i < column_length; ++i) {
+        //     mcol[i] = std::move(tmp_mutable_block.mutable_columns()[i]);
+        // }
+        // mutable_block.add_ref_row_indices(tmp_mutable_block.get_ref_row_indices());
+
+        Block new_block = _probe_block.get_unmaterialized_block(
+            std::make_shared<IndiceArray>(std::move(_probe_block_rows)));
+        auto mutated_columns = std::move(new_block.mutate_columns());
+        auto& mcol = mutable_block.mutable_columns();
+        for (int i = 0; i < column_length; ++i) {
+            mcol[i] = std::move(mutated_columns[i]);
+        }
+        mutable_block.add_ref_row_indices(new_block.get_ref_row_indices());
+    }
+
     // Only process the join with no other join conjunt, because of no other join conjunt
     // the output block struct is same with mutable block. we can do more opt on it and simplify
     // the logic of probe
@@ -231,13 +301,14 @@ struct ProcessHashTableProbe {
         int right_col_len = _join_node->_right_table_data_types.size();
 
         KeyGetter key_getter(_probe_raw_ptrs, _join_node->_probe_key_sz, nullptr);
-        auto& mcol = mutable_block.mutable_columns();
+        // auto& mcol = mutable_block.mutable_columns();
         int current_offset = 0;
 
-        _items_counts.resize(_probe_rows);
+        // _items_counts.resize(_probe_rows);
         _build_block_offsets.resize(_batch_size);
         _build_block_rows.resize(_batch_size);
-        memset(_items_counts.data(), 0, sizeof(uint32_t) * _probe_rows);
+        _probe_block_rows.resize(_batch_size);
+        // memset(_items_counts.data(), 0, sizeof(uint32_t) * _probe_rows);
 
         constexpr auto need_to_set_visited = JoinOpType::value == TJoinOp::RIGHT_ANTI_JOIN ||
                                        JoinOpType::value == TJoinOp::RIGHT_SEMI_JOIN ||
@@ -255,11 +326,11 @@ struct ProcessHashTableProbe {
             for (; _probe_index < _probe_rows;) {
                 if constexpr (ignore_null) {
                     if ((*null_map)[_probe_index]) {
-                        _items_counts[_probe_index++] = (uint32_t)0;
+                        _probe_index++;
                         continue;
                     }
                 }
-                int last_offset = current_offset;
+                // int last_offset = current_offset;
                 auto find_result = (*null_map)[_probe_index]
                                     ? decltype(key_getter.find_key(hash_table_ctx.hash_table, _probe_index,
                                                                     _arena)) {nullptr, false}
@@ -267,11 +338,11 @@ struct ProcessHashTableProbe {
 
                 if constexpr (JoinOpType::value == TJoinOp::LEFT_ANTI_JOIN) {
                     if (!find_result.is_found()) {
-                        ++current_offset;
+                        _probe_block_rows[current_offset++] = _probe_index;
                     }
                 } else if constexpr (JoinOpType::value == TJoinOp::LEFT_SEMI_JOIN) {
                     if (find_result.is_found()) {
-                        ++current_offset;
+                        _probe_block_rows[current_offset++] = _probe_index;
                     }
                 } else {
                     if (find_result.is_found()) {
@@ -285,6 +356,7 @@ struct ProcessHashTableProbe {
                             if constexpr (!is_right_semi_anti_join) {
                                 _build_block_offsets[current_offset] = mapped.block_offset;
                                 _build_block_rows[current_offset] = mapped.row_num;
+                                _probe_block_rows[current_offset] = _probe_index;
                                 ++current_offset;
                             }
                         } else {
@@ -297,9 +369,11 @@ struct ProcessHashTableProbe {
                                     if (current_offset < _batch_size) {
                                         _build_block_offsets[current_offset] = it->block_offset;
                                         _build_block_rows[current_offset] = it->row_num;
+                                        _probe_block_rows[current_offset] = _probe_index;
                                     } else {
                                         _build_block_offsets.emplace_back(it->block_offset);
                                         _build_block_rows.emplace_back(it->row_num);
+                                        _probe_block_rows.emplace_back(_probe_index);
                                     }
                                     ++current_offset;
                                 }
@@ -312,29 +386,50 @@ struct ProcessHashTableProbe {
                             // only full outer / left outer need insert the data of right table
                             _build_block_offsets[current_offset] = -1;
                             _build_block_rows[current_offset] = -1;
+                            _probe_block_rows[current_offset] = -1;
                             ++current_offset;
                         }
                     }
                 }
 
-                _items_counts[_probe_index++] = (uint32_t)(current_offset - last_offset);
+                _probe_index++;
+                // _items_counts[_probe_index++] = (uint32_t)(current_offset - last_offset);
                 if (current_offset >= _batch_size) {
                     break;
                 }
             }
         }
+        {
+        SCOPED_TIMER(_probe_do_process_resize_timer);
+        _build_block_offsets.resize(current_offset);
+        _build_block_rows.resize(current_offset);
+        _probe_block_rows.resize(current_offset);
+        }
 
         {
             SCOPED_TIMER(_build_side_output_timer);
-            build_side_output_column(mcol, right_col_idx, right_col_len, current_offset);
+            // build_side_output_column(mcol, right_col_idx, right_col_len, current_offset);
+            build_side_output_column_unmaterialized(mutable_block, right_col_idx, right_col_len, current_offset);
         }
 
         {
             SCOPED_TIMER(_probe_side_output_timer);
-            probe_side_output_column(mcol, right_col_idx, current_offset);
+            // probe_side_output_column(mcol, right_col_idx, current_offset);
+            probe_side_output_column_unmaterialized(mutable_block, right_col_idx, current_offset);
         }
 
-        output_block->swap(mutable_block.to_block());
+        {
+        Block new_block;
+
+            {
+                SCOPED_TIMER(_probe_do_process_to_block_timer);
+                new_block = mutable_block.to_block();
+            }
+            {
+                SCOPED_TIMER(_probe_do_process_swap_timer);
+                output_block->swap(new_block);
+            }
+        }
 
         return Status::OK();
     }
@@ -598,20 +693,24 @@ private:
     HashJoinNode* _join_node;
     const int _batch_size;
     const size_t _probe_rows;
-    const std::vector<Block>& _build_blocks;
-    const Block& _probe_block;
+    std::vector<Block>& _build_blocks;
+    Block& _probe_block;
     int& _probe_index;
     ColumnRawPtrs& _probe_raw_ptrs;
     Arena _arena;
 
-    std::vector<uint32_t>& _items_counts;
+    // std::vector<uint32_t>& _items_counts;
     std::vector<int8_t>& _build_block_offsets;
     std::vector<int>& _build_block_rows;
+    std::vector<int> _probe_block_rows;
 
     ProfileCounter* _rows_returned_counter;
     ProfileCounter* _search_hashtable_timer;
     ProfileCounter* _build_side_output_timer;
     ProfileCounter* _probe_side_output_timer;
+    ProfileCounter* _probe_do_process_resize_timer;
+    ProfileCounter* _probe_do_process_swap_timer;
+    ProfileCounter* _probe_do_process_to_block_timer;
 };
 
 // now we only support inner join
@@ -722,20 +821,28 @@ Status HashJoinNode::prepare(RuntimeState* state) {
     _build_expr_call_timer = ADD_TIMER(build_phase_profile, "BuildExprCallTime");
     _build_table_expanse_timer = ADD_TIMER(build_phase_profile, "BuildTableExpanseTime");
     _build_rows_counter = ADD_COUNTER(build_phase_profile, "BuildRows", TUnit::UNIT);
+    _build_materialize_timer = ADD_TIMER(build_phase_profile, "BuildMaterializeTime");
 
     // Probe phase
     auto probe_phase_profile = runtime_profile()->create_child("ProbePhase", true, true);
     _probe_timer = ADD_TIMER(probe_phase_profile, "ProbeTime");
+    _probe_do_process_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessTime");
+    _probe_do_process_resize_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessResizeTime");
+    _probe_do_process_swap_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessSwapTime");
+    _probe_do_process_to_block_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessToBlockTime");
     _probe_next_timer = ADD_TIMER(probe_phase_profile, "ProbeFindNextTime");
     _probe_expr_call_timer = ADD_TIMER(probe_phase_profile, "ProbeExprCallTime");
     _probe_rows_counter = ADD_COUNTER(probe_phase_profile, "ProbeRows", TUnit::UNIT);
     _search_hashtable_timer = ADD_TIMER(probe_phase_profile, "ProbeWhenSearchHashTableTime");
     _build_side_output_timer = ADD_TIMER(probe_phase_profile, "ProbeWhenBuildSideOutputTime");
     _probe_side_output_timer = ADD_TIMER(probe_phase_profile, "ProbeWhenProbeSideOutputTime");
+    _probe_materialize_timer  = ADD_TIMER(probe_phase_profile, "ProbeMaterializeTime");
 
     _push_down_timer = ADD_TIMER(runtime_profile(), "PushDownTime");
     _push_compute_timer = ADD_TIMER(runtime_profile(), "PushDownComputeTime");
     _build_buckets_counter = ADD_COUNTER(runtime_profile(), "BuildBuckets", TUnit::UNIT);
+    
+    _filter_timer = ADD_TIMER(runtime_profile(), "FilterTime");
 
     RETURN_IF_ERROR(
             VExpr::prepare(_build_expr_ctxs, state, child(1)->row_desc(), expr_mem_tracker()));
@@ -792,7 +899,8 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
                 }
                 _probe_column_disguise_null.clear();
             }
-            release_block_memory(_probe_block);
+            // release_block_memory(_probe_block);
+            _probe_block = Block();
         }
 
         do {
@@ -838,6 +946,8 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
                 using HashTableCtxType = std::decay_t<decltype(arg)>;
                 using JoinOpType = std::decay_t<decltype(join_op_variants)>;
                 if constexpr (have_other_join_conjunct) {
+                        LOG(FATAL) << "FATAL: other join conjunct";
+
                     MutableBlock mutable_block(VectorizedUtils::create_empty_columnswithtypename(
                         _row_desc_for_other_join_conjunt));
 
@@ -851,17 +961,20 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
                         LOG(FATAL) << "FATAL: uninited hash table";
                     }
                 } else {
+                    {
                     MutableBlock mutable_block = output_block->mem_reuse() ? MutableBlock(output_block) : 
                                                 MutableBlock(VectorizedUtils::create_empty_columnswithtypename(row_desc()));
 
                     if constexpr (!std::is_same_v<HashTableCtxType, std::monostate>) {
                         ProcessHashTableProbe<HashTableCtxType, JoinOpType, probe_ignore_null> process_hashtable_ctx(
                                 this, state->batch_size(), probe_rows);
+                        SCOPED_TIMER(_probe_do_process_timer);
                         st = process_hashtable_ctx.do_process(
                                 arg, &_null_map_column->get_data(),
                                 mutable_block, output_block);
                     } else {
                         LOG(FATAL) << "FATAL: uninited hash table";
+                    }
                     }
                 }
             }, _hash_table_variants,
@@ -870,6 +983,7 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
                 make_bool_variant(_probe_ignore_null));
     } else if (_probe_eos) {
         if (_is_right_semi_anti || (_is_outer_join && _join_op != TJoinOp::LEFT_OUTER_JOIN)) {
+                        LOG(FATAL) << "FATAL: probe oes handle error";
             MutableBlock mutable_block(
                     VectorizedUtils::create_empty_columnswithtypename(row_desc()));
             std::visit(
@@ -895,9 +1009,14 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
         return Status::OK();
     }
 
+    {
+    SCOPED_TIMER(_filter_timer);
     RETURN_IF_ERROR(
             VExprContext::filter_block(_vconjunct_ctx_ptr, output_block, output_block->columns()));
+    }
     reached_limit(output_block, eos);
+
+    // output_block->materialize_columns();
 
     return st;
 }
@@ -983,10 +1102,15 @@ Status HashJoinNode::extract_build_join_column(Block& block, NullMap& null_map,
             RETURN_IF_ERROR(_build_expr_ctxs[i]->execute(&block, &result_col_id));
         }
 
+        {
+            SCOPED_TIMER(_build_materialize_timer);
+            block.materialize_column(result_col_id);
+        }
+
         // TODO: opt the column is const
         block.get_by_position(result_col_id).column =
                 block.get_by_position(result_col_id).column->convert_to_full_column_if_const();
-        
+
         if (_is_null_safe_eq_join[i]) {
             raw_ptrs[i] = block.get_by_position(result_col_id).column.get();
         } else {
@@ -1019,6 +1143,11 @@ Status HashJoinNode::extract_probe_join_column(Block& block, NullMap& null_map,
         {
             SCOPED_TIMER(&expr_call_timer);
             RETURN_IF_ERROR(_probe_expr_ctxs[i]->execute(&block, &result_col_id));
+        }
+
+        {
+            SCOPED_TIMER(_probe_materialize_timer);
+            block.materialize_column(result_col_id);
         }
 
         // TODO: opt the column is const

@@ -35,30 +35,36 @@ MutableColumnPtr ColumnString::clone_resized(size_t to_size) const {
 
     size_t from_size = size();
 
-    if (to_size <= from_size) {
-        /// Just cut column.
+    if (IColumn::is_materialized()) {
+        if (to_size <= from_size) {
+            /// Just cut column.
 
-        res->offsets.assign(offsets.begin(), offsets.begin() + to_size);
-        res->chars.assign(chars.begin(), chars.begin() + offsets[to_size - 1]);
+            res->offsets.assign(offsets.begin(), offsets.begin() + to_size);
+            res->chars.assign(chars.begin(), chars.begin() + offsets[to_size - 1]);
+        } else {
+            /// Copy column and append empty strings for extra elements.
+
+            Offset offset = 0;
+            if (from_size > 0) {
+                res->offsets.assign(offsets.begin(), offsets.end());
+                res->chars.assign(chars.begin(), chars.end());
+                offset = offsets.back();
+            }
+
+            /// Empty strings are just zero terminating bytes.
+
+            res->chars.resize_fill(res->chars.size() + to_size - from_size);
+
+            res->offsets.resize(to_size);
+            for (size_t i = from_size; i < to_size; ++i) {
+                ++offset;
+                res->offsets[i] = offset;
+            }
+        }
     } else {
-        /// Copy column and append empty strings for extra elements.
-
-        Offset offset = 0;
-        if (from_size > 0) {
-            res->offsets.assign(offsets.begin(), offsets.end());
-            res->chars.assign(chars.begin(), chars.end());
-            offset = offsets.back();
-        }
-
-        /// Empty strings are just zero terminating bytes.
-
-        res->chars.resize_fill(res->chars.size() + to_size - from_size);
-
-        res->offsets.resize(to_size);
-        for (size_t i = from_size; i < to_size; ++i) {
-            ++offset;
-            res->offsets[i] = offset;
-        }
+        assert(to_size == this->size());
+        res->set_ref_column(IColumn::ref_column);
+        res->set_ref_row_indice(IColumn::ref_row_indice);
     }
 
     return res;

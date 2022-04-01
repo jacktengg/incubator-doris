@@ -99,6 +99,7 @@ Status VResultSink::send(RuntimeState* state, RowBatch* batch) {
 }
 
 Status VResultSink::send(RuntimeState* state, Block* block) {
+    block->materialize_columns();
     return _writer->append_block(*block);
 }
 

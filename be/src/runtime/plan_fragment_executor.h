@@ -243,7 +243,7 @@ private:
 
     // Executes get_next() logic and returns resulting status.
     Status get_next_internal(RowBatch** batch);
-    Status get_vectorized_internal(::doris::vectorized::Block** block);
+    Status get_vectorized_internal(::doris::vectorized::Block* block);
 
     // Stops report thread, if one is running. Blocks until report thread terminates.
     // Idempotent.

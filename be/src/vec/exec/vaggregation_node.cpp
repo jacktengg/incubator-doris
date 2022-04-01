@@ -356,6 +356,7 @@ Status AggregationNode::open(RuntimeState* state) {
         if (block.rows() == 0) {
             continue;
         }
+        block.materialize_columns();
         RETURN_IF_ERROR(_executor.execute(&block));
         _executor.update_memusage();
     }
@@ -381,6 +382,7 @@ Status AggregationNode::get_next(RuntimeState* state, Block* block, bool* eos) {
         } while (_preagg_block.rows() == 0 && !child_eos);
 
         if (_preagg_block.rows() != 0) {
+            _preagg_block.materialize_columns();
             RETURN_IF_ERROR(_executor.pre_agg(&_preagg_block, block));
         } else {
             RETURN_IF_ERROR(_executor.get_result(state, block, eos));

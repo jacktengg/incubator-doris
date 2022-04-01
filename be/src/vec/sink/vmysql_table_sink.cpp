@@ -80,6 +80,7 @@ Status VMysqlTableSink::send(RuntimeState* state, RowBatch* batch) {
 }
 
 Status VMysqlTableSink::send(RuntimeState* state, Block* block) {
+    block->materialize_columns();
     return _writer->append(block);
 }
 

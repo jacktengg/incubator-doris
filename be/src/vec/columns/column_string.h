@@ -73,7 +73,12 @@ private:
 public:
     const char* get_family_name() const override { return "String"; }
 
-    size_t size() const override { return offsets.size(); }
+    size_t size() const override {
+        if (nullptr != IColumn::ref_row_indice) {
+            return IColumn::ref_row_indice->size();
+        }
+        return offsets.size();
+    }
 
     size_t byte_size() const override { return chars.size() + offsets.size() * sizeof(offsets[0]); }
 

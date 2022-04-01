@@ -108,15 +108,21 @@ MutableColumnPtr ColumnDecimal<T>::clone_resized(size_t size) const {
     auto res = this->create(0, scale);
 
     if (size > 0) {
-        auto& new_col = static_cast<Self&>(*res);
-        new_col.data.resize(size);
+        if (IColumn::is_materialized()) {
+            auto& new_col = static_cast<Self&>(*res);
+            new_col.data.resize(size);
 
-        size_t count = std::min(this->size(), size);
-        memcpy(new_col.data.data(), data.data(), count * sizeof(data[0]));
+            size_t count = std::min(this->size(), size);
+            memcpy(new_col.data.data(), data.data(), count * sizeof(data[0]));
 
-        if (size > count) {
-            void* tail = &new_col.data[count];
-            memset(tail, 0, (size - count) * sizeof(T));
+            if (size > count) {
+                void* tail = &new_col.data[count];
+                memset(tail, 0, (size - count) * sizeof(T));
+            }
+        } else {
+            assert(size == this->size());
+            res->set_ref_column(IColumn::ref_column);
+            res->set_ref_row_indice(IColumn::ref_row_indice);
         }
     }
 

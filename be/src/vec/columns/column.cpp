@@ -28,6 +28,70 @@
 
 namespace doris::vectorized {
 
+void dump_indices(const IndiceArrayPtr indice_array, int count = 100) {
+    int n = count;
+    if (n > indice_array->size()) {
+        n = indice_array->size();
+    }
+    std::cout << "dump indices:\n";
+    for (int i = 0; i < n; ++i) {
+        std::cout << (*indice_array)[i] << ", ";
+        if (i > 0 && 0 == (i + 1) % 8) std::cout << "\n";
+    }
+    std::cout << "\n";
+}
+
+void RowIndice::add_indice(IndiceArrayPtr indice_array) {
+    _total_rows += indice_array->size();
+    _indices.emplace_back(indice_array);
+    _indice_prefix_sum.push_back(_total_rows);
+}
+
+IndiceArrayPtr RowIndice::get_indices() {
+    if (_indices.size() == 1) {
+        return _indices[0];
+    }
+    auto indice_array = std::make_shared<IndiceArray>();
+    indice_array->resize(_total_rows);
+    auto* p = indice_array->data();
+    for (auto& indice : _indices) {
+        auto item_size = sizeof(IndiceArray::value_type);
+        memcpy(p, indice->data(), indice->size() * item_size);
+        p += indice->size();
+    }
+    _indices.clear();
+    _indices.emplace_back(indice_array);
+
+    _indice_prefix_sum.clear();
+    _indice_prefix_sum.push_back(0);
+    _indice_prefix_sum.push_back(_total_rows);
+
+    return indice_array;
+}
+
+void IColumn::materialize() {
+    if(is_materialized()) {
+        return;
+    }
+    const auto& ref_row_indices_array = ref_row_indice->get_indices_array();
+    auto& column = *ref_column;
+    for (auto& indice_array : ref_row_indices_array) {
+        for (auto index : *indice_array) {
+            insert_from(column, index);
+        }
+    }
+    ref_column = nullptr;
+    ref_row_indice = nullptr;
+}
+
+MutableColumnPtr IColumn::make_unmaterialized_column(const Ptr column, const RowIndicePtr row_indice) {
+    assert(column->size() > 0);
+    auto new_column = column->clone_empty();
+    new_column->ref_column = column;
+    new_column->ref_row_indice = row_indice;
+    return new_column;
+}
+
 std::string IColumn::dump_structure() const {
     std::stringstream res;
     res << get_family_name() << "(size = " << size();
@@ -53,5 +117,4 @@ bool is_column_nullable(const IColumn& column) {
 bool is_column_const(const IColumn& column) {
     return check_column<ColumnConst>(column);
 }
-
 } // namespace doris::vectorized

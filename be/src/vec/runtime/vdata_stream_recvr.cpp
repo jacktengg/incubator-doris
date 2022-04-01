@@ -144,8 +144,11 @@ void VDataStreamRecvr::SenderQueue::add_block(Block* block, bool use_move) {
     if (_is_cancelled) {
         return;
     }
+    block->materialize_columns();
+
     Block* nblock = new Block(block->get_columns_with_type_and_name());
     nblock->info = block->info;
+    // nblock->set_ref_row_indices(block->get_ref_row_indices());
 
     // local exchange should copy the block contented if use move == false
     if (use_move) {
@@ -153,8 +156,10 @@ void VDataStreamRecvr::SenderQueue::add_block(Block* block, bool use_move) {
     } else {
         auto rows = block->rows();
         for (int i = 0; i < nblock->columns(); ++i) {
+            // auto ref_indice = nblock->get_by_position(i).column->get_ref_row_indice();
             nblock->get_by_position(i).column =
                     nblock->get_by_position(i).column->clone_resized(rows);
+            // (*std::move(nblock->get_by_position(i).column)).mutate()->set_ref_row_indice(ref_indice);
         }
     }
     materialize_block_inplace(*nblock);

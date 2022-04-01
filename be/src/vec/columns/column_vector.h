@@ -145,7 +145,12 @@ private:
 public:
     bool is_numeric() const override { return IsNumber<T>; }
 
-    size_t size() const override { return data.size(); }
+    size_t size() const override {
+        if (nullptr != IColumn::ref_row_indice) {
+            return IColumn::ref_row_indice->size();
+        }
+        return data.size();
+    }
 
     StringRef get_data_at(size_t n) const override {
         return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[n]));

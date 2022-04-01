@@ -271,14 +271,14 @@ Status PlanFragmentExecutor::open_vectorized_internal() {
     }
 
     while (true) {
-        doris::vectorized::Block* block;
+        doris::vectorized::Block block;
 
         {
             SCOPED_CPU_TIMER(_fragment_cpu_timer);
             RETURN_IF_ERROR(get_vectorized_internal(&block));
         }
 
-        if (block == NULL) {
+        if (0 == block.rows()) {
             break;
         }
 
@@ -289,7 +289,8 @@ Status PlanFragmentExecutor::open_vectorized_internal() {
             _collect_query_statistics();
         }
 
-        auto st = _sink->send(runtime_state(), block);
+        // block.materialize_columns();
+        auto st = _sink->send(runtime_state(), &block);
         if (st.is_end_of_file()) {
             break;
         }
@@ -317,24 +318,24 @@ Status PlanFragmentExecutor::open_vectorized_internal() {
     return Status::OK();
 }
 
-Status PlanFragmentExecutor::get_vectorized_internal(::doris::vectorized::Block** block) {
+Status PlanFragmentExecutor::get_vectorized_internal(::doris::vectorized::Block* block) {
     if (_done) {
-        *block = nullptr;
+        // *block = nullptr;
         return Status::OK();
     }
 
     while (!_done) {
-        _block->clear_column_data(_plan->row_desc().num_materialized_slots());
+        // _block->clear_column_data(_plan->row_desc().num_materialized_slots());
         SCOPED_TIMER(profile()->total_time_counter());
-        RETURN_IF_ERROR(_plan->get_next(_runtime_state.get(), _block.get(), &_done));
+        RETURN_IF_ERROR(_plan->get_next(_runtime_state.get(), block, &_done));
 
-        if (_block->rows() > 0) {
-            COUNTER_UPDATE(_rows_produced_counter, _block->rows());
-            *block = _block.get();
+        if (block->rows() > 0) {
+            COUNTER_UPDATE(_rows_produced_counter, block->rows());
+            // *block = _block.get();
             break;
         }
 
-        *block = nullptr;
+        // *block = nullptr;
     }
 
     return Status::OK();

@@ -37,6 +37,12 @@ class Field;
 // TODO: Remove the trickly hint, after FE support better way to remove function tuple_is_null
 constexpr uint8_t JOIN_NULL_HINT = 2;
 
+using IndiceArray = std::vector<int>;
+using IndiceArrayPtr = std::shared_ptr<IndiceArray>;
+
+class RowIndice;
+using RowIndicePtr = std::shared_ptr<RowIndice>;
+
 /// Declares interface to store columns in memory.
 class IColumn : public COW<IColumn> {
 private:
@@ -48,7 +54,49 @@ private:
     /// If you want to copy column for modification, look at 'mutate' method.
     virtual MutablePtr clone() const = 0;
 
+protected:
+    // reffered materialized column
+    Ptr ref_column;
+
+    // row indice reffering materialized column
+    RowIndicePtr ref_row_indice;
+
 public:
+    static MutablePtr make_unmaterialized_column(const Ptr column, const RowIndicePtr row_indice);
+
+    virtual bool is_materialized() const {
+        return nullptr == ref_row_indice;
+    }
+    
+    virtual void materialize();
+
+    void set_ref_column(const Ptr column) {
+        ref_column = column;
+    }
+    const Ptr get_ref_column() const {
+        return ref_column;
+    }
+
+    void set_ref_row_indice(const RowIndicePtr indice) {
+        ref_row_indice = indice;
+    }
+
+    RowIndicePtr get_ref_row_indice() const {
+        return ref_row_indice;
+    }
+
+    bool share_the_same_ref_column(const Ptr column) const {
+        if (nullptr != column) {
+            return ref_column.get() == column->ref_column.get();
+        } else {
+            return false;
+        }
+    }
+
+    MutablePtr get_column(IndiceArrayPtr indice_array) const;
+
+    virtual void insert_from_no_copy(const IColumn& src) {};
+
     /// Name of a Column. It is used in info messages.
     virtual std::string get_name() const { return get_family_name(); }
 
@@ -478,6 +526,33 @@ using MutableColumns = std::vector<MutableColumnPtr>;
 
 using ColumnRawPtrs = std::vector<const IColumn*>;
 //using MutableColumnRawPtrs = std::vector<IColumn *>;
+
+class RowIndice {
+private:
+    std::vector<IndiceArrayPtr> _indices;
+    // prefix sum of rows
+    std::vector<int64_t> _indice_prefix_sum;
+
+    int64_t _total_rows = 0;
+
+public:
+    RowIndice() {
+        _indice_prefix_sum.push_back(0);
+    }
+
+    void add_indice(IndiceArrayPtr indice_array);
+
+    const std::vector<IndiceArrayPtr>& get_indices_array() const {
+        return _indices;
+    }
+
+    IndiceArrayPtr get_indices();
+
+    int64_t size() const {
+        return _total_rows;
+    }
+
+};
 
 template <typename... Args>
 struct IsMutableColumns;

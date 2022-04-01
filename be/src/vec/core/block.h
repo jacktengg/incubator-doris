@@ -63,6 +63,9 @@ private:
     Container data;
     IndexByName index_by_name;
 
+    // keep all ref indices that reffered by columns
+    std::vector<RowIndicePtr> ref_row_indices;
+
 public:
     BlockInfo info;
 
@@ -70,6 +73,24 @@ public:
     Block(std::initializer_list<ColumnWithTypeAndName> il);
     Block(const ColumnsWithTypeAndName& data_);
     Block(const PBlock& pblock);
+
+    std::vector<RowIndicePtr> get_ref_row_indices() {
+        return ref_row_indices;
+    }
+
+    void set_ref_row_indices(const std::vector<RowIndicePtr>& indices) {
+        ref_row_indices = indices;
+    }
+
+    std::map<size_t, size_t> get_col_ref_indice_pos() const;
+
+    std::vector<RowIndicePtr> shuffle_indices(IndiceArrayPtr indice_array);
+
+    Block get_unmaterialized_block(IndiceArrayPtr indice_array);
+
+    void materialize_column(size_t i);
+
+    void materialize_columns();
 
     /// insert the column at the specified position
     void insert(size_t position, const ColumnWithTypeAndName& elem);
@@ -193,6 +214,8 @@ public:
 
     /** Get the same block, but empty. */
     Block clone_empty() const;
+
+    Block clone_shallow() const;
 
     Columns get_columns() const;
     void set_columns(const Columns& columns);
@@ -318,6 +341,7 @@ class MutableBlock {
 private:
     MutableColumns _columns;
     DataTypes _data_types;
+    std::vector<RowIndicePtr> _ref_row_indices;
 
 public:
     static MutableBlock build_mutable_block(Block* block) {
@@ -329,14 +353,34 @@ public:
     MutableBlock(const std::vector<TupleDescriptor*>& tuple_descs);
 
     MutableBlock(Block* block)
-            : _columns(block->mutate_columns()), _data_types(block->get_data_types()) {}
+            : _columns(block->mutate_columns()),
+              _data_types(block->get_data_types()) {
+        _ref_row_indices = block->get_ref_row_indices();
+    }
     MutableBlock(Block&& block)
-            : _columns(block.mutate_columns()), _data_types(block.get_data_types()) {}
+            : _columns(block.mutate_columns()),
+              _data_types(block.get_data_types()) {
+        _ref_row_indices = block.get_ref_row_indices();
+    }
 
     void operator=(MutableBlock&& m_block) {
         _columns = std::move(m_block._columns);
         _data_types = std::move(m_block._data_types);
     }
+
+    void materialize_column(size_t i);
+
+    void materialize_columns();
+
+    std::vector<RowIndicePtr> get_ref_row_indices() const {
+        return _ref_row_indices;
+    }
+
+    void add_ref_row_indices(const std::vector<RowIndicePtr>& indices ) {
+        _ref_row_indices.insert(_ref_row_indices.end(), indices.begin(), indices.end());
+    }
+
+    void update_ref_row_indice(IndiceArrayPtr indice_array);
 
     size_t rows() const;
     size_t columns() const { return _columns.size(); }
@@ -354,11 +398,20 @@ public:
         if (_columns.size() == 0 && _data_types.size() == 0) {
             _data_types = block.get_data_types();
             _columns.resize(block.columns());
+            _ref_row_indices = block.get_ref_row_indices();
+
             for (size_t i = 0; i < block.columns(); ++i) {
                 if (block.get_by_position(i).column) {
-                    _columns[i] = (*std::move(block.get_by_position(i)
-                                                      .column->convert_to_full_column_if_const()))
-                                          .mutate();
+                    if (block.get_by_position(i).column->is_materialized()) {
+                        _columns[i] = (*std::move(block.get_by_position(i)
+                                                          .column->convert_to_full_column_if_const()))
+                                              .mutate();
+                    } else {
+                        _columns[i] = _data_types[i]->create_column();
+                        assert(block.get_by_position(i).column->get_ref_column()->size() > 0);
+                        _columns[i]->set_ref_column(block.get_by_position(i).column->get_ref_column());
+                        _columns[i]->set_ref_row_indice(block.get_by_position(i).column->get_ref_row_indice());
+                    }
                 } else {
                     _columns[i] = _data_types[i]->create_column();
                 }
@@ -376,12 +429,26 @@ public:
                                                             ->convert_to_full_column_if_const(),
                                                    0, block.rows());
                 } else {
-                    _columns[i]->insert_range_from(
-                            *block.get_by_position(i)
-                                     .column->convert_to_full_column_if_const()
-                                     .get(),
-                            0, block.rows());
+                    if (block.get_by_position(i).column->is_materialized()) {
+                        DCHECK(_columns[i]->is_materialized());
+                        _columns[i]->insert_range_from(
+                                *block.get_by_position(i)
+                                         .column->convert_to_full_column_if_const()
+                                         .get(),
+                                0, block.rows());
+                    } else {
+                        DCHECK(!_columns[i]->is_materialized());
+                        if (!_columns[i]->share_the_same_ref_column(block.get_by_position(i).column)) {
+                            assert(0);
+                        }
+                    }
                 }
+            }
+            auto this_indices = get_ref_row_indices();
+            auto indices_to_add = block.get_ref_row_indices();
+            DCHECK(this_indices.size() == indices_to_add.size());
+            for (size_t i = 0; i < this_indices.size(); ++i) {
+                this_indices[i]->add_indice(indices_to_add[i]->get_indices());
             }
         }
     }
@@ -399,6 +466,9 @@ public:
         _columns.clear();
         _data_types.clear();
     }
+    
+    void shuffle_indices(IndiceArrayPtr indice_array);
+    std::map<size_t, size_t> get_col_ref_indice_pos() const;
 };
 
 } // namespace vectorized

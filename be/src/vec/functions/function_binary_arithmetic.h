@@ -587,6 +587,9 @@ public:
                                 DecimalBinaryOperation<T0, T1, Op, ResultType>,
                                 BinaryOperationImpl<T0, T1, Op<T0, T1>, ResultType>>;
 
+                        block.materialize_column(arguments[0]);
+                        block.materialize_column(arguments[1]);
+
                         auto col_left_raw = block.get_by_position(arguments[0]).column.get();
                         auto col_right_raw = block.get_by_position(arguments[1]).column.get();
                         if (auto col_left = check_and_get_column_const<ColVecT0>(col_left_raw)) {

@@ -100,6 +100,116 @@ void Block::initialize_index_by_name() {
     }
 }
 
+Block Block::get_unmaterialized_block(IndiceArrayPtr indice_array) {
+    assert(indice_array->size() > 0 );
+
+    Block res;
+    std::vector<RowIndicePtr> new_ref_row_indices;
+
+    auto new_indice = std::make_shared<RowIndice>();
+    new_indice->add_indice(indice_array);
+
+    if (ref_row_indices.empty()) {
+        new_ref_row_indices.emplace_back(new_indice);
+        for (const auto& column : data) {
+            assert(column.column->is_materialized());
+            assert(column.column->size() > 0);
+
+            auto mutable_column = column.type->create_column();
+            mutable_column->set_ref_row_indice(new_indice);
+            mutable_column->set_ref_column(column.column);
+            res.insert({std::move(mutable_column), column.type, column.name});
+        }
+    } else {
+        auto col_ref_indice_mapping = get_col_ref_indice_pos();
+
+        new_ref_row_indices = shuffle_indices(indice_array);
+
+        bool add_new_indice = false;
+        for (size_t i = 0; i < data.size(); ++i) {
+            const auto& column = data[i];
+            auto mutable_column = column.type->create_column();
+
+            if (column.column->is_materialized()) {
+                add_new_indice = true;
+                mutable_column->set_ref_column(column.column);
+                mutable_column->set_ref_row_indice(new_indice);
+                assert(column.column->size() > 0);
+            } else {
+                assert(column.column->get_ref_column()->size() > 0);
+                mutable_column->set_ref_column(column.column->get_ref_column());
+                mutable_column->set_ref_row_indice(new_ref_row_indices[col_ref_indice_mapping[i]]);
+            }
+            res.insert({std::move(mutable_column), column.type, column.name});
+        }
+        if (add_new_indice) {
+            new_ref_row_indices.emplace_back(new_indice);
+        }
+    }
+
+    res.set_ref_row_indices(new_ref_row_indices);
+
+    return res;
+}
+
+void Block::materialize_column(size_t i) {
+    (const_cast<IColumn*>(data[i].column.get()))->materialize();
+}
+
+void Block::materialize_columns() {
+    for (auto& column : data) {
+        (const_cast<IColumn*>(column.column.get()))->materialize();
+    }
+}
+
+std::map<size_t, size_t> Block::get_col_ref_indice_pos() const {
+    std::map<size_t, size_t> result;
+    for (size_t i = 0; i < data.size(); ++i) {
+        if (!data[i].column->is_materialized()) {
+            bool found = false;
+            for (size_t j = 0; j < ref_row_indices.size(); ++j) {
+                if (data[i].column->get_ref_row_indice() == ref_row_indices[j]) {
+                    result.insert({i, j});
+                    found = true;
+                    break;
+                }
+            }
+            DCHECK(found);
+        }
+    }
+    return result;
+}
+std::vector<RowIndicePtr> Block::shuffle_indices(IndiceArrayPtr indice_array) {
+    std::vector<IndiceArrayPtr> old_indice_arrays;
+    std::vector<IndiceArrayPtr> new_indice_arrays;
+    auto indice_item_count = indice_array->size();
+    for (auto indice : ref_row_indices) {
+        old_indice_arrays.emplace_back(indice->get_indices());
+
+        auto new_indice_array = std::make_shared<IndiceArray>();
+        new_indice_array->resize(indice_item_count);
+        new_indice_arrays.emplace_back(new_indice_array);
+    }
+    auto array_count = old_indice_arrays.size();
+    for (int i = 0; i < indice_item_count; ++i) {
+        auto ind = (*indice_array)[i];
+        for (int j = 0; j < array_count; ++j) {
+            auto new_ind = old_indice_arrays[j]->operator[](ind);
+            // DCHECK(new_ind >= 0 && new_ind <);
+            new_indice_arrays[j]->operator[](i) = new_ind;
+        }
+    }
+
+    std::vector<RowIndicePtr> new_indices;
+    for (auto& indice : new_indice_arrays) {
+        auto new_indice = std::make_shared<RowIndice>();
+        new_indice->add_indice(indice);
+        new_indices.emplace_back(new_indice);
+    }
+
+    return new_indices;
+}
+
 void Block::insert(size_t position, const ColumnWithTypeAndName& elem) {
     if (position > data.size()) {
         LOG(FATAL) << fmt::format("Position out of bound in Block::insert(), max position = {}",
@@ -538,6 +648,7 @@ void Block::clear() {
     info = BlockInfo();
     data.clear();
     index_by_name.clear();
+    ref_row_indices.clear();
 }
 
 void Block::clear_column_data(int column_size) noexcept {
@@ -549,7 +660,7 @@ void Block::clear_column_data(int column_size) noexcept {
         }
     }
     for (auto& d : data) {
-        DCHECK(d.column->use_count() == 1);
+        if(d.column->use_count() == 1)
         (*std::move(d.column)).assume_mutable()->clear();
     }
 }
@@ -558,11 +669,13 @@ void Block::swap(Block& other) noexcept {
     std::swap(info, other.info);
     data.swap(other.data);
     index_by_name.swap(other.index_by_name);
+    ref_row_indices.swap(other.ref_row_indices);
 }
 
 void Block::swap(Block&& other) noexcept {
     clear();
     data = std::move(other.data);
+    ref_row_indices = std::move(other.ref_row_indices);
     initialize_index_by_name();
 }
 
@@ -827,6 +940,103 @@ MutableBlock::MutableBlock(const std::vector<TupleDescriptor*>& tuple_descs) {
     }
 }
 
+// void MutableBlock::materialize_column(size_t i) {
+//     _columns[i]->materialize();
+// }
+// void MutableBlock::materialize_columns() {
+//     for (auto& column : _columns) {
+//         column->materialize();
+//     }
+// }
+// void MutableBlock::shuffle_indices(IndiceArrayPtr indice_array) {
+//     std::vector<IndiceArrayPtr> old_indice_arrays;
+//     std::vector<IndiceArrayPtr> new_indice_arrays;
+//     auto indice_item_count = indice_array->size();
+//     for (auto indice : _ref_row_indices) {
+//         old_indice_arrays.emplace_back(indice->get_indices());
+// 
+//         auto new_indice_array = std::make_shared<IndiceArray>();
+//         new_indice_array->resize(indice_item_count);
+//         new_indice_arrays.emplace_back(new_indice_array);
+//     }
+//     auto array_count = old_indice_arrays.size();
+//     for (int i = 0; i < indice_item_count; ++i) {
+//         auto ind = (*indice_array)[i];
+//         for (int j = 0; j < array_count; ++j) {
+//             auto new_ind = old_indice_arrays[j]->operator[](ind);
+//             // DCHECK(new_ind >= 0 && new_ind <);
+//             new_indice_arrays[j]->operator[](i) = new_ind;
+//         }
+//     }
+// 
+//     std::vector<RowIndicePtr> new_indices;
+//     for (auto& indice : new_indice_arrays) {
+//         auto new_indice = std::make_shared<RowIndice>();
+//         new_indice->add_indice(indice);
+//         new_indices.emplace_back(new_indice);
+//     }
+// 
+//     std::swap(_ref_row_indices, new_indices);
+// }
+
+// std::map<size_t, size_t> MutableBlock::get_col_ref_indice_pos() const {
+//     std::map<size_t, size_t> result;
+//     for (int i = 0; i < _columns.size(); ++i) {
+//         if (!_columns[i]->is_materialized()) {
+//             for (size_t j = 0; j < _ref_row_indices.size(); ++j) {
+//                 if (_columns[i]->get_ref_row_indice() == _ref_row_indices[j]) {
+//                     result.insert({i, j});
+//                     break;
+//                 }
+//             }
+//         }
+//     }
+//     return result;
+// }
+void dump_indices(const IndiceArrayPtr indice_array, int count = 100);
+// void MutableBlock::update_ref_row_indice(IndiceArrayPtr indice_array) {
+//     dump_indices(indice_array);
+// 
+//     MutableColumns new_columns;
+// 
+//     auto new_indice = std::make_shared<RowIndice>();
+//     new_indice->add_indice(indice_array);
+// 
+//     if (_ref_row_indices.empty()) {
+//         _ref_row_indices.emplace_back(new_indice);
+//         for (auto& column : _columns) {
+//             new_columns.emplace_back(
+//                 IColumn::make_unmaterialized_column(std::move(column), new_indice));
+//         }
+//     } else {
+//         auto col_ref_indice_mapping = get_col_ref_indice_pos();
+// 
+//         shuffle_indices(indice_array);
+// 
+//         bool add_new_indice = false;
+// 
+//         for (const auto& it : col_ref_indice_mapping) {
+//             _columns[it.first]->set_ref_row_indice(_ref_row_indices[it.second]);
+//         }
+// 
+//         for (auto& column : _columns) {
+//             if (column->is_materialized()) {
+//                 add_new_indice = true;
+//                 new_columns.emplace_back(
+//                     IColumn::make_unmaterialized_column(std::move(column), new_indice));
+//             } else {
+//                 new_columns.emplace_back(std::move(column));
+//             }
+//         }
+// 
+//         if (add_new_indice) {
+//             _ref_row_indices.emplace_back(new_indice);
+//         }
+//     }
+// 
+//     _columns = std::move(new_columns);
+// }
+
 size_t MutableBlock::rows() const {
     for (const auto& column : _columns) {
         if (column) {
@@ -862,7 +1072,9 @@ Block MutableBlock::to_block(int start_column, int end_column) {
     for (size_t i = start_column; i < end_column; ++i) {
         columns_with_schema.emplace_back(std::move(_columns[i]), _data_types[i], "");
     }
-    return {columns_with_schema};
+    Block block({columns_with_schema});
+    block.set_ref_row_indices(_ref_row_indices);
+    return block;
 }
 
 std::string MutableBlock::dump_data(size_t row_limit) const {

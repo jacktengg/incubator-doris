@@ -178,15 +178,21 @@ MutableColumnPtr ColumnVector<T>::clone_resized(size_t size) const {
     auto res = this->create();
 
     if (size > 0) {
-        auto& new_col = static_cast<Self&>(*res);
-        new_col.data.resize(size);
+        if (IColumn::is_materialized()) {
+            auto& new_col = static_cast<Self&>(*res);
+            new_col.data.resize(size);
 
-        size_t count = std::min(this->size(), size);
-        memcpy(new_col.data.data(), data.data(), count * sizeof(data[0]));
+            size_t count = std::min(this->size(), size);
+            memcpy(new_col.data.data(), data.data(), count * sizeof(data[0]));
 
-        if (size > count)
-            memset(static_cast<void*>(&new_col.data[count]), static_cast<int>(value_type()),
-                   (size - count) * sizeof(value_type));
+            if (size > count)
+                memset(static_cast<void*>(&new_col.data[count]), static_cast<int>(value_type()),
+                       (size - count) * sizeof(value_type));
+        } else {
+            assert(size == this->size());
+            res->set_ref_column(IColumn::ref_column);
+            res->set_ref_row_indice(IColumn::ref_row_indice);
+        }
     }
 
     return res;

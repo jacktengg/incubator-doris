@@ -128,6 +128,8 @@ Status VSortNode::sort_input(RuntimeState* state) {
         auto rows = block.rows();
 
         if (rows != 0) {
+            block.materialize_columns();
+
             RETURN_IF_ERROR(pretreat_block(block));
             size_t mem_usage = block.allocated_bytes();
 

@@ -87,7 +87,12 @@ public:
     bool is_fixed_and_contiguous() const override { return true; }
     size_t size_of_value_if_fixed() const override { return sizeof(T); }
 
-    size_t size() const override { return data.size(); }
+    size_t size() const override {
+        if (nullptr != IColumn::ref_row_indice) {
+            return IColumn::ref_row_indice->size();
+        }
+        return data.size();
+    }
     size_t byte_size() const override { return data.size() * sizeof(data[0]); }
     size_t allocated_bytes() const override { return data.allocated_bytes(); }
     void protect() override { data.protect(); }
