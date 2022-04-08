@@ -61,7 +61,9 @@ Block::Block(std::initializer_list<ColumnWithTypeAndName> il) : data {il} {
     initialize_index_by_name();
 }
 
-Block::Block(const ColumnsWithTypeAndName& data_) : data {data_} {
+Block::Block(const ColumnsWithTypeAndName& data_, const std::vector<RowIndicePtr>& indices)
+    : data {data_},
+      ref_row_indices(indices) {
     initialize_index_by_name();
 }
 
@@ -98,6 +100,21 @@ void Block::initialize_index_by_name() {
     for (size_t i = 0, size = data.size(); i < size; ++i) {
         index_by_name[data[i].name] = i;
     }
+}
+
+Block Block::make_table_by_columns(const std::vector<size_t>& positions) {
+    ColumnsWithTypeAndName columns;
+    std::set<RowIndicePtr> row_indices;
+    for (auto pos : positions) {
+        columns.emplace_back(data[pos]);
+        if (!data[pos].column->is_materialized()) {
+            row_indices.insert(data[pos].column->get_ref_row_indice());
+        }
+    }
+    Block res(columns);
+    std::vector<RowIndicePtr> row_indices_vec(row_indices.begin(), row_indices.end());
+    res.set_ref_row_indices(row_indices_vec);
+    return res;
 }
 
 Block Block::get_unmaterialized_block(IndiceArrayPtr indice_array) {
@@ -147,7 +164,7 @@ Block Block::get_unmaterialized_block(IndiceArrayPtr indice_array) {
         }
     }
 
-    res.set_ref_row_indices(new_ref_row_indices);
+    res.set_ref_row_indices(std::move(new_ref_row_indices));
 
     return res;
 }
@@ -663,6 +680,15 @@ void Block::clear_column_data(int column_size) noexcept {
         if(d.column->use_count() == 1)
         (*std::move(d.column)).assume_mutable()->clear();
     }
+    std::vector<RowIndicePtr> new_ref_row_indices;
+    for (const auto& indice : ref_row_indices) {
+        if (indice.use_count() > 1) {
+            new_ref_row_indices.emplace_back(indice);
+        }
+    }
+    if (new_ref_row_indices.size() != ref_row_indices.size()) {
+        std::swap(ref_row_indices, new_ref_row_indices);
+    }
 }
 
 void Block::swap(Block& other) noexcept {
@@ -1063,18 +1089,16 @@ void MutableBlock::add_rows(const Block* block, const int* row_begin, const int*
     }
 }
 
-Block MutableBlock::to_block(int start_column) {
-    return to_block(start_column, _columns.size());
+Block MutableBlock::to_block(int start_column, RuntimeProfile::Counter* timer) {
+    return to_block(start_column, _columns.size(), timer);
 }
 
-Block MutableBlock::to_block(int start_column, int end_column) {
+Block MutableBlock::to_block(int start_column, int end_column, RuntimeProfile::Counter* timer) {
     ColumnsWithTypeAndName columns_with_schema;
     for (size_t i = start_column; i < end_column; ++i) {
         columns_with_schema.emplace_back(std::move(_columns[i]), _data_types[i], "");
     }
-    Block block({columns_with_schema});
-    block.set_ref_row_indices(_ref_row_indices);
-    return block;
+    return {columns_with_schema};
 }
 
 std::string MutableBlock::dump_data(size_t row_limit) const {

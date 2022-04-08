@@ -189,9 +189,6 @@ private:
     RuntimeProfile::Counter* _build_table_expanse_timer;
     RuntimeProfile::Counter* _probe_timer;
     RuntimeProfile::Counter* _probe_do_process_timer;
-    RuntimeProfile::Counter* _probe_do_process_resize_timer;
-    RuntimeProfile::Counter* _probe_do_process_to_block_timer;
-    RuntimeProfile::Counter* _probe_do_process_swap_timer;
     RuntimeProfile::Counter* _probe_expr_call_timer;
     RuntimeProfile::Counter* _probe_next_timer;
     RuntimeProfile::Counter* _build_materialize_timer;
@@ -204,7 +201,9 @@ private:
     RuntimeProfile::Counter* _search_hashtable_timer;
     RuntimeProfile::Counter* _build_side_output_timer;
     RuntimeProfile::Counter* _probe_side_output_timer;
-    RuntimeProfile::Counter* _filter_timer;
+
+    RuntimeProfile::Counter* _build_side_output_column_count;
+    RuntimeProfile::Counter* _probe_side_output_column_count;
 
     int64_t _hash_table_rows;
     int64_t _mem_used;

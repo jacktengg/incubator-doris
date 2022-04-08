@@ -171,9 +171,8 @@ struct ProcessHashTableProbe {
               _search_hashtable_timer(join_node->_search_hashtable_timer),
               _build_side_output_timer(join_node->_build_side_output_timer),
               _probe_side_output_timer(join_node->_probe_side_output_timer),
-              _probe_do_process_resize_timer(join_node->_probe_do_process_resize_timer),
-              _probe_do_process_swap_timer(join_node->_probe_do_process_swap_timer),
-              _probe_do_process_to_block_timer(join_node->_probe_do_process_to_block_timer)  {}
+              _build_side_output_column_count(join_node->_build_side_output_column_count),
+              _probe_side_output_column_count(join_node->_probe_side_output_column_count)  {}
 
     // output build side result column
     void build_side_output_column(MutableColumns& mcol, int column_offset, int column_length, int size) {
@@ -238,7 +237,10 @@ struct ProcessHashTableProbe {
 
                 // mutable_block.add_ref_row_indices(tmp_mutable_block.get_ref_row_indices());
 
-                Block new_block = _build_blocks[0].get_unmaterialized_block(
+                std::vector<size_t> column_positions(column_length);
+                std::iota(column_positions.begin(), column_positions.end(), 0);
+                Block new_block = _build_blocks[0].make_table_by_columns(column_positions);
+                new_block = new_block.get_unmaterialized_block(
                     std::make_shared<IndiceArray>(std::move(_build_block_rows)));
 
                 auto mutated_columns = std::move(new_block.mutate_columns());
@@ -277,8 +279,12 @@ struct ProcessHashTableProbe {
         // }
         // mutable_block.add_ref_row_indices(tmp_mutable_block.get_ref_row_indices());
 
-        Block new_block = _probe_block.get_unmaterialized_block(
+        std::vector<size_t> column_positions(column_length);
+        std::iota(column_positions.begin(), column_positions.end(), 0);
+        Block new_block = _probe_block.make_table_by_columns(column_positions);
+        new_block = new_block.get_unmaterialized_block(
             std::make_shared<IndiceArray>(std::move(_probe_block_rows)));
+
         auto mutated_columns = std::move(new_block.mutate_columns());
         auto& mcol = mutable_block.mutable_columns();
         for (int i = 0; i < column_length; ++i) {
@@ -399,37 +405,28 @@ struct ProcessHashTableProbe {
                 }
             }
         }
-        {
-        SCOPED_TIMER(_probe_do_process_resize_timer);
+
         _build_block_offsets.resize(current_offset);
         _build_block_rows.resize(current_offset);
         _probe_block_rows.resize(current_offset);
-        }
 
         {
             SCOPED_TIMER(_build_side_output_timer);
             // build_side_output_column(mcol, right_col_idx, right_col_len, current_offset);
+            _build_side_output_column_count->set((int64_t)right_col_len);
             build_side_output_column_unmaterialized(mutable_block, right_col_idx, right_col_len, current_offset);
         }
 
         {
             SCOPED_TIMER(_probe_side_output_timer);
             // probe_side_output_column(mcol, right_col_idx, current_offset);
+            _probe_side_output_column_count->set((int64_t)right_col_idx);
             probe_side_output_column_unmaterialized(mutable_block, right_col_idx, current_offset);
         }
 
-        {
-        Block new_block;
-
-            {
-                SCOPED_TIMER(_probe_do_process_to_block_timer);
-                new_block = mutable_block.to_block();
-            }
-            {
-                SCOPED_TIMER(_probe_do_process_swap_timer);
-                output_block->swap(new_block);
-            }
-        }
+        Block new_block = mutable_block.to_block();
+        new_block.set_ref_row_indices(mutable_block.get_ref_row_indices());
+        output_block->swap(new_block);
 
         return Status::OK();
     }
@@ -708,9 +705,9 @@ private:
     ProfileCounter* _search_hashtable_timer;
     ProfileCounter* _build_side_output_timer;
     ProfileCounter* _probe_side_output_timer;
-    ProfileCounter* _probe_do_process_resize_timer;
-    ProfileCounter* _probe_do_process_swap_timer;
-    ProfileCounter* _probe_do_process_to_block_timer;
+
+    ProfileCounter* _build_side_output_column_count;
+    ProfileCounter* _probe_side_output_column_count;
 };
 
 // now we only support inner join
@@ -827,9 +824,6 @@ Status HashJoinNode::prepare(RuntimeState* state) {
     auto probe_phase_profile = runtime_profile()->create_child("ProbePhase", true, true);
     _probe_timer = ADD_TIMER(probe_phase_profile, "ProbeTime");
     _probe_do_process_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessTime");
-    _probe_do_process_resize_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessResizeTime");
-    _probe_do_process_swap_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessSwapTime");
-    _probe_do_process_to_block_timer = ADD_TIMER(probe_phase_profile, "ProbeDoProcessToBlockTime");
     _probe_next_timer = ADD_TIMER(probe_phase_profile, "ProbeFindNextTime");
     _probe_expr_call_timer = ADD_TIMER(probe_phase_profile, "ProbeExprCallTime");
     _probe_rows_counter = ADD_COUNTER(probe_phase_profile, "ProbeRows", TUnit::UNIT);
@@ -841,8 +835,9 @@ Status HashJoinNode::prepare(RuntimeState* state) {
     _push_down_timer = ADD_TIMER(runtime_profile(), "PushDownTime");
     _push_compute_timer = ADD_TIMER(runtime_profile(), "PushDownComputeTime");
     _build_buckets_counter = ADD_COUNTER(runtime_profile(), "BuildBuckets", TUnit::UNIT);
-    
-    _filter_timer = ADD_TIMER(runtime_profile(), "FilterTime");
+
+    _build_side_output_column_count = ADD_COUNTER(runtime_profile(), "BuildSideOutputColumnCount", TUnit::UNIT);
+    _probe_side_output_column_count = ADD_COUNTER(runtime_profile(), "ProbeSideOutputColumnCount", TUnit::UNIT);
 
     RETURN_IF_ERROR(
             VExpr::prepare(_build_expr_ctxs, state, child(1)->row_desc(), expr_mem_tracker()));
@@ -1009,11 +1004,8 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
         return Status::OK();
     }
 
-    {
-    SCOPED_TIMER(_filter_timer);
     RETURN_IF_ERROR(
             VExprContext::filter_block(_vconjunct_ctx_ptr, output_block, output_block->columns()));
-    }
     reached_limit(output_block, eos);
 
     // output_block->materialize_columns();
@@ -1063,7 +1055,9 @@ Status HashJoinNode::_hash_table_build(RuntimeState* state) {
         // make one block for each 4 gigabytes
         constexpr static auto BUILD_BLOCK_MAX_SIZE =  4 * 1024UL * 1024UL * 1024UL;
         if (_mem_used - last_mem_used > BUILD_BLOCK_MAX_SIZE) {
-            _build_blocks.emplace_back(mutable_block.to_block());
+            auto new_block = mutable_block.to_block();
+            new_block.set_ref_row_indices(mutable_block.get_ref_row_indices());
+            _build_blocks.emplace_back(new_block);
             // TODO:: Rethink may we should do the proess after we recevie all build blocks ?
             // which is better.
             RETURN_IF_ERROR(_process_build_block(state, _build_blocks[index], index));
@@ -1074,7 +1068,9 @@ Status HashJoinNode::_hash_table_build(RuntimeState* state) {
         }
     }
 
-    _build_blocks.emplace_back(mutable_block.to_block());
+    auto new_block = mutable_block.to_block();
+    new_block.set_ref_row_indices(mutable_block.get_ref_row_indices());
+    _build_blocks.emplace_back(new_block);
     RETURN_IF_ERROR(_process_build_block(state, _build_blocks[index], index));
 
     return std::visit(

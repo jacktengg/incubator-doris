@@ -35,6 +35,7 @@
 #include "vec/core/columns_with_type_and_name.h"
 #include "vec/core/names.h"
 #include "vec/data_types/data_type_nullable.h"
+#include "util/runtime_profile.h"
 
 namespace doris {
 
@@ -71,16 +72,22 @@ public:
 
     Block() = default;
     Block(std::initializer_list<ColumnWithTypeAndName> il);
-    Block(const ColumnsWithTypeAndName& data_);
+    Block(const ColumnsWithTypeAndName& data_, const std::vector<RowIndicePtr>& indices = {});
     Block(const PBlock& pblock);
 
-    std::vector<RowIndicePtr> get_ref_row_indices() {
+    const std::vector<RowIndicePtr>& get_ref_row_indices() const {
         return ref_row_indices;
     }
 
     void set_ref_row_indices(const std::vector<RowIndicePtr>& indices) {
         ref_row_indices = indices;
     }
+
+    void set_ref_row_indices(const std::vector<RowIndicePtr>&& indices) {
+        ref_row_indices = std::move(indices);
+    }
+
+    Block make_table_by_columns(const std::vector<size_t>& positions);
 
     std::map<size_t, size_t> get_col_ref_indice_pos() const;
 
@@ -366,13 +373,14 @@ public:
     void operator=(MutableBlock&& m_block) {
         _columns = std::move(m_block._columns);
         _data_types = std::move(m_block._data_types);
+        _ref_row_indices = std::move(m_block._ref_row_indices);
     }
 
     void materialize_column(size_t i);
 
     void materialize_columns();
 
-    std::vector<RowIndicePtr> get_ref_row_indices() const {
+    const std::vector<RowIndicePtr>& get_ref_row_indices() const {
         return _ref_row_indices;
     }
 
@@ -453,9 +461,9 @@ public:
         }
     }
 
-    Block to_block(int start_column = 0);
+    Block to_block(int start_column = 0, RuntimeProfile::Counter* timer = nullptr);
 
-    Block to_block(int start_column, int end_column);
+    Block to_block(int start_column, int end_column, RuntimeProfile::Counter* timer = nullptr);
 
     void add_row(const Block* block, int row);
     void add_rows(const Block* block, const int* row_begin, const int* row_end);
@@ -465,6 +473,7 @@ public:
     void clear() {
         _columns.clear();
         _data_types.clear();
+        _ref_row_indices.clear();
     }
     
     void shuffle_indices(IndiceArrayPtr indice_array);

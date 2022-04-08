@@ -78,6 +78,7 @@ Status VDataStreamSender::Channel::send_current_block(bool eos) {
     //        return send_local_block(eos);
     //    }
     auto block = _mutable_block->to_block();
+    block.set_ref_row_indices(_mutable_block->get_ref_row_indices());
     RETURN_IF_ERROR(_parent->serialize_block(&block, _ch_cur_pb_block));
     block.clear_column_data();
     _mutable_block->set_muatable_columns(block.mutate_columns());
@@ -92,6 +93,7 @@ Status VDataStreamSender::Channel::send_local_block(bool eos) {
                                                                     _dest_node_id);
     if (recvr != nullptr) {
         Block block = _mutable_block->to_block();
+        block.set_ref_row_indices(_mutable_block->get_ref_row_indices());
         COUNTER_UPDATE(_parent->_local_bytes_send_counter, block.bytes());
         recvr->add_block(&block, _parent->_sender_id, true);
         if (eos) {
