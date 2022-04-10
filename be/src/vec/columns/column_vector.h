@@ -120,6 +120,8 @@ private:
     /// Sugar constructor.
     ColumnVector(std::initializer_list<T> il) : data {il} {}
 
+    virtual void materialize();
+
     void insert_res_column(const uint16_t* sel, size_t sel_size,
                            vectorized::ColumnVector<T>* res_ptr) {
         auto& res_data = res_ptr->data;

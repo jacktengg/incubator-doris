@@ -211,6 +211,8 @@ Status AggregationNode::prepare(RuntimeState* state) {
     _get_results_timer = ADD_TIMER(runtime_profile(), "GetResultsTime");
     _data_mem_tracker = MemTracker::create_virtual_tracker(-1, "AggregationNode:Data", mem_tracker());
 
+    _materialize_timer  = ADD_TIMER(runtime_profile(), "MaterializeTime");
+
     SCOPED_TIMER(_runtime_profile->total_time_counter());
     _intermediate_tuple_desc = state->desc_tbl().get_tuple_descriptor(_intermediate_tuple_id);
     _output_tuple_desc = state->desc_tbl().get_tuple_descriptor(_output_tuple_id);
@@ -356,7 +358,10 @@ Status AggregationNode::open(RuntimeState* state) {
         if (block.rows() == 0) {
             continue;
         }
-        block.materialize_columns();
+        {
+            SCOPED_TIMER(_materialize_timer);
+            block.materialize_columns();
+        }
         RETURN_IF_ERROR(_executor.execute(&block));
         _executor.update_memusage();
     }
@@ -382,7 +387,10 @@ Status AggregationNode::get_next(RuntimeState* state, Block* block, bool* eos) {
         } while (_preagg_block.rows() == 0 && !child_eos);
 
         if (_preagg_block.rows() != 0) {
-            _preagg_block.materialize_columns();
+            {
+                SCOPED_TIMER(_materialize_timer);
+                _preagg_block.materialize_columns();
+            }
             RETURN_IF_ERROR(_executor.pre_agg(&_preagg_block, block));
         } else {
             RETURN_IF_ERROR(_executor.get_result(state, block, eos));

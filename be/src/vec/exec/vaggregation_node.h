@@ -452,6 +452,7 @@ private:
     RuntimeProfile::Counter* _merge_timer;
     RuntimeProfile::Counter* _expr_timer;
     RuntimeProfile::Counter* _get_results_timer;
+    RuntimeProfile::Counter* _materialize_timer;
 
     bool _is_streaming_preagg;
     Block _preagg_block = Block();

@@ -246,6 +246,36 @@ void ColumnVector<T>::insert_indices_from(const IColumn& src, const int* indices
 }
 
 template <typename T>
+void ColumnVector<T>::materialize() {
+    if(IColumn::is_materialized()) {
+        return;
+    }
+    const auto& ref_row_indices_array = IColumn::ref_row_indice->get_indices_array();
+    const Self& src_vec = assert_cast<const Self&>(*IColumn::ref_column);
+    auto total_size = IColumn::ref_row_indice->size();
+    data.resize(total_size);
+
+    size_t dst_offset = 0;
+    for (auto& indice_array_ptr : ref_row_indices_array) {
+        const auto& indice_array = *indice_array_ptr;
+        auto size = indice_array.size();
+        for (int i = 0; i < size; ++i) {
+            if constexpr (std::is_same_v<T, UInt8>) {
+                // Now Uint8 use to identify null and non null
+                // 1. nullable column : offset == -1 means is null at the here, set true here
+                // 2. real data column : offset == -1 what at is meaningless
+                // 3. JOIN_NULL_HINT only use in outer join to hint the null is produced by outer join
+                data[dst_offset++] = (indice_array[i] == -1) ? T{JOIN_NULL_HINT} : src_vec.get_element(indice_array[i]);
+            } else {
+                data[dst_offset++] = (indice_array[i] == -1) ? T{0} : src_vec.get_element(indice_array[i]);
+            }
+        }
+    }
+    IColumn::ref_column = nullptr;
+    IColumn::ref_row_indice = nullptr;
+}
+
+template <typename T>
 ColumnPtr ColumnVector<T>::filter(const IColumn::Filter& filt, ssize_t result_size_hint) const {
     size_t size = data.size();
     if (size != filt.size()) {

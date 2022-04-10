@@ -1053,7 +1053,7 @@ Status HashJoinNode::_hash_table_build(RuntimeState* state) {
         if (block.rows() != 0) { mutable_block.merge(block); }
 
         // make one block for each 4 gigabytes
-        constexpr static auto BUILD_BLOCK_MAX_SIZE =  4 * 1024UL * 1024UL * 1024UL;
+        constexpr static auto BUILD_BLOCK_MAX_SIZE =  8 * 1024UL * 1024UL * 1024UL;
         if (_mem_used - last_mem_used > BUILD_BLOCK_MAX_SIZE) {
             auto new_block = mutable_block.to_block();
             new_block.set_ref_row_indices(mutable_block.get_ref_row_indices());

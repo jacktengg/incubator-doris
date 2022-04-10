@@ -29,6 +29,27 @@
 
 namespace doris::vectorized {
 
+void ColumnString::materialize() {
+    if(IColumn::is_materialized()) {
+        return;
+    }
+
+    const auto& ref_row_indices_array = IColumn::ref_row_indice->get_indices_array();
+
+    for (auto& indice_array_ptr : ref_row_indices_array) {
+        const auto& indice_array = *indice_array_ptr;
+        auto size = indice_array.size();
+        for (int i = 0; i < size; ++i) {
+            if (indice_array[i] == -1) {
+                ColumnString::insert_default();
+            } else {
+                ColumnString::insert_from(*IColumn::ref_column, indice_array[i]);
+            }
+        }
+    }
+    IColumn::ref_column = nullptr;
+    IColumn::ref_row_indice = nullptr;
+}
 MutableColumnPtr ColumnString::clone_resized(size_t to_size) const {
     auto res = ColumnString::create();
     if (to_size == 0) return res;

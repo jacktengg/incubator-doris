@@ -33,6 +33,29 @@ bool decimal_less(T x, T y, doris::vectorized::UInt32 x_scale, doris::vectorized
 namespace doris::vectorized {
 
 template <typename T>
+void ColumnDecimal<T>::materialize() {
+    if(IColumn::is_materialized()) {
+        return;
+    }
+
+    const auto& ref_row_indices_array = IColumn::ref_row_indice->get_indices_array();
+    const Self& src_vec = assert_cast<const Self&>(*IColumn::ref_column);
+    auto total_size = IColumn::ref_row_indice->size();
+    data.resize(total_size);
+
+    size_t dst_offset = 0;
+    for (auto& indice_array_ptr : ref_row_indices_array) {
+        const auto& indice_array = *indice_array_ptr;
+        auto size = indice_array.size();
+        for (int i = 0; i < size; ++i) {
+            data[dst_offset++] = indice_array[i] == -1 ? T{} : src_vec.get_element(indice_array[i]);
+        }
+    }
+    IColumn::ref_column = nullptr;
+    IColumn::ref_row_indice = nullptr;
+}
+
+template <typename T>
 int ColumnDecimal<T>::compare_at(size_t n, size_t m, const IColumn& rhs_, int) const {
     auto& other = static_cast<const Self&>(rhs_);
     const T& a = data[n];

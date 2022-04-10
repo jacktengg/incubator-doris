@@ -177,6 +177,7 @@ void Block::materialize_columns() {
     for (auto& column : data) {
         (const_cast<IColumn*>(column.column.get()))->materialize();
     }
+    ref_row_indices.clear();
 }
 
 std::map<size_t, size_t> Block::get_col_ref_indice_pos() const {

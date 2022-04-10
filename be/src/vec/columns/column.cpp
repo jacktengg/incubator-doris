@@ -41,6 +41,16 @@ void dump_indices(const IndiceArrayPtr indice_array, int count = 100) {
     std::cout << "\n";
 }
 
+void dump_indices(const int* indices_begin, const int* indices_end) {
+    auto count = indices_end - indices_begin;
+    std::cout << "dump indices2:\n";
+    for (int i = 0; i < count; ++i) {
+        std::cout << indices_begin[i] << ", ";
+        if (i > 0 && 0 == (i + 1) % 8) std::cout << "\n";
+    }
+    std::cout << "\n";
+}
+
 void RowIndice::add_indice(IndiceArrayPtr indice_array) {
     _total_rows += indice_array->size();
     _indices.emplace_back(indice_array);
@@ -51,6 +61,7 @@ IndiceArrayPtr RowIndice::get_indices() {
     if (_indices.size() == 1) {
         return _indices[0];
     }
+    std::cout << "RowIndice::get_indices, more than one indice array\n";
     auto indice_array = std::make_shared<IndiceArray>();
     indice_array->resize(_total_rows);
     auto* p = indice_array->data();
@@ -76,9 +87,14 @@ void IColumn::materialize() {
     const auto& ref_row_indices_array = ref_row_indice->get_indices_array();
     auto& column = *ref_column;
     for (auto& indice_array : ref_row_indices_array) {
-        for (auto index : *indice_array) {
-            insert_from(column, index);
-        }
+        // for (auto index : *indice_array) {
+        //     insert_from(column, index);
+        // }
+        // dump_indices(indice_array, 512);
+        // auto size = std::min(indice_array->size(), (size_t)512);
+        // dump_indices(indice_array->data(), indice_array->data() + size);
+
+        insert_indices_from(column, indice_array->data(), indice_array->data() + indice_array->size());
     }
     ref_column = nullptr;
     ref_row_indice = nullptr;

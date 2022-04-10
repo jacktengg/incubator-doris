@@ -73,6 +73,8 @@ private:
 public:
     const char* get_family_name() const override { return "String"; }
 
+    virtual void materialize();
+
     size_t size() const override {
         if (nullptr != IColumn::ref_row_indice) {
             return IColumn::ref_row_indice->size();

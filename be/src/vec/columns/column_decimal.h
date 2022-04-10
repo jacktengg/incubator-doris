@@ -79,6 +79,8 @@ private:
     ColumnDecimal(const ColumnDecimal& src) : data(src.data), scale(src.scale) {}
 
 public:
+    virtual void materialize();
+
     const char* get_family_name() const override { return TypeName<T>::get(); }
 
     bool is_numeric() const override { return false; }
