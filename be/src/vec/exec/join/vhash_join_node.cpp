@@ -172,7 +172,14 @@ struct ProcessHashTableProbe {
               _build_side_output_timer(join_node->_build_side_output_timer),
               _probe_side_output_timer(join_node->_probe_side_output_timer),
               _build_side_output_column_count(join_node->_build_side_output_column_count),
-              _probe_side_output_column_count(join_node->_probe_side_output_column_count)  {}
+              _probe_side_output_column_count(join_node->_probe_side_output_column_count),
+              _build_side_mutate_columns_timer(join_node->_build_side_mutate_columns_timer),
+              _build_side_update_indice_timer(join_node->_build_side_update_indice_timer),
+              _probe_side_mutate_columns_timer(join_node->_probe_side_mutate_columns_timer),
+              _probe_side_update_indice_timer(join_node->_probe_side_update_indice_timer),
+              _build_side_make_table_timer(join_node->_build_side_make_table_timer),
+              _probe_side_make_table_timer(join_node->_probe_side_make_table_timer)
+                {}
 
     // output build side result column
     void build_side_output_column(MutableColumns& mcol, int column_offset, int column_length, int size) {
@@ -224,29 +231,27 @@ struct ProcessHashTableProbe {
 
         if constexpr (!is_semi_anti_join) {
             if (_build_blocks.size() == 1) {
-                // Block new_block = _build_blocks[0].clone_shallow();
-                // MutableBlock tmp_mutable_block(&new_block);
-
-                // tmp_mutable_block.update_ref_row_indice(
-                //     std::make_shared<IndiceArray>(std::move(_build_block_rows)));
-
-                // auto& mcol = mutable_block.mutable_columns();
-                // for (int i = 0; i < column_length; i++) {
-                //     mcol[i + column_offset] = std::move(tmp_mutable_block.mutable_columns()[i]);
-                // }
-
-                // mutable_block.add_ref_row_indices(tmp_mutable_block.get_ref_row_indices());
-
                 std::vector<size_t> column_positions(column_length);
                 std::iota(column_positions.begin(), column_positions.end(), 0);
-                Block new_block = _build_blocks[0].make_table_by_columns(column_positions);
-                new_block = new_block.get_unmaterialized_block(
-                    std::make_shared<IndiceArray>(std::move(_build_block_rows)));
+                Block new_block;
+                IndiceArrayPtr indice_array_ptr = std::make_shared<IndiceArray>(std::move(_build_block_rows));
+                {
+                    SCOPED_TIMER(_build_side_make_table_timer);
+                    new_block = _build_blocks[0].make_table_by_columns(column_positions);
+                }
+                {
+                    SCOPED_TIMER(_build_side_update_indice_timer);
+                    new_block = new_block.get_unmaterialized_block(indice_array_ptr );
+                }
 
-                auto mutated_columns = std::move(new_block.mutate_columns());
-                auto& mcol = mutable_block.mutable_columns();
-                for (int i = 0; i < column_length; i++) {
-                    mcol[i + column_offset] = std::move(mutated_columns[i]);
+                MutableColumns mutated_columns;
+                {
+                    mutated_columns = std::move(new_block.mutate_columns());
+                    SCOPED_TIMER(_build_side_mutate_columns_timer);
+                    auto& mcol = mutable_block.mutable_columns();
+                    for (int i = 0; i < column_length; i++) {
+                        mcol[i + column_offset] = std::move(mutated_columns[i]);
+                    }
                 }
                 mutable_block.add_ref_row_indices(new_block.get_ref_row_indices());
             } else {
@@ -267,28 +272,28 @@ struct ProcessHashTableProbe {
     void probe_side_output_column_unmaterialized(MutableBlock& mutable_block, int column_length, int size) {
         if (0 == size)
             return;
-        // Block new_block = _probe_block.clone_shallow();
-        // MutableBlock tmp_mutable_block(&new_block);
-
-        // tmp_mutable_block.update_ref_row_indice(
-        //     std::make_shared<IndiceArray>(std::move(_probe_block_rows)));
-
-        // auto& mcol = mutable_block.mutable_columns();
-        // for (int i = 0; i < column_length; ++i) {
-        //     mcol[i] = std::move(tmp_mutable_block.mutable_columns()[i]);
-        // }
-        // mutable_block.add_ref_row_indices(tmp_mutable_block.get_ref_row_indices());
 
         std::vector<size_t> column_positions(column_length);
         std::iota(column_positions.begin(), column_positions.end(), 0);
-        Block new_block = _probe_block.make_table_by_columns(column_positions);
-        new_block = new_block.get_unmaterialized_block(
-            std::make_shared<IndiceArray>(std::move(_probe_block_rows)));
+        Block new_block;
+        IndiceArrayPtr indice_array_ptr = std::make_shared<IndiceArray>(std::move(_probe_block_rows));
+        {
+            SCOPED_TIMER(_probe_side_make_table_timer);
+            new_block = _probe_block.make_table_by_columns(column_positions);
+        }
+        {
+            SCOPED_TIMER(_probe_side_update_indice_timer);
+            new_block = new_block.get_unmaterialized_block(indice_array_ptr);
+        }
 
-        auto mutated_columns = std::move(new_block.mutate_columns());
-        auto& mcol = mutable_block.mutable_columns();
-        for (int i = 0; i < column_length; ++i) {
-            mcol[i] = std::move(mutated_columns[i]);
+        MutableColumns mutated_columns;
+        {
+            mutated_columns = std::move(new_block.mutate_columns());
+            SCOPED_TIMER(_probe_side_mutate_columns_timer);
+            auto& mcol = mutable_block.mutable_columns();
+            for (int i = 0; i < column_length; ++i) {
+                mcol[i] = std::move(mutated_columns[i]);
+            }
         }
         mutable_block.add_ref_row_indices(new_block.get_ref_row_indices());
     }
@@ -412,15 +417,11 @@ struct ProcessHashTableProbe {
 
         {
             SCOPED_TIMER(_build_side_output_timer);
-            // build_side_output_column(mcol, right_col_idx, right_col_len, current_offset);
-            _build_side_output_column_count->set((int64_t)right_col_len);
             build_side_output_column_unmaterialized(mutable_block, right_col_idx, right_col_len, current_offset);
         }
 
         {
             SCOPED_TIMER(_probe_side_output_timer);
-            // probe_side_output_column(mcol, right_col_idx, current_offset);
-            _probe_side_output_column_count->set((int64_t)right_col_idx);
             probe_side_output_column_unmaterialized(mutable_block, right_col_idx, current_offset);
         }
 
@@ -708,6 +709,15 @@ private:
 
     ProfileCounter* _build_side_output_column_count;
     ProfileCounter* _probe_side_output_column_count;
+
+    ProfileCounter* _build_side_mutate_columns_timer;
+    ProfileCounter* _build_side_update_indice_timer;
+
+    ProfileCounter* _probe_side_mutate_columns_timer;
+    ProfileCounter* _probe_side_update_indice_timer;
+
+    ProfileCounter* _build_side_make_table_timer;
+    ProfileCounter* _probe_side_make_table_timer;
 };
 
 // now we only support inner join
@@ -819,6 +829,7 @@ Status HashJoinNode::prepare(RuntimeState* state) {
     _build_table_expanse_timer = ADD_TIMER(build_phase_profile, "BuildTableExpanseTime");
     _build_rows_counter = ADD_COUNTER(build_phase_profile, "BuildRows", TUnit::UNIT);
     _build_materialize_timer = ADD_TIMER(build_phase_profile, "BuildMaterializeTime");
+    _build_table_merge_timer = ADD_TIMER(build_phase_profile, "BuildMergeBlockTime");
 
     // Probe phase
     auto probe_phase_profile = runtime_profile()->create_child("ProbePhase", true, true);
@@ -831,6 +842,15 @@ Status HashJoinNode::prepare(RuntimeState* state) {
     _build_side_output_timer = ADD_TIMER(probe_phase_profile, "ProbeWhenBuildSideOutputTime");
     _probe_side_output_timer = ADD_TIMER(probe_phase_profile, "ProbeWhenProbeSideOutputTime");
     _probe_materialize_timer  = ADD_TIMER(probe_phase_profile, "ProbeMaterializeTime");
+
+    _build_side_mutate_columns_timer = ADD_TIMER(probe_phase_profile, "BuildSideMutateColumsTime");
+    _build_side_update_indice_timer = ADD_TIMER(probe_phase_profile, "BuildSideUpdateIndicesTime");
+
+    _probe_side_mutate_columns_timer = ADD_TIMER(probe_phase_profile, "ProbeSideMutateColumsTime");
+    _probe_side_update_indice_timer = ADD_TIMER(probe_phase_profile, "ProbeSideUpdateIndicesTime");
+
+    _build_side_make_table_timer = ADD_TIMER(probe_phase_profile, "BuildSideMakeTableTime");
+    _probe_side_make_table_timer = ADD_TIMER(probe_phase_profile, "ProbeSideMakeTableTime");
 
     _push_down_timer = ADD_TIMER(runtime_profile(), "PushDownTime");
     _push_compute_timer = ADD_TIMER(runtime_profile(), "PushDownComputeTime");
@@ -859,6 +879,7 @@ Status HashJoinNode::prepare(RuntimeState* state) {
 
     _build_block_offsets.resize(state->batch_size());
     _build_block_rows.resize(state->batch_size());
+
     return Status::OK();
 }
 
@@ -1008,8 +1029,6 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
             VExprContext::filter_block(_vconjunct_ctx_ptr, output_block, output_block->columns()));
     reached_limit(output_block, eos);
 
-    // output_block->materialize_columns();
-
     return st;
 }
 
@@ -1027,6 +1046,12 @@ Status HashJoinNode::open(RuntimeState* state) {
 
     RETURN_IF_ERROR(_hash_table_build(state));
     RETURN_IF_ERROR(child(0)->open(state));
+
+    int right_col_idx = _is_right_semi_anti ? 0 : _left_table_data_types.size();
+    int right_col_len = _right_table_data_types.size();
+
+    _build_side_output_column_count->set((int64_t)right_col_len);
+    _probe_side_output_column_count->set((int64_t)right_col_idx);
 
     return Status::OK();
 }
@@ -1053,7 +1078,7 @@ Status HashJoinNode::_hash_table_build(RuntimeState* state) {
         if (block.rows() != 0) { mutable_block.merge(block); }
 
         // make one block for each 4 gigabytes
-        constexpr static auto BUILD_BLOCK_MAX_SIZE =  8 * 1024UL * 1024UL * 1024UL;
+        constexpr static auto BUILD_BLOCK_MAX_SIZE =  100 * 1024UL * 1024UL * 1024UL;
         if (_mem_used - last_mem_used > BUILD_BLOCK_MAX_SIZE) {
             auto new_block = mutable_block.to_block();
             new_block.set_ref_row_indices(mutable_block.get_ref_row_indices());

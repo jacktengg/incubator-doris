@@ -103,17 +103,20 @@ void Block::initialize_index_by_name() {
 }
 
 Block Block::make_table_by_columns(const std::vector<size_t>& positions) {
-    ColumnsWithTypeAndName columns;
+    ColumnsWithTypeAndName columns(positions.size());
     std::set<RowIndicePtr> row_indices;
-    for (auto pos : positions) {
-        columns.emplace_back(data[pos]);
-        if (!data[pos].column->is_materialized()) {
-            row_indices.insert(data[pos].column->get_ref_row_indice());
+    auto column_count = positions.size();
+    for (size_t i = 0; i < column_count; ++i) {
+        columns[i] = data[positions[i]];
+        if (!data[positions[i]].column->is_materialized()) {
+            row_indices.insert(data[positions[i]].column->get_ref_row_indice());
         }
     }
     Block res(columns);
-    std::vector<RowIndicePtr> row_indices_vec(row_indices.begin(), row_indices.end());
-    res.set_ref_row_indices(row_indices_vec);
+    if (row_indices.size() > 0) {
+        std::vector<RowIndicePtr> row_indices_vec(row_indices.begin(), row_indices.end());
+        res.set_ref_row_indices(row_indices_vec);
+    }
     return res;
 }
 
@@ -129,9 +132,6 @@ Block Block::get_unmaterialized_block(IndiceArrayPtr indice_array) {
     if (ref_row_indices.empty()) {
         new_ref_row_indices.emplace_back(new_indice);
         for (const auto& column : data) {
-            assert(column.column->is_materialized());
-            assert(column.column->size() > 0);
-
             auto mutable_column = column.type->create_column();
             mutable_column->set_ref_row_indice(new_indice);
             mutable_column->set_ref_column(column.column);

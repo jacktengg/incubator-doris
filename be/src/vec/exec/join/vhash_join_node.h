@@ -187,6 +187,7 @@ private:
     RuntimeProfile::Counter* _build_expr_call_timer;
     RuntimeProfile::Counter* _build_table_insert_timer;
     RuntimeProfile::Counter* _build_table_expanse_timer;
+    RuntimeProfile::Counter* _build_table_merge_timer;
     RuntimeProfile::Counter* _probe_timer;
     RuntimeProfile::Counter* _probe_do_process_timer;
     RuntimeProfile::Counter* _probe_expr_call_timer;
@@ -202,8 +203,17 @@ private:
     RuntimeProfile::Counter* _build_side_output_timer;
     RuntimeProfile::Counter* _probe_side_output_timer;
 
+    RuntimeProfile::Counter* _build_side_mutate_columns_timer;
+    RuntimeProfile::Counter* _build_side_update_indice_timer;
+
+    RuntimeProfile::Counter* _probe_side_mutate_columns_timer;
+    RuntimeProfile::Counter* _probe_side_update_indice_timer;
+
     RuntimeProfile::Counter* _build_side_output_column_count;
     RuntimeProfile::Counter* _probe_side_output_column_count;
+
+    RuntimeProfile::Counter* _build_side_make_table_timer;
+    RuntimeProfile::Counter* _probe_side_make_table_timer;
 
     int64_t _hash_table_rows;
     int64_t _mem_used;

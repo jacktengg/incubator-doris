@@ -222,8 +222,6 @@ public:
     /** Get the same block, but empty. */
     Block clone_empty() const;
 
-    Block clone_shallow() const;
-
     Columns get_columns() const;
     void set_columns(const Columns& columns);
     Block clone_with_columns(const Columns& columns) const;
