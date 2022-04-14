@@ -33,6 +33,13 @@ private:
     ColumnNothing(const ColumnNothing&) = default;
 
 public:
+    void materialize() const override {
+        if(IColumn::is_materialized()) {
+            return;
+        }
+        LOG(FATAL) << "ColumnNothing::materialize not implemented";
+    }
+
     const char* get_family_name() const override { return "Nothing"; }
     MutableColumnPtr clone_dummy(size_t s_) const override { return ColumnNothing::create(s_); }
 

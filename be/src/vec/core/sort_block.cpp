@@ -104,6 +104,14 @@ struct PartialSortingLessWithCollation {
 void sort_block(Block& block, const SortDescription& description, UInt64 limit) {
     if (!block) return;
 
+    auto rows1 = block.rows();
+    block.materialize_columns();
+    auto rows2 = block.rows();
+
+    if (0== rows1 || 0 == rows2) {
+        std::cout << "0 rows!!!\n";
+    }
+
     /// If only one column to sort by
     if (description.size() == 1) {
         bool reverse = description[0].direction == -1;

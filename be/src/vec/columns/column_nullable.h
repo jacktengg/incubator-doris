@@ -63,19 +63,35 @@ public:
         return Base::create(std::forward<Args>(args)...);
     }
 
+    void materialize() const override;
+
     const char* get_family_name() const override { return "Nullable"; }
     std::string get_name() const override { return "Nullable(" + nested_column->get_name() + ")"; }
     MutableColumnPtr clone_resized(size_t size) const override;
-    size_t size() const override { return nested_column->size(); }
+    size_t size() const override {
+        if (nullptr != IColumn::ref_row_indice) {
+            return IColumn::ref_row_indice->size();
+        }
+        return nested_column->size();
+    }
     bool is_null_at(size_t n) const override {
-        return assert_cast<const ColumnUInt8&>(*null_map).get_data()[n] != 0;
+        if (nullptr != IColumn::ref_row_indice) {
+            auto& indices = *(IColumn::ref_row_indice->get_indices());
+            return assert_cast<const ColumnUInt8&>(*null_map).get_data()[indices[n]] != 0;
+        } else {
+            return assert_cast<const ColumnUInt8&>(*null_map).get_data()[n] != 0;
+        }
     }
     Field operator[](size_t n) const override;
     void get(size_t n, Field& res) const override;
     bool get_bool(size_t n) const override {
+        DCHECK(IColumn::is_materialized());
         return is_null_at(n) ? 0 : nested_column->get_bool(n);
     }
-    UInt64 get64(size_t n) const override { return nested_column->get64(n); }
+    UInt64 get64(size_t n) const override {
+        DCHECK(IColumn::is_materialized());
+        return nested_column->get64(n);
+    }
     StringRef get_data_at(size_t n) const override;
 
     /// Will insert null value if pos=nullptr
@@ -96,12 +112,14 @@ public:
     void insert_many_from_not_nullable(const IColumn& src, size_t position, size_t length);
 
     void insert_many_fix_len_data(const char* pos, size_t num) override {
+        DCHECK(IColumn::is_materialized());
         get_null_map_column().fill(0, num);
         get_nested_column().insert_many_fix_len_data(pos, num);
     }
 
     void insert_many_dict_data(const int32_t* data_array, size_t start_index, const StringRef* dict,
                                size_t data_num, uint32_t dict_num) override {
+        DCHECK(IColumn::is_materialized());
         get_null_map_column().fill(0, data_num);
         get_nested_column().insert_many_dict_data(data_array, start_index, dict, data_num,
                                                   dict_num);
@@ -109,21 +127,25 @@ public:
 
     void insert_many_binary_data(char* data_array, uint32_t* len_array,
                                  uint32_t* start_offset_array, size_t num) override {
+        DCHECK(IColumn::is_materialized());
         get_null_map_column().fill(0, num);
         get_nested_column().insert_many_binary_data(data_array, len_array, start_offset_array, num);
     }
 
     void insert_default() override {
+        DCHECK(IColumn::is_materialized());
         get_nested_column().insert_default();
         get_null_map_data().push_back(1);
     }
 
     void insert_many_defaults(size_t length) override {
+        DCHECK(IColumn::is_materialized());
         get_nested_column().insert_many_defaults(length);
         get_null_map_data().resize_fill(get_null_map_data().size() + length, 1);
     }
 
     void insert_null_elements(int num) {
+        DCHECK(IColumn::is_materialized());
         get_nested_column().insert_many_defaults(num);
         get_null_map_column().fill(1, num);
     }
@@ -147,6 +169,7 @@ public:
     void get_extremes(Field& min, Field& max) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector& selector) const override {
+        DCHECK(IColumn::is_materialized());
         return scatter_impl<ColumnNullable>(num_columns, selector);
     }
 
@@ -163,15 +186,15 @@ public:
         return false;
     }
 
-    bool is_date_type() override { return get_nested_column().is_date_type(); }
-    bool is_datetime_type() override { return get_nested_column().is_datetime_type(); }
-    void set_date_type() override { get_nested_column().set_date_type(); }
-    void set_datetime_type() override { get_nested_column().set_datetime_type(); }
+    bool is_date_type() override { return nested_column->is_date_type(); }
+    bool is_datetime_type() override { return nested_column->is_datetime_type(); }
+    void set_date_type() override { nested_column->set_date_type(); }
+    void set_datetime_type() override { nested_column->set_datetime_type(); }
 
     bool is_nullable() const override { return true; }
-    bool is_bitmap() const override { return get_nested_column().is_bitmap(); }
-    bool is_column_decimal() const override { return get_nested_column().is_column_decimal(); }
-    bool is_column_string() const override { return get_nested_column().is_column_string(); }
+    bool is_bitmap() const override { return nested_column->is_bitmap(); }
+    bool is_column_decimal() const override { return nested_column->is_column_decimal(); }
+    bool is_column_string() const override { return nested_column->is_column_string(); }
     bool is_fixed_and_contiguous() const override { return false; }
     bool values_have_fixed_size() const override { return nested_column->values_have_fixed_size(); }
     size_t size_of_value_if_fixed() const override {
@@ -180,30 +203,62 @@ public:
     bool only_null() const override { return nested_column->is_dummy(); }
 
     /// Return the column that represents values.
-    IColumn& get_nested_column() { return *nested_column; }
-    const IColumn& get_nested_column() const { return *nested_column; }
+    IColumn& get_nested_column() {
+        materialize();
+        return *nested_column;
+    }
+    const IColumn& get_nested_column() const {
+        materialize();
+        return *nested_column;
+    }
 
-    const ColumnPtr& get_nested_column_ptr() const { return nested_column; }
+    const ColumnPtr& get_nested_column_ptr() const {
+        materialize();
+        return nested_column;
+    }
 
-    MutableColumnPtr get_nested_column_ptr() { return nested_column->assume_mutable(); }
+    MutableColumnPtr get_nested_column_ptr() {
+        materialize();
+        return nested_column->assume_mutable();
+    }
 
     /// Return the column that represents the byte map.
-    const ColumnPtr& get_null_map_column_ptr() const { return null_map; }
+    const ColumnPtr& get_null_map_column_ptr() const {
+        materialize();
+        return null_map;
+    }
 
-    MutableColumnPtr get_null_map_column_ptr() { return null_map->assume_mutable(); }
+    MutableColumnPtr get_null_map_column_ptr() {
+        materialize();
+        return null_map->assume_mutable();
+    }
 
-    ColumnUInt8& get_null_map_column() { return assert_cast<ColumnUInt8&>(*null_map); }
+    ColumnUInt8& get_null_map_column() {
+        materialize();
+        return assert_cast<ColumnUInt8&>(*null_map);
+    }
     const ColumnUInt8& get_null_map_column() const {
+        materialize();
         return assert_cast<const ColumnUInt8&>(*null_map);
     }
 
     void clear() override {
         null_map->clear();
         nested_column->clear();
+        if (IColumn::is_materialized()) {
+            IColumn::ref_column = nullptr;
+            IColumn::ref_row_indice = nullptr;
+        }
     }
 
-    NullMap& get_null_map_data() { return get_null_map_column().get_data(); }
-    const NullMap& get_null_map_data() const { return get_null_map_column().get_data(); }
+    NullMap& get_null_map_data() {
+        materialize();
+        return get_null_map_column().get_data();
+    }
+    const NullMap& get_null_map_data() const {
+        materialize();
+        return get_null_map_column().get_data();
+    }
 
     /// Apply the null byte map of a specified nullable column onto the
     /// null byte map of the current column by performing an element-wise OR
@@ -220,6 +275,8 @@ public:
     bool has_null() const override { return has_null(get_null_map_data().size()); }
 
     bool has_null(size_t size) const override {
+        DCHECK(IColumn::is_materialized());
+        
         const UInt8* null_pos = get_null_map_data().data();
         const UInt8* null_pos_end = get_null_map_data().data() + size;
 #ifdef __SSE2__
@@ -252,6 +309,7 @@ public:
     }
 
     void replace_column_data(const IColumn& rhs, size_t row, size_t self_row = 0) override {
+        DCHECK(IColumn::is_materialized());
         DCHECK(size() > 1);
         const ColumnNullable& nullable_rhs = assert_cast<const ColumnNullable&>(rhs);
         null_map->replace_column_data(*nullable_rhs.null_map, row, self_row);
@@ -268,8 +326,9 @@ public:
     }
 
 private:
-    WrappedPtr nested_column;
-    WrappedPtr null_map;
+    mutable WrappedPtr nested_column;
+    mutable WrappedPtr null_map;
+    mutable ColumnUInt8* null_map_raw_ptr;
 
     template <bool negative>
     void apply_null_map_impl(const ColumnUInt8& map);

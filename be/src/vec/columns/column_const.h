@@ -42,6 +42,8 @@ private:
     ColumnConst(const ColumnConst& src) = default;
 
 public:
+    void materialize() const override;
+
     ColumnPtr convert_to_full_column() const;
 
     ColumnPtr convert_to_full_column_if_const() const override { return convert_to_full_column(); }

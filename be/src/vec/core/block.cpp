@@ -444,8 +444,15 @@ void Block::skip_num_rows(int64_t& length) {
 
 size_t Block::bytes() const {
     size_t res = 0;
+    std::set<const IColumn*> ref_columns;
     for (const auto& elem : data) {
         res += elem.column->byte_size();
+        if (!elem.column->is_materialized()) {
+            ref_columns.insert(elem.column->get_ref_column().get());
+        }
+    }
+    for (const auto* column : ref_columns) {
+        res += column->byte_size();
     }
 
     return res;
@@ -453,8 +460,15 @@ size_t Block::bytes() const {
 
 size_t Block::allocated_bytes() const {
     size_t res = 0;
+    std::set<const IColumn*> ref_columns;
     for (const auto& elem : data) {
         res += elem.column->allocated_bytes();
+        if (!elem.column->is_materialized()) {
+            ref_columns.insert(elem.column->get_ref_column().get());
+        }
+    }
+    for (const auto* column : ref_columns) {
+        res += column->allocated_bytes();
     }
 
     return res;

@@ -44,6 +44,13 @@ public:
     using value_type = T;
     using Container = std::vector<value_type>;
 
+    void materialize() const override {
+        if(IColumn::is_materialized()) {
+            return;
+        }
+        LOG(FATAL) << "ColumnComplexType::materialize not implemented";
+    }
+
     bool is_numeric() const override { return false; }
 
     bool is_bitmap() const override { return std::is_same_v<T, BitmapValue>; }
@@ -63,12 +70,13 @@ public:
     }
 
     void insert_many_binary_data(char* data_array, uint32_t* len_array, uint32_t* start_offset_array, size_t num) override {
+        DCHECK(IColumn::is_materialized());
         if constexpr (std::is_same_v<T, BitmapValue>) {
             for (size_t i = 0; i < num; i++) {
                 uint32_t len = len_array[i];
                 uint32_t start_offset = start_offset_array[i];
                 insert_default();
-                BitmapValue* pvalue = &get_element(size() - 1);
+                BitmapValue* pvalue = &data[size() - 1];
                 if (len != 0) {
                     BitmapValue value;
                     value.deserialize(data_array + start_offset);
@@ -82,7 +90,7 @@ public:
                 uint32_t len = len_array[i];
                 uint32_t start_offset = start_offset_array[i];
                 insert_default();
-                HyperLogLog* pvalue = &get_element(size() - 1);
+                HyperLogLog* pvalue = &data[size() - 1];
                 if (len != 0) {
                     HyperLogLog value;
                     value.deserialize(Slice(data_array + start_offset, len));
@@ -169,6 +177,7 @@ public:
 
     void insert_indices_from(const IColumn& src, const int* indices_begin,
                              const int* indices_end) override {
+        DCHECK(IColumn::is_materialized());
         const Self& src_vec = assert_cast<const Self&>(src);
         auto new_size = indices_end - indices_begin;
 
@@ -177,7 +186,7 @@ public:
             if (offset == -1) {
                 data.emplace_back(T{});
             } else {
-                data.emplace_back(src_vec.get_element(offset));
+                data.emplace_back(src_vec.data[offset]);
             }
         }
     }

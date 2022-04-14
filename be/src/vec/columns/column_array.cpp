@@ -80,6 +80,13 @@ ColumnArray::ColumnArray(MutableColumnPtr && nested_column)
     offsets = ColumnOffsets::create();
 }
 
+void ColumnArray::materialize() const {
+    if(IColumn::is_materialized()) {
+        return;
+    }
+    LOG(FATAL) << "ColumnArray::materialize not implemented";
+
+}
 std::string ColumnArray::get_name() const { return "Array(" + get_data().get_name() + ")"; }
 
 MutableColumnPtr ColumnArray::clone_resized(size_t to_size) const {

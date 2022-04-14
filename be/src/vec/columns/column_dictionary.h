@@ -63,6 +63,13 @@ public:
     using Container = PaddedPODArray<value_type>;
     using DictContainer = PaddedPODArray<StringValue>;
 
+    void materialize() const override {
+        if(IColumn::is_materialized()) {
+            return;
+        }
+        LOG(FATAL) << "ColumnDictionary::materialize not implemented";
+    }
+
     bool is_numeric() const override { return false; }
 
     bool is_predicate_column() const override { return false; }

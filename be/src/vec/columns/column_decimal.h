@@ -79,7 +79,7 @@ private:
     ColumnDecimal(const ColumnDecimal& src) : data(src.data), scale(src.scale) {}
 
 public:
-    virtual void materialize();
+    virtual void materialize() const override;
 
     const char* get_family_name() const override { return TypeName<T>::get(); }
 
@@ -95,18 +95,40 @@ public:
         }
         return data.size();
     }
-    size_t byte_size() const override { return data.size() * sizeof(data[0]); }
-    size_t allocated_bytes() const override { return data.allocated_bytes(); }
+    size_t byte_size() const override {
+        if (IColumn::is_materialized()) {
+            return data.size() * sizeof(data[0]);
+        } else {
+            return IColumn::ref_row_indice->byte_size();
+        }
+    }
+    size_t allocated_bytes() const override {
+        if (IColumn::is_materialized()) {
+            return data.allocated_bytes();
+        } else {
+            return IColumn::ref_row_indice->byte_size();
+        }
+    }
     void protect() override { data.protect(); }
-    void reserve(size_t n) override { data.reserve(n); }
-    void resize(size_t n) override { data.resize(n); }
+    void reserve(size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        data.reserve(n);
+    }
+    void resize(size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        data.resize(n);
+    }
 
     void insert_from(const IColumn& src, size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        DCHECK(src.is_materialized());
         data.push_back(static_cast<const Self&>(src).get_data()[n]);
     }
 
     void insert_indices_from(const IColumn& src, const int* indices_begin,
                              const int* indices_end) override {
+        DCHECK(IColumn::is_materialized());
+        DCHECK(src.is_materialized());
         const Self& src_vec = assert_cast<const Self&>(src);
         auto origin_size = size();
         auto new_size = indices_end - indices_begin;
@@ -114,11 +136,12 @@ public:
 
         for (int i = 0; i < new_size; ++i) {
             auto offset = *(indices_begin + i);
-            data[origin_size + i] = offset == -1 ? T{} : src_vec.get_element(offset);
+            data[origin_size + i] = offset == -1 ? T{} : src_vec.data[offset];
         }
     }
 
     void insert_many_fix_len_data(const char* data_ptr, size_t num) override {
+        DCHECK(IColumn::is_materialized());
         for (int i = 0; i < num; i++) {
             const char* cur_ptr = data_ptr + sizeof(decimal12_t) * i;
             int64_t int_value = *(int64_t*)(cur_ptr);
@@ -136,12 +159,16 @@ public:
     void insert_range_from(const IColumn& src, size_t start, size_t length) override;
 
     void insert_many_defaults(size_t length) override {
+        DCHECK(IColumn::is_materialized());
         size_t old_size = data.size();
         data.resize(old_size + length);
         memset(data.data() + old_size, 0, length * sizeof(data[0]));
     }
 
-    void pop_back(size_t n) override { data.resize_assume_reserved(data.size() - n); }
+    void pop_back(size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        data.resize_assume_reserved(data.size() - n);
+    }
 
     StringRef serialize_value_into_arena(size_t n, Arena& arena, char const*& begin) const override;
     const char* deserialize_and_insert_from_arena(const char* pos) override;
@@ -152,21 +179,40 @@ public:
 
     MutableColumnPtr clone_resized(size_t size) const override;
 
-    Field operator[](size_t n) const override { return DecimalField(data[n], scale); }
+    Field operator[](size_t n) const override {
+        DCHECK(IColumn::is_materialized());
+        return DecimalField(data[n], scale);
+    }
 
     StringRef get_raw_data() const override {
+        materialize();
         return StringRef(reinterpret_cast<const char*>(data.data()), data.size());
     }
     StringRef get_data_at(size_t n) const override {
-        return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[n]));
+        if (IColumn::is_materialized()) {
+            return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[n]));
+        } else {
+            auto& indices = *(IColumn::ref_row_indice->get_indices());
+            const Self& ref_vec = assert_cast<const Self&>(*IColumn::ref_column);
+            return StringRef(reinterpret_cast<const char*>(&ref_vec.data[indices[n]]), sizeof(ref_vec.data[indices[n]]));
+        }
     }
     void get(size_t n, Field& res) const override { res = (*this)[n]; }
     bool get_bool(size_t n) const override { return bool(data[n]); }
     Int64 get_int(size_t n) const override { return Int64(data[n] * scale); }
     UInt64 get64(size_t n) const override;
-    bool is_default_at(size_t n) const override { return data[n] == 0; }
+    bool is_default_at(size_t n) const override {
+        DCHECK(IColumn::is_materialized());
+        return data[n] == 0;
+    }
 
-    void clear() override { data.clear(); }
+    void clear() override {
+        data.clear();
+        if (IColumn::is_materialized()) {
+            IColumn::ref_column = nullptr;
+            IColumn::ref_row_indice = nullptr;
+        }
+    }
 
     ColumnPtr filter(const IColumn::Filter& filt, ssize_t result_size_hint) const override;
     ColumnPtr permute(const IColumn::Permutation& perm, size_t limit) const override;
@@ -183,6 +229,7 @@ public:
 
     MutableColumns scatter(IColumn::ColumnIndex num_columns,
                            const IColumn::Selector& selector) const override {
+        DCHECK(IColumn::is_materialized());
         return this->template scatter_impl<Self>(num_columns, selector);
     }
 
@@ -194,24 +241,35 @@ public:
         return false;
     }
 
-    void insert(const T value) { data.push_back(value); }
-    Container& get_data() { return data; }
-    const Container& get_data() const { return data; }
-    const T& get_element(size_t n) const { return data[n]; }
-    T& get_element(size_t n) { return data[n]; }
+    void insert(const T value) {
+        DCHECK(IColumn::is_materialized());
+        data.push_back(value);
+    }
+    Container& get_data();
+    const Container& get_data() const;
+    const T& get_element(size_t n) const {
+        DCHECK(IColumn::is_materialized());
+        return data[n];
+    }
+    T& get_element(size_t n) {
+        DCHECK(IColumn::is_materialized());
+        return data[n];
+    }
 
     void replace_column_data(const IColumn& rhs, size_t row, size_t self_row = 0) override {
+        DCHECK(IColumn::is_materialized());
         DCHECK(size() > self_row);
         data[self_row] = static_cast<const Self&>(rhs).data[row];
     }
 
     void replace_column_data_default(size_t self_row = 0) override {
+        DCHECK(IColumn::is_materialized());
         DCHECK(size() > self_row);
         data[self_row] = T();
     }
 
 protected:
-    Container data;
+    mutable Container data;
     UInt32 scale;
 
     template <typename U>
@@ -232,6 +290,7 @@ protected:
     }
 };
 
+/*
 template <typename T>
 template <typename Type>
 ColumnPtr ColumnDecimal<T>::index_impl(const PaddedPODArray<Type>& indexes, size_t limit) const {
@@ -248,6 +307,7 @@ ColumnPtr ColumnDecimal<T>::index_impl(const PaddedPODArray<Type>& indexes, size
 
     return res;
 }
+*/
 
 using ColumnDecimal32 = ColumnDecimal<Decimal32>;
 using ColumnDecimal64 = ColumnDecimal<Decimal64>;

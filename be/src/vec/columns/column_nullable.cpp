@@ -41,9 +41,35 @@ ColumnNullable::ColumnNullable(MutableColumnPtr&& nested_column_, MutableColumnP
     if (is_column_const(*null_map)) {
         LOG(FATAL) << "ColumnNullable cannot have constant null map";
     }
+    null_map_raw_ptr = assert_cast<ColumnUInt8*>(null_map.get());
+}
+
+void ColumnNullable::materialize() const {
+    if(IColumn::is_materialized()) {
+        return;
+    }
+
+    const auto& ref_vec = assert_cast<const ColumnNullable&>(*IColumn::ref_column);
+    auto new_nested_column = nested_column->clone_resized(0);
+    new_nested_column->set_ref_column(ref_vec.get_nested_column_ptr());
+    new_nested_column->set_ref_row_indice(IColumn::ref_row_indice);
+    new_nested_column->materialize();
+
+    auto new_null_map = ColumnUInt8::create();
+    new_null_map->set_ref_column(ref_vec.get_null_map_column_ptr());
+    new_null_map->set_ref_row_indice(IColumn::ref_row_indice);
+    new_null_map->materialize();
+
+    nested_column = std::move(new_nested_column);
+    null_map = std::move(new_null_map);
+    null_map_raw_ptr = assert_cast<ColumnUInt8*>(null_map.get());
+
+    IColumn::ref_column = nullptr;
+    IColumn::ref_row_indice = nullptr;
 }
 
 void ColumnNullable::update_hash_with_value(size_t n, SipHash& hash) const {
+    DCHECK(IColumn::is_materialized());
     if (is_null_at(n))
         hash.update(0);
     else
@@ -51,54 +77,79 @@ void ColumnNullable::update_hash_with_value(size_t n, SipHash& hash) const {
 }
 
 MutableColumnPtr ColumnNullable::clone_resized(size_t new_size) const {
-    MutableColumnPtr new_nested_col = get_nested_column().clone_resized(new_size);
+    MutableColumnPtr res;
+    MutableColumnPtr new_nested_col;
     auto new_null_map = ColumnUInt8::create();
+    if (IColumn::is_materialized() || new_size > this->size()) {
+        materialize();
 
-    if (new_size > 0) {
-        new_null_map->get_data().resize(new_size);
+        new_nested_col = get_nested_column().clone_resized(new_size);
 
-        size_t count = std::min(size(), new_size);
-        memcpy(new_null_map->get_data().data(), get_null_map_data().data(),
-               count * sizeof(get_null_map_data()[0]));
+        if (new_size > 0) {
+            new_null_map->get_data().resize(new_size);
 
-        /// If resizing to bigger one, set all new values to NULLs.
-        if (new_size > count) memset(&new_null_map->get_data()[count], 1, new_size - count);
+            size_t count = std::min(size(), new_size);
+            memcpy(new_null_map->get_data().data(), get_null_map_data().data(),
+                   count * sizeof(get_null_map_data()[0]));
+
+            /// If resizing to bigger one, set all new values to NULLs.
+            if (new_size > count) memset(&new_null_map->get_data()[count], 1, new_size - count);
+        }
+        res = ColumnNullable::create(std::move(new_nested_col), std::move(new_null_map));
+    } else {
+        new_nested_col = nested_column->clone_resized(0);
+        res = ColumnNullable::create(std::move(new_nested_col), std::move(new_null_map));
+
+        res->set_ref_column(IColumn::ref_column);
+        res->set_ref_row_indice(IColumn::ref_row_indice->clone(new_size));
     }
-
-    return ColumnNullable::create(std::move(new_nested_col), std::move(new_null_map));
+    return res;
 }
 
 Field ColumnNullable::operator[](size_t n) const {
-    return is_null_at(n) ? Null() : get_nested_column()[n];
+    DCHECK(IColumn::is_materialized());
+    return is_null_at(n) ? Null() : (*nested_column)[n];
 }
 
 void ColumnNullable::get(size_t n, Field& res) const {
+    DCHECK(IColumn::is_materialized());
     if (is_null_at(n))
         res = Null();
     else
-        get_nested_column().get(n, res);
+        nested_column->get(n, res);
 }
 
 StringRef ColumnNullable::get_data_at(size_t n) const {
-    if (is_null_at(n)) {
-        return StringRef((const char*)nullptr, 0);
+    if (IColumn::is_materialized()) {
+        if (is_null_at(n)) {
+            return StringRef((const char*)nullptr, 0);
+        }
+        return nested_column->get_data_at(n);
+    } else {
+        auto& indices = *(IColumn::ref_row_indice->get_indices());
+        const auto& ref_vec = assert_cast<const ColumnNullable&>(*IColumn::ref_column);
+        if (ref_vec.is_null_at(indices[n])) {
+            return StringRef((const char*)nullptr, 0);
+        }
+        return ref_vec.nested_column->get_data_at(indices[n]);
     }
-    return get_nested_column().get_data_at(n);
 }
 
 void ColumnNullable::insert_data(const char* pos, size_t length) {
+    DCHECK(IColumn::is_materialized());
     if (pos == nullptr) {
-        get_nested_column().insert_default();
-        get_null_map_data().push_back(1);
+        nested_column->insert_default();
+        null_map_raw_ptr->get_data().push_back(1);
     } else {
-        get_nested_column().insert_data(pos, length);
-        get_null_map_data().push_back(0);
+        nested_column->insert_data(pos, length);
+        null_map_raw_ptr->get_data().push_back(0);
     }
 }
 
 StringRef ColumnNullable::serialize_value_into_arena(size_t n, Arena& arena,
                                                      char const*& begin) const {
-    const auto& arr = get_null_map_data();
+    DCHECK(IColumn::is_materialized());
+    const auto& arr = null_map_raw_ptr->get_data();
     static constexpr auto s = sizeof(arr[0]);
 
     auto pos = arena.alloc_continue(s, begin);
@@ -106,105 +157,142 @@ StringRef ColumnNullable::serialize_value_into_arena(size_t n, Arena& arena,
 
     if (arr[n]) return StringRef(pos, s);
 
-    auto nested_ref = get_nested_column().serialize_value_into_arena(n, arena, begin);
+    auto nested_ref = nested_column->serialize_value_into_arena(n, arena, begin);
 
     /// serialize_value_into_arena may reallocate memory. Have to use ptr from nested_ref.data and move it back.
     return StringRef(nested_ref.data - s, nested_ref.size + s);
 }
 
-    void ColumnNullable::insert_join_null_data() {
-        get_nested_column().insert_default();
-        get_null_map_data().push_back(JOIN_NULL_HINT);
-    }
+void ColumnNullable::insert_join_null_data() {
+    DCHECK(IColumn::is_materialized());
+    nested_column->insert_default();
+    null_map_raw_ptr->get_data().push_back(JOIN_NULL_HINT);
+}
 
 const char* ColumnNullable::deserialize_and_insert_from_arena(const char* pos) {
+    DCHECK(IColumn::is_materialized());
     UInt8 val = *reinterpret_cast<const UInt8*>(pos);
     pos += sizeof(val);
 
-    get_null_map_data().push_back(val);
+    null_map_raw_ptr->get_data().push_back(val);
 
     if (val == 0)
-        pos = get_nested_column().deserialize_and_insert_from_arena(pos);
+        pos = nested_column->deserialize_and_insert_from_arena(pos);
     else
-        get_nested_column().insert_default();
+        nested_column->insert_default();
 
     return pos;
 }
 
 void ColumnNullable::insert_range_from(const IColumn& src, size_t start, size_t length) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
     const ColumnNullable& nullable_col = assert_cast<const ColumnNullable&>(src);
-    get_null_map_column().insert_range_from(*nullable_col.null_map, start, length);
-    get_nested_column().insert_range_from(*nullable_col.nested_column, start, length);
+    null_map->insert_range_from(*nullable_col.null_map, start, length);
+    nested_column->insert_range_from(*nullable_col.nested_column, start, length);
 }
 
 void ColumnNullable::insert_indices_from(const IColumn& src, const int* indices_begin, const int* indices_end) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
     const ColumnNullable& src_concrete = assert_cast<const ColumnNullable&>(src);
-    get_nested_column().insert_indices_from(src_concrete.get_nested_column(), indices_begin, indices_end);
-    get_null_map_column().insert_indices_from(src_concrete.get_null_map_column(), indices_begin, indices_end);
+    nested_column->insert_indices_from(src_concrete.get_nested_column(), indices_begin, indices_end);
+    null_map->insert_indices_from(src_concrete.get_null_map_column(), indices_begin, indices_end);
 }
 
 void ColumnNullable::insert(const Field& x) {
+    DCHECK(IColumn::is_materialized());
     if (x.is_null()) {
-        get_nested_column().insert_default();
-        get_null_map_data().push_back(1);
+        nested_column->insert_default();
+        null_map_raw_ptr->get_data().push_back(1);
     } else {
-        get_nested_column().insert(x);
-        get_null_map_data().push_back(0);
+        nested_column->insert(x);
+        null_map_raw_ptr->get_data().push_back(0);
     }
 }
 
 void ColumnNullable::insert_from(const IColumn& src, size_t n) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
     const ColumnNullable& src_concrete = assert_cast<const ColumnNullable&>(src);
-    get_nested_column().insert_from(src_concrete.get_nested_column(), n);
-    get_null_map_data().push_back(src_concrete.get_null_map_data()[n]);
+    nested_column->insert_from(src_concrete.get_nested_column(), n);
+    null_map_raw_ptr->get_data().push_back(src_concrete.get_null_map_data()[n]);
 }
 
 void ColumnNullable::insert_from_not_nullable(const IColumn& src, size_t n) {
-    get_nested_column().insert_from(src, n);
-    get_null_map_data().push_back(0);
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
+    nested_column->insert_from(src, n);
+    null_map_raw_ptr->get_data().push_back(0);
 }
 
 void ColumnNullable::insert_range_from_not_nullable(const IColumn& src, size_t start,
                                                     size_t length) {
-    get_nested_column().insert_range_from(src, start, length);
-    get_null_map_data().resize_fill(get_null_map_data().size() + length, 0);
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
+    nested_column->insert_range_from(src, start, length);
+    null_map_raw_ptr->get_data().resize_fill(null_map->size() + length, 0);
 }
 
 void ColumnNullable::insert_many_from_not_nullable(const IColumn& src, size_t position,
                                                    size_t length) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
     for (size_t i = 0; i < length; ++i) {
         insert_from_not_nullable(src, position);
     }
 }
 
 void ColumnNullable::pop_back(size_t n) {
-    get_nested_column().pop_back(n);
-    get_null_map_column().pop_back(n);
+    DCHECK(IColumn::is_materialized());
+    nested_column->pop_back(n);
+    null_map->pop_back(n);
 }
 
 ColumnPtr ColumnNullable::filter(const Filter& filt, ssize_t result_size_hint) const {
-    ColumnPtr filtered_data = get_nested_column().filter(filt, result_size_hint);
-    ColumnPtr filtered_null_map = get_null_map_column().filter(filt, result_size_hint);
+    materialize();
+
+    ColumnPtr filtered_data = nested_column->filter(filt, result_size_hint);
+    ColumnPtr filtered_null_map = null_map->filter(filt, result_size_hint);
     return ColumnNullable::create(filtered_data, filtered_null_map);
 }
 
 Status ColumnNullable::filter_by_selector(const uint16_t* sel, size_t sel_size, IColumn* col_ptr) {
+    DCHECK(IColumn::is_materialized());
+
     const ColumnNullable* nullable_col_ptr = reinterpret_cast<const ColumnNullable*>(col_ptr);
     ColumnPtr nest_col_ptr = nullable_col_ptr->nested_column;
     ColumnPtr null_map_ptr = nullable_col_ptr->null_map;
-    RETURN_IF_ERROR(get_nested_column().filter_by_selector(sel, sel_size, const_cast<doris::vectorized::IColumn*>(nest_col_ptr.get())));
-    RETURN_IF_ERROR(get_null_map_column().filter_by_selector(sel, sel_size, const_cast<doris::vectorized::IColumn*>(null_map_ptr.get())));
+    RETURN_IF_ERROR(nested_column->filter_by_selector(sel, sel_size, const_cast<doris::vectorized::IColumn*>(nest_col_ptr.get())));
+    RETURN_IF_ERROR(null_map->filter_by_selector(sel, sel_size, const_cast<doris::vectorized::IColumn*>(null_map_ptr.get())));
     return Status::OK();
 }
 
 ColumnPtr ColumnNullable::permute(const Permutation& perm, size_t limit) const {
-    ColumnPtr permuted_data = get_nested_column().permute(perm, limit);
-    ColumnPtr permuted_null_map = get_null_map_column().permute(perm, limit);
-    return ColumnNullable::create(permuted_data, permuted_null_map);
+    if (IColumn::is_materialized()) {
+        ColumnPtr permuted_data = nested_column->permute(perm, limit);
+        ColumnPtr permuted_null_map = null_map->permute(perm, limit);
+        return ColumnNullable::create(permuted_data, permuted_null_map);
+    } else {
+        auto new_nested_column = nested_column->clone_resized(0);
+        new_nested_column->set_ref_column(nested_column);
+        new_nested_column->set_ref_row_indice(IColumn::ref_row_indice);
+        ColumnPtr permuted_data = new_nested_column->permute(perm, limit);
+
+        auto new_null_map = ColumnUInt8::create();
+        new_null_map->set_ref_column(null_map);
+        new_null_map->set_ref_row_indice(IColumn::ref_row_indice);
+        ColumnPtr permuted_null_map = new_null_map->permute(perm, limit);
+
+        return ColumnNullable::create(permuted_data, permuted_null_map);
+    }
 }
 
 int ColumnNullable::compare_at(size_t n, size_t m, const IColumn& rhs_,
                                int null_direction_hint) const {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(rhs_.is_materialized());
+
     /// NULL values share the properties of NaN values.
     /// Here the last parameter of compare_at is called null_direction_hint
     /// instead of the usual nan_direction_hint and is used to implement
@@ -218,14 +306,16 @@ int ColumnNullable::compare_at(size_t n, size_t m, const IColumn& rhs_,
         return -null_direction_hint;
     }
 
-    return get_nested_column().compare_at(n, m, nullable_rhs.get_nested_column(),
+    return nested_column->compare_at(n, m, nullable_rhs.get_nested_column(),
                                           null_direction_hint);
 }
 
 void ColumnNullable::get_permutation(bool reverse, size_t limit, int null_direction_hint,
                                      Permutation& res) const {
+    materialize();
+
     /// Cannot pass limit because of unknown amount of NULLs.
-    get_nested_column().get_permutation(reverse, 0, null_direction_hint, res);
+    nested_column->get_permutation(reverse, 0, null_direction_hint, res);
 
     if ((null_direction_hint > 0) != reverse) {
         /// Shift all NULL values to the end.
@@ -292,26 +382,36 @@ void ColumnNullable::get_permutation(bool reverse, size_t limit, int null_direct
 //}
 
 void ColumnNullable::reserve(size_t n) {
-    get_nested_column().reserve(n);
-    get_null_map_data().reserve(n);
+    DCHECK(IColumn::is_materialized());
+    nested_column->reserve(n);
+    null_map->reserve(n);
 }
 
 void ColumnNullable::resize(size_t n) {
-    get_nested_column().resize(n);
-    get_null_map_data().resize(n);
+    DCHECK(IColumn::is_materialized());
+    nested_column->resize(n);
+    null_map->resize(n);
 }
 
 size_t ColumnNullable::byte_size() const {
-    return get_nested_column().byte_size() + get_null_map_column().byte_size();
+    if (IColumn::is_materialized()) {
+        return nested_column->byte_size() + null_map->byte_size();
+    } else {
+        return IColumn::ref_row_indice->byte_size();
+    }
 }
 
 size_t ColumnNullable::allocated_bytes() const {
-    return get_nested_column().allocated_bytes() + get_null_map_column().allocated_bytes();
+    if (IColumn::is_materialized()) {
+        return nested_column->allocated_bytes() + null_map->allocated_bytes();
+    } else {
+        return IColumn::ref_row_indice->byte_size();
+    }
 }
 
 void ColumnNullable::protect() {
-    get_nested_column().protect();
-    get_null_map_column().protect();
+    nested_column->protect();
+    null_map->protect();
 }
 
 namespace {
@@ -374,6 +474,7 @@ void getExtremesFromNullableContent(const ColumnVector<T>& col, const NullMap& n
 } // namespace
 
 void ColumnNullable::get_extremes(Field& min, Field& max) const {
+    DCHECK(IColumn::is_materialized());
     min = Null();
     max = Null();
 
@@ -402,19 +503,22 @@ void ColumnNullable::get_extremes(Field& min, Field& max) const {
 }
 
 ColumnPtr ColumnNullable::replicate(const Offsets& offsets) const {
-    ColumnPtr replicated_data = get_nested_column().replicate(offsets);
-    ColumnPtr replicated_null_map = get_null_map_column().replicate(offsets);
+    DCHECK(IColumn::is_materialized());
+    ColumnPtr replicated_data = nested_column->replicate(offsets);
+    ColumnPtr replicated_null_map = null_map->replicate(offsets);
     return ColumnNullable::create(replicated_data, replicated_null_map);
 }
 
 void ColumnNullable::replicate(const uint32_t* counts, size_t target_size, IColumn& column) const {
+    DCHECK(IColumn::is_materialized());
     auto& res = reinterpret_cast<ColumnNullable&>(column);
-    get_nested_column().replicate(counts, target_size, res.get_nested_column());
-    get_null_map_column().replicate(counts, target_size, res.get_null_map_column());
+    nested_column->replicate(counts, target_size, res.get_nested_column());
+    null_map->replicate(counts, target_size, res.get_null_map_column());
 }
 
 template <bool negative>
 void ColumnNullable::apply_null_map_impl(const ColumnUInt8& map) {
+    DCHECK(IColumn::is_materialized());
     NullMap& arr1 = get_null_map_data();
     const NullMap& arr2 = map.get_data();
 
@@ -438,6 +542,7 @@ void ColumnNullable::apply_null_map(const ColumnNullable& other) {
 }
 
 void ColumnNullable::check_consistency() const {
+    DCHECK(IColumn::is_materialized());
     if (null_map->size() != get_nested_column().size()) {
         LOG(FATAL) << "Logical error: Sizes of nested column and null map of Nullable column are "
                       "not equal";

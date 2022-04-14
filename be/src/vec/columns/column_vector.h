@@ -28,6 +28,7 @@
 #include "vec/columns/column_vector_helper.h"
 #include "vec/common/unaligned.h"
 #include "vec/core/field.h"
+#include "vec/common/assert_cast.h"
 
 namespace doris::vectorized {
 
@@ -115,12 +116,11 @@ private:
     ColumnVector() {}
     ColumnVector(const size_t n) : data(n) {}
     ColumnVector(const size_t n, const value_type x) : data(n, x) {}
-    ColumnVector(const ColumnVector& src) : data(src.data.begin(), src.data.end()) {}
+    ColumnVector(const ColumnVector& src)
+        : data(((const decltype(src.data)&)src.data).begin(), ((const decltype(src.data)&)src.data).end()) {}
 
     /// Sugar constructor.
     ColumnVector(std::initializer_list<T> il) : data {il} {}
-
-    virtual void materialize();
 
     void insert_res_column(const uint16_t* sel, size_t sel_size,
                            vectorized::ColumnVector<T>* res_ptr) {
@@ -145,6 +145,8 @@ private:
     }
 
 public:
+    void materialize() const override;
+
     bool is_numeric() const override { return IsNumber<T>; }
 
     size_t size() const override {
@@ -155,19 +157,29 @@ public:
     }
 
     StringRef get_data_at(size_t n) const override {
-        return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[n]));
+        if (IColumn::is_materialized()) {
+            return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[n]));
+        } else {
+            auto& indices = *(IColumn::ref_row_indice->get_indices());
+            const Self& ref_vec = assert_cast<const Self&>(*IColumn::ref_column);
+            return StringRef(reinterpret_cast<const char*>(&ref_vec.data[indices[n]]), sizeof(ref_vec.data[indices[n]]));
+        }
     }
 
     void insert_from(const IColumn& src, size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        DCHECK(src.is_materialized());
         data.push_back(static_cast<const Self&>(src).get_data()[n]);
     }
 
     void insert_data(const char* pos, size_t /*length*/) override {
+        DCHECK(IColumn::is_materialized());
         data.push_back(unaligned_load<T>(pos));
     }
 
     // note(wb) type of data_ptr element should be same with current column_vector's T
     void insert_many_in_copy_way(const char* data_ptr, size_t num) {
+        DCHECK(IColumn::is_materialized());
         char* res_ptr = (char*)data.get_end_ptr();
         memcpy(res_ptr, data_ptr, num * sizeof(T));
         res_ptr += num * sizeof(T);
@@ -175,6 +187,7 @@ public:
     }
 
     void insert_date_column(const char* data_ptr, size_t num) {
+        DCHECK(IColumn::is_materialized());
         size_t value_size = sizeof(uint24_t);
         for (int i = 0; i < num; i++) {
             const char* cur_ptr = data_ptr + value_size * i;
@@ -191,6 +204,7 @@ public:
     }
 
     void insert_datetime_column(const char* data_ptr, size_t num) {
+        DCHECK(IColumn::is_materialized());
         size_t value_size = sizeof(uint64_t);
         for (int i = 0; i < num; i++) {
             const char* cur_ptr = data_ptr + value_size * i;
@@ -204,6 +218,7 @@ public:
         use by date, datetime, basic type
     */
     void insert_many_fix_len_data(const char* data_ptr, size_t num) override {
+        DCHECK(IColumn::is_materialized());
         if constexpr (std::is_same_v<T, vectorized::Int128>) {
             insert_many_in_copy_way(data_ptr, num);
         } else if (IColumn::is_date) {
@@ -215,15 +230,22 @@ public:
         }
     }
 
-    void insert_default() override { data.push_back(T()); }
+    void insert_default() override {
+        DCHECK(IColumn::is_materialized());
+        data.push_back(T());
+    }
 
     void insert_many_defaults(size_t length) override {
+        DCHECK(IColumn::is_materialized());
         size_t old_size = data.size();
         data.resize(old_size + length);
         memset(data.data() + old_size, 0, length * sizeof(data[0]));
     }
 
-    void pop_back(size_t n) override { data.resize_assume_reserved(data.size() - n); }
+    void pop_back(size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        data.resize_assume_reserved(data.size() - n);
+    }
 
     StringRef serialize_value_into_arena(size_t n, Arena& arena, char const*& begin) const override;
 
@@ -231,16 +253,40 @@ public:
 
     void update_hash_with_value(size_t n, SipHash& hash) const override;
 
-    size_t byte_size() const override { return data.size() * sizeof(data[0]); }
+    size_t byte_size() const override {
+        if (IColumn::is_materialized()) {
+            return data.size() * sizeof(data[0]);
+        } else {
+            return IColumn::ref_row_indice->byte_size();
+        }
+    }
 
-    size_t allocated_bytes() const override { return data.allocated_bytes(); }
+    size_t allocated_bytes() const override {
+        if (IColumn::is_materialized()) {
+            return data.allocated_bytes();
+        } else {
+            return IColumn::ref_row_indice->byte_size();
+        }
+    }
 
-    void protect() override { data.protect(); }
+    void protect() override {
+        if (IColumn::is_materialized()) {
+            data.protect();
+        } else {
+            // IColumn::ref_column->protect();
+        }
+    }
 
-    void insert_value(const T value) { data.push_back(value); }
+    void insert_value(const T value) {
+        DCHECK(IColumn::is_materialized());
+        data.push_back(value);
+    }
 
     /// This method implemented in header because it could be possibly devirtualized.
     int compare_at(size_t n, size_t m, const IColumn& rhs_, int nan_direction_hint) const override {
+        DCHECK(IColumn::is_materialized());
+        DCHECK(rhs_.is_materialized());
+
         return CompareHelper<T>::compare(data[n], static_cast<const Self&>(rhs_).data[m],
                                          nan_direction_hint);
     }
@@ -248,31 +294,59 @@ public:
     void get_permutation(bool reverse, size_t limit, int nan_direction_hint,
                          IColumn::Permutation& res) const override;
 
-    void reserve(size_t n) override { data.reserve(n); }
+    void reserve(size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        data.reserve(n);
+    }
 
-    void resize(size_t n) override { data.resize(n); }
+    void resize(size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        data.resize(n);
+    }
 
     const char* get_family_name() const override;
 
     MutableColumnPtr clone_resized(size_t size) const override;
 
-    Field operator[](size_t n) const override { return data[n]; }
+    Field operator[](size_t n) const override {
+        DCHECK(IColumn::is_materialized());
+        return data[n];
+    }
 
-    void get(size_t n, Field& res) const override { res = (*this)[n]; }
+    void get(size_t n, Field& res) const override {
+        DCHECK(IColumn::is_materialized());
+        res = (*this)[n];
+    }
 
     UInt64 get64(size_t n) const override;
 
     Float64 get_float64(size_t n) const override;
 
-    void clear() override { data.clear(); }
+    void clear() override {
+        data.clear();
+        if (IColumn::is_materialized()) {
+            IColumn::ref_column = nullptr;
+            IColumn::ref_row_indice = nullptr;
+        }
+    }
 
-    UInt64 get_uint(size_t n) const override { return UInt64(data[n]); }
+    UInt64 get_uint(size_t n) const override {
+        DCHECK(IColumn::is_materialized());
+        return UInt64(data[n]);
+    }
 
-    bool get_bool(size_t n) const override { return bool(data[n]); }
+    bool get_bool(size_t n) const override {
+        DCHECK(IColumn::is_materialized());
+        return bool(data[n]);
+    }
 
-    Int64 get_int(size_t n) const override { return Int64(data[n]); }
+    Int64 get_int(size_t n) const override {
+        DCHECK(IColumn::is_materialized());
+        return Int64(data[n]);
+    }
 
     void insert(const Field& x) override {
+        DCHECK(IColumn::is_materialized());
         data.push_back(doris::vectorized::get<NearestFieldType<T>>(x));
     }
 
@@ -282,6 +356,7 @@ public:
                              const int* indices_end) override;
 
     void fill(const value_type& element, size_t num) {
+        DCHECK(IColumn::is_materialized());
         auto old_size = data.size();
         auto new_size = old_size + num;
         data.resize(new_size);
@@ -295,6 +370,7 @@ public:
     }
 
     void insert_zeroed_elements(size_t num) {
+        DCHECK(IColumn::is_materialized());
         auto old_size = data.size();
         auto new_size = old_size + num;
         data.resize(new_size);
@@ -305,6 +381,7 @@ public:
 
     // note(wb) this method is only used in storage layer now
     Status filter_by_selector(const uint16_t* sel, size_t sel_size, IColumn* col_ptr) override {
+        DCHECK(IColumn::is_materialized());
         insert_res_column(sel, sel_size, reinterpret_cast<vectorized::ColumnVector<T>*>(col_ptr));
         return Status::OK();
     }
@@ -324,6 +401,7 @@ public:
 
     MutableColumns scatter(IColumn::ColumnIndex num_columns,
                            const IColumn::Selector& selector) const override {
+        DCHECK(IColumn::is_materialized());
         return this->template scatter_impl<Self>(num_columns, selector);
     }
 
@@ -334,6 +412,7 @@ public:
     bool is_fixed_and_contiguous() const override { return true; }
     size_t size_of_value_if_fixed() const override { return sizeof(T); }
     StringRef get_raw_data() const override {
+        materialize();
         return StringRef(reinterpret_cast<const char*>(data.data()), data.size());
     }
 
@@ -342,28 +421,37 @@ public:
     }
 
     /** More efficient methods of manipulation - to manipulate with data directly. */
-    Container& get_data() { return data; }
+    Container& get_data();
 
-    const Container& get_data() const { return data; }
+    const Container& get_data() const;
 
-    const T& get_element(size_t n) const { return data[n]; }
+    const T& get_element(size_t n) const {
+        DCHECK(IColumn::is_materialized());
+        return data[n];
+    }
 
-    T& get_element(size_t n) { return data[n]; }
+    T& get_element(size_t n) {
+        DCHECK(IColumn::is_materialized());
+        return data[n];
+    }
 
     void replace_column_data(const IColumn& rhs, size_t row, size_t self_row = 0) override {
+        DCHECK(IColumn::is_materialized());
         DCHECK(size() > self_row);
         data[self_row] = static_cast<const Self&>(rhs).data[row];
     }
 
     void replace_column_data_default(size_t self_row = 0) override {
+        DCHECK(IColumn::is_materialized());
         DCHECK(size() > self_row);
         data[self_row] = T();
     }
 
 protected:
-    Container data;
+    mutable Container data;
 };
 
+/*
 template <typename T>
 template <typename Type>
 ColumnPtr ColumnVector<T>::index_impl(const PaddedPODArray<Type>& indexes, size_t limit) const {
@@ -380,5 +468,6 @@ ColumnPtr ColumnVector<T>::index_impl(const PaddedPODArray<Type>& indexes, size_
 
     return res;
 }
+*/
 
 } // namespace doris::vectorized

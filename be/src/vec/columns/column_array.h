@@ -65,6 +65,8 @@ public:
     /** On the index i there is an offset to the beginning of the i + 1 -th element. */
     using ColumnOffsets = ColumnVector<Offset>;
 
+    void materialize() const override;
+
     std::string get_name() const override;
     const char * get_family_name() const override { return "Array"; }
     bool can_be_inside_nullable() const override { return true; }

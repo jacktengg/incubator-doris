@@ -63,6 +63,7 @@ Status VCrossJoinNode::construct_build_side(RuntimeState* state) {
 
         Block block;
         RETURN_IF_ERROR(child(1)->get_next(state, &block, &eos));
+        block.materialize_columns();
         auto rows = block.rows();
         auto mem_usage = block.allocated_bytes();
 
@@ -120,6 +121,7 @@ Status VCrossJoinNode::get_next(RuntimeState* state, Block* block, bool* eos) {
                         timer.start();
                     } while (_left_block.rows() == 0 && !_left_side_eos);
                     COUNTER_UPDATE(_left_child_row_counter, _left_block.rows());
+                    _left_block.materialize_columns();
                     if (_left_block.rows() == 0) {
                         *eos = _eos = _left_side_eos;
                     }

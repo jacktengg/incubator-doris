@@ -33,7 +33,17 @@ bool decimal_less(T x, T y, doris::vectorized::UInt32 x_scale, doris::vectorized
 namespace doris::vectorized {
 
 template <typename T>
-void ColumnDecimal<T>::materialize() {
+DecimalPaddedPODArray<T>& ColumnDecimal<T>::get_data() {
+    materialize();
+    return data;
+}
+template <typename T>
+const DecimalPaddedPODArray<T>& ColumnDecimal<T>::get_data() const {
+    materialize();
+    return data;
+}
+template <typename T>
+void ColumnDecimal<T>::materialize() const {
     if(IColumn::is_materialized()) {
         return;
     }
@@ -48,7 +58,7 @@ void ColumnDecimal<T>::materialize() {
         const auto& indice_array = *indice_array_ptr;
         auto size = indice_array.size();
         for (int i = 0; i < size; ++i) {
-            data[dst_offset++] = indice_array[i] == -1 ? T{} : src_vec.get_element(indice_array[i]);
+            data[dst_offset++] = indice_array[i] == -1 ? T{} : src_vec.data[indice_array[i]];
         }
     }
     IColumn::ref_column = nullptr;
@@ -57,6 +67,9 @@ void ColumnDecimal<T>::materialize() {
 
 template <typename T>
 int ColumnDecimal<T>::compare_at(size_t n, size_t m, const IColumn& rhs_, int) const {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(rhs_.is_materialized());
+
     auto& other = static_cast<const Self&>(rhs_);
     const T& a = data[n];
     const T& b = other.data[m];
@@ -70,6 +83,7 @@ int ColumnDecimal<T>::compare_at(size_t n, size_t m, const IColumn& rhs_, int) c
 template <typename T>
 StringRef ColumnDecimal<T>::serialize_value_into_arena(size_t n, Arena& arena,
                                                        char const*& begin) const {
+    DCHECK(IColumn::is_materialized());
     auto pos = arena.alloc_continue(sizeof(T), begin);
     memcpy(pos, &data[n], sizeof(T));
     return StringRef(pos, sizeof(T));
@@ -77,6 +91,7 @@ StringRef ColumnDecimal<T>::serialize_value_into_arena(size_t n, Arena& arena,
 
 template <typename T>
 const char* ColumnDecimal<T>::deserialize_and_insert_from_arena(const char* pos) {
+    DCHECK(IColumn::is_materialized());
     data.push_back(unaligned_load<T>(pos));
     return pos + sizeof(T);
 }
@@ -91,12 +106,15 @@ UInt64 ColumnDecimal<T>::get64(size_t n) const {
 
 template <typename T>
 void ColumnDecimal<T>::update_hash_with_value(size_t n, SipHash& hash) const {
+    DCHECK(IColumn::is_materialized());
     hash.update(data[n]);
 }
 
 template <typename T>
 void ColumnDecimal<T>::get_permutation(bool reverse, size_t limit, int,
                                        IColumn::Permutation& res) const {
+    materialize();
+
 #if 1 /// TODO: perf test
     if (data.size() <= std::numeric_limits<UInt32>::max()) {
         PaddedPODArray<UInt32> tmp_res;
@@ -113,7 +131,14 @@ void ColumnDecimal<T>::get_permutation(bool reverse, size_t limit, int,
 
 template <typename T>
 ColumnPtr ColumnDecimal<T>::permute(const IColumn::Permutation& perm, size_t limit) const {
-    size_t size = limit ? std::min(data.size(), limit) : data.size();
+    size_t size;
+    if (IColumn::is_materialized()) {
+        size = data.size();
+    } else {
+        size = IColumn::ref_row_indice->size();
+    }
+
+    size = limit ? std::min(size, limit) : size;
     if (perm.size() < size) {
         LOG(FATAL) << "Size of permutation is less than required.";
     }
@@ -121,7 +146,14 @@ ColumnPtr ColumnDecimal<T>::permute(const IColumn::Permutation& perm, size_t lim
     auto res = this->create(size, scale);
     typename Self::Container& res_data = res->get_data();
 
-    for (size_t i = 0; i < size; ++i) res_data[i] = data[perm[i]];
+    if (IColumn::is_materialized()) {
+        for (size_t i = 0; i < size; ++i) res_data[i] = data[perm[i]];
+    } else {
+        const Self& ref_vec = assert_cast<const Self&>(*IColumn::ref_column);
+        const auto& ref_data = ref_vec.get_data();
+        auto& indices = *(IColumn::ref_row_indice->get_indices());
+        for (size_t i = 0; i < limit; ++i) res_data[i] = ref_data[indices[perm[i]]];
+    }
 
     return res;
 }
@@ -131,7 +163,9 @@ MutableColumnPtr ColumnDecimal<T>::clone_resized(size_t size) const {
     auto res = this->create(0, scale);
 
     if (size > 0) {
-        if (IColumn::is_materialized()) {
+        if (IColumn::is_materialized() || size > this->size()) {
+            materialize();
+
             auto& new_col = static_cast<Self&>(*res);
             new_col.data.resize(size);
 
@@ -143,9 +177,8 @@ MutableColumnPtr ColumnDecimal<T>::clone_resized(size_t size) const {
                 memset(tail, 0, (size - count) * sizeof(T));
             }
         } else {
-            assert(size == this->size());
             res->set_ref_column(IColumn::ref_column);
-            res->set_ref_row_indice(IColumn::ref_row_indice);
+            res->set_ref_row_indice(IColumn::ref_row_indice->clone(size));
         }
     }
 
@@ -154,6 +187,7 @@ MutableColumnPtr ColumnDecimal<T>::clone_resized(size_t size) const {
 
 template <typename T>
 void ColumnDecimal<T>::insert_data(const char* src, size_t /*length*/) {
+    DCHECK(IColumn::is_materialized());
     T tmp;
     memcpy(&tmp, src, sizeof(T));
     data.emplace_back(tmp);
@@ -161,6 +195,9 @@ void ColumnDecimal<T>::insert_data(const char* src, size_t /*length*/) {
 
 template <typename T>
 void ColumnDecimal<T>::insert_range_from(const IColumn& src, size_t start, size_t length) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
+
     const ColumnDecimal& src_vec = assert_cast<const ColumnDecimal&>(src);
 
     if (start + length > src_vec.data.size()) {
@@ -177,6 +214,8 @@ void ColumnDecimal<T>::insert_range_from(const IColumn& src, size_t start, size_
 
 template <typename T>
 ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter& filt, ssize_t result_size_hint) const {
+    materialize();
+
     size_t size = data.size();
     if (size != filt.size()) {
         LOG(FATAL) << "Size of filter doesn't match size of column.";
@@ -228,6 +267,7 @@ ColumnPtr ColumnDecimal<T>::filter(const IColumn::Filter& filt, ssize_t result_s
 
 template <typename T>
 ColumnPtr ColumnDecimal<T>::replicate(const IColumn::Offsets& offsets) const {
+    DCHECK(IColumn::is_materialized());
     size_t size = data.size();
     if (size != offsets.size()) {
         LOG(FATAL) << "Size of offsets doesn't match size of column.";
@@ -252,6 +292,7 @@ ColumnPtr ColumnDecimal<T>::replicate(const IColumn::Offsets& offsets) const {
 
 template <typename T>
 void ColumnDecimal<T>::replicate(const uint32_t* counts, size_t target_size, IColumn& column) const {
+    DCHECK(IColumn::is_materialized());
     size_t size = data.size();
     if (0 == size) return;
 
@@ -266,6 +307,7 @@ void ColumnDecimal<T>::replicate(const uint32_t* counts, size_t target_size, ICo
 
 template <typename T>
 void ColumnDecimal<T>::get_extremes(Field& min, Field& max) const {
+    DCHECK(IColumn::is_materialized());
     if (data.size() == 0) {
         min = NearestFieldType<T>(0, scale);
         max = NearestFieldType<T>(0, scale);

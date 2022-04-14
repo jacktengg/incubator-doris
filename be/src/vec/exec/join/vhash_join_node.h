@@ -223,6 +223,7 @@ private:
 
     std::vector<Block> _build_blocks;
     Block _probe_block;
+    bool _use_lazy_materialize = false;
     ColumnRawPtrs _probe_columns;
     ColumnUInt8::MutablePtr _null_map_column;
     bool _probe_ignore_null = false;

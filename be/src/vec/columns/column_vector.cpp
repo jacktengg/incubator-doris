@@ -39,8 +39,50 @@
 namespace doris::vectorized {
 
 template <typename T>
+PaddedPODArray<T>& ColumnVector<T>::get_data() {
+    materialize();
+    return data;
+}
+template <typename T>
+const PaddedPODArray<T>& ColumnVector<T>::get_data() const {
+    materialize();
+    return data;
+}
+
+template <typename T>
+void ColumnVector<T>::materialize() const {
+    if(IColumn::is_materialized()) {
+        return;
+    }
+    const auto& ref_row_indices_array = IColumn::ref_row_indice->get_indices_array();
+    const Self& src_vec = assert_cast<const Self&>(*IColumn::ref_column);
+    auto total_size = IColumn::ref_row_indice->size();
+    data.resize(total_size);
+
+    size_t dst_offset = 0;
+    for (auto& indice_array_ptr : ref_row_indices_array) {
+        const auto& indice_array = *indice_array_ptr;
+        auto size = indice_array.size();
+        for (int i = 0; i < size; ++i) {
+            if constexpr (std::is_same_v<T, UInt8>) {
+                // Now Uint8 use to identify null and non null
+                // 1. nullable column : offset == -1 means is null at the here, set true here
+                // 2. real data column : offset == -1 what at is meaningless
+                // 3. JOIN_NULL_HINT only use in outer join to hint the null is produced by outer join
+                data[dst_offset++] = (indice_array[i] == -1) ? T{JOIN_NULL_HINT} : src_vec.data[indice_array[i]];
+            } else {
+                data[dst_offset++] = (indice_array[i] == -1) ? T{0} : src_vec.data[indice_array[i]];
+            }
+        }
+    }
+    IColumn::ref_column = nullptr;
+    IColumn::ref_row_indice = nullptr;
+}
+
+template <typename T>
 StringRef ColumnVector<T>::serialize_value_into_arena(size_t n, Arena& arena,
                                                       char const*& begin) const {
+    DCHECK(IColumn::is_materialized());
     auto pos = arena.alloc_continue(sizeof(T), begin);
     unaligned_store<T>(pos, data[n]);
     return StringRef(pos, sizeof(T));
@@ -48,12 +90,14 @@ StringRef ColumnVector<T>::serialize_value_into_arena(size_t n, Arena& arena,
 
 template <typename T>
 const char* ColumnVector<T>::deserialize_and_insert_from_arena(const char* pos) {
+    DCHECK(IColumn::is_materialized());
     data.push_back(unaligned_load<T>(pos));
     return pos + sizeof(T);
 }
 
 template <typename T>
 void ColumnVector<T>::update_hash_with_value(size_t n, SipHash& hash) const {
+    DCHECK(IColumn::is_materialized());
     hash.update(data[n]);
 }
 
@@ -96,6 +140,8 @@ struct RadixSortTraits : RadixSortNumTraits<T> {
 template <typename T>
 void ColumnVector<T>::get_permutation(bool reverse, size_t limit, int nan_direction_hint,
                                       IColumn::Permutation& res) const {
+    materialize();
+
     size_t s = data.size();
     res.resize(s);
 
@@ -178,7 +224,9 @@ MutableColumnPtr ColumnVector<T>::clone_resized(size_t size) const {
     auto res = this->create();
 
     if (size > 0) {
-        if (IColumn::is_materialized()) {
+        if (IColumn::is_materialized() || size > this->size()) {
+            materialize();
+
             auto& new_col = static_cast<Self&>(*res);
             new_col.data.resize(size);
 
@@ -189,9 +237,8 @@ MutableColumnPtr ColumnVector<T>::clone_resized(size_t size) const {
                 memset(static_cast<void*>(&new_col.data[count]), static_cast<int>(value_type()),
                        (size - count) * sizeof(value_type));
         } else {
-            assert(size == this->size());
             res->set_ref_column(IColumn::ref_column);
-            res->set_ref_row_indice(IColumn::ref_row_indice);
+            res->set_ref_row_indice(IColumn::ref_row_indice->clone(size));
         }
     }
 
@@ -200,16 +247,21 @@ MutableColumnPtr ColumnVector<T>::clone_resized(size_t size) const {
 
 template <typename T>
 UInt64 ColumnVector<T>::get64(size_t n) const {
+    DCHECK(IColumn::is_materialized());
     return ext::bit_cast<UInt64>(data[n]);
 }
 
 template <typename T>
 Float64 ColumnVector<T>::get_float64(size_t n) const {
+    DCHECK(IColumn::is_materialized());
     return static_cast<Float64>(data[n]);
 }
 
 template <typename T>
 void ColumnVector<T>::insert_range_from(const IColumn& src, size_t start, size_t length) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
+
     const ColumnVector& src_vec = dynamic_cast<const ColumnVector&>(src);
 
     if (start + length > src_vec.data.size()) {
@@ -226,6 +278,8 @@ void ColumnVector<T>::insert_range_from(const IColumn& src, size_t start, size_t
 
 template <typename T>
 void ColumnVector<T>::insert_indices_from(const IColumn& src, const int* indices_begin, const int* indices_end) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
     const Self& src_vec = assert_cast<const Self&>(src);
     auto origin_size = size();
     auto new_size = indices_end - indices_begin;
@@ -238,45 +292,17 @@ void ColumnVector<T>::insert_indices_from(const IColumn& src, const int* indices
             // 1. nullable column : offset == -1 means is null at the here, set true here
             // 2. real data column : offset == -1 what at is meaningless
             // 3. JOIN_NULL_HINT only use in outer join to hint the null is produced by outer join
-            data[origin_size + i] = (offset == -1) ? T{JOIN_NULL_HINT} : src_vec.get_element(offset);
+            data[origin_size + i] = (offset == -1) ? T{JOIN_NULL_HINT} : src_vec.data[offset];
         } else {
-            data[origin_size + i] = (offset == -1) ? T{0} : src_vec.get_element(offset);
+            data[origin_size + i] = (offset == -1) ? T{0} : src_vec.data[offset];
         }
     }
-}
-
-template <typename T>
-void ColumnVector<T>::materialize() {
-    if(IColumn::is_materialized()) {
-        return;
-    }
-    const auto& ref_row_indices_array = IColumn::ref_row_indice->get_indices_array();
-    const Self& src_vec = assert_cast<const Self&>(*IColumn::ref_column);
-    auto total_size = IColumn::ref_row_indice->size();
-    data.resize(total_size);
-
-    size_t dst_offset = 0;
-    for (auto& indice_array_ptr : ref_row_indices_array) {
-        const auto& indice_array = *indice_array_ptr;
-        auto size = indice_array.size();
-        for (int i = 0; i < size; ++i) {
-            if constexpr (std::is_same_v<T, UInt8>) {
-                // Now Uint8 use to identify null and non null
-                // 1. nullable column : offset == -1 means is null at the here, set true here
-                // 2. real data column : offset == -1 what at is meaningless
-                // 3. JOIN_NULL_HINT only use in outer join to hint the null is produced by outer join
-                data[dst_offset++] = (indice_array[i] == -1) ? T{JOIN_NULL_HINT} : src_vec.get_element(indice_array[i]);
-            } else {
-                data[dst_offset++] = (indice_array[i] == -1) ? T{0} : src_vec.get_element(indice_array[i]);
-            }
-        }
-    }
-    IColumn::ref_column = nullptr;
-    IColumn::ref_row_indice = nullptr;
 }
 
 template <typename T>
 ColumnPtr ColumnVector<T>::filter(const IColumn::Filter& filt, ssize_t result_size_hint) const {
+    materialize();
+
     size_t size = data.size();
     if (size != filt.size()) {
         LOG(FATAL) << "Size of filter doesn't match size of column.";
@@ -328,7 +354,12 @@ ColumnPtr ColumnVector<T>::filter(const IColumn::Filter& filt, ssize_t result_si
 
 template <typename T>
 ColumnPtr ColumnVector<T>::permute(const IColumn::Permutation& perm, size_t limit) const {
-    size_t size = data.size();
+    size_t size;
+    if (IColumn::is_materialized()) {
+        size = data.size();
+    } else {
+        size = IColumn::ref_row_indice->size();
+    }
 
     if (limit == 0)
         limit = size;
@@ -341,13 +372,21 @@ ColumnPtr ColumnVector<T>::permute(const IColumn::Permutation& perm, size_t limi
 
     auto res = this->create(limit);
     typename Self::Container& res_data = res->get_data();
-    for (size_t i = 0; i < limit; ++i) res_data[i] = data[perm[i]];
+    if (IColumn::is_materialized()) {
+        for (size_t i = 0; i < limit; ++i) res_data[i] = data[perm[i]];
+    } else {
+        const Self& ref_vec = assert_cast<const Self&>(*IColumn::ref_column);
+        const auto& ref_data = ref_vec.get_data();
+        auto& indices = *(IColumn::ref_row_indice->get_indices());
+        for (size_t i = 0; i < limit; ++i) res_data[i] = ref_data[indices[perm[i]]];
+    }
 
     return res;
 }
 
 template <typename T>
 ColumnPtr ColumnVector<T>::replicate(const IColumn::Offsets& offsets) const {
+    DCHECK(IColumn::is_materialized());
     size_t size = data.size();
     if (size != offsets.size()) {
         LOG(FATAL) << "Size of offsets doesn't match size of column.";
@@ -374,6 +413,7 @@ ColumnPtr ColumnVector<T>::replicate(const IColumn::Offsets& offsets) const {
 
 template <typename T>
 void ColumnVector<T>::replicate(const uint32_t* counts, size_t target_size, IColumn& column) const {
+    DCHECK(IColumn::is_materialized());
     size_t size = data.size();
     if (size == 0) return;
 
@@ -388,6 +428,7 @@ void ColumnVector<T>::replicate(const uint32_t* counts, size_t target_size, ICol
 
 template <typename T>
 void ColumnVector<T>::get_extremes(Field& min, Field& max) const {
+    DCHECK(IColumn::is_materialized());
     size_t size = data.size();
 
     if (size == 0) {

@@ -37,7 +37,8 @@ class Field;
 // TODO: Remove the trickly hint, after FE support better way to remove function tuple_is_null
 constexpr uint8_t JOIN_NULL_HINT = 2;
 
-using IndiceArray = std::vector<int>;
+using RowIndiceType = int;
+using IndiceArray = std::vector<RowIndiceType>;
 using IndiceArrayPtr = std::shared_ptr<IndiceArray>;
 
 class RowIndice;
@@ -56,21 +57,22 @@ private:
 
 protected:
     // reffered materialized column
-    Ptr ref_column;
+    mutable Ptr ref_column;
 
     // row indice reffering materialized column
-    RowIndicePtr ref_row_indice;
+    mutable RowIndicePtr ref_row_indice;
 
 public:
-    static MutablePtr make_unmaterialized_column(const Ptr column, const RowIndicePtr row_indice);
-
     virtual bool is_materialized() const {
         return nullptr == ref_row_indice;
     }
     
-    virtual void materialize();
+    // for implementation convenience, make this function const,
+    // it may will be called by get_data and actually modify data
+    virtual void materialize() const = 0;
 
     void set_ref_column(const Ptr column) {
+        DCHECK(column->is_materialized());
         ref_column = column;
     }
     const Ptr get_ref_column() const {
@@ -92,8 +94,6 @@ public:
             return false;
         }
     }
-
-    MutablePtr get_column(IndiceArrayPtr indice_array) const;
 
     virtual void insert_from_no_copy(const IColumn& src) {};
 
@@ -531,9 +531,9 @@ class RowIndice {
 private:
     std::vector<IndiceArrayPtr> _indices;
     // prefix sum of rows
-    std::vector<int64_t> _indice_prefix_sum;
+    std::vector<size_t> _indice_prefix_sum;
 
-    int64_t _total_rows = 0;
+    size_t _total_rows = 0;
 
 public:
     RowIndice() {
@@ -548,9 +548,15 @@ public:
 
     IndiceArrayPtr get_indices();
 
-    int64_t size() const {
+    size_t size() const {
         return _total_rows;
     }
+
+    size_t byte_size() const {
+        return _total_rows * sizeof(RowIndiceType);
+    }
+
+    RowIndicePtr clone(size_t size);
 
 };
 

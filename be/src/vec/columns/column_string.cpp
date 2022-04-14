@@ -29,26 +29,30 @@
 
 namespace doris::vectorized {
 
-void ColumnString::materialize() {
+void ColumnString::materialize() const {
     if(IColumn::is_materialized()) {
         return;
     }
 
-    const auto& ref_row_indices_array = IColumn::ref_row_indice->get_indices_array();
+    auto ref_column_ = IColumn::ref_column;
+    auto ref_row_indice_ = IColumn::ref_row_indice;
+
+    IColumn::ref_column = nullptr;
+    IColumn::ref_row_indice = nullptr;
+
+    const auto& ref_row_indices_array = ref_row_indice_->get_indices_array();
 
     for (auto& indice_array_ptr : ref_row_indices_array) {
         const auto& indice_array = *indice_array_ptr;
         auto size = indice_array.size();
         for (int i = 0; i < size; ++i) {
             if (indice_array[i] == -1) {
-                ColumnString::insert_default();
+                const_cast<ColumnString*>(this)->insert_default();
             } else {
-                ColumnString::insert_from(*IColumn::ref_column, indice_array[i]);
+                const_cast<ColumnString*>(this)->insert_from(*ref_column_, indice_array[i]);
             }
         }
     }
-    IColumn::ref_column = nullptr;
-    IColumn::ref_row_indice = nullptr;
 }
 MutableColumnPtr ColumnString::clone_resized(size_t to_size) const {
     auto res = ColumnString::create();
@@ -56,7 +60,9 @@ MutableColumnPtr ColumnString::clone_resized(size_t to_size) const {
 
     size_t from_size = size();
 
-    if (IColumn::is_materialized()) {
+    if (IColumn::is_materialized() || to_size > from_size) {
+        materialize();
+
         if (to_size <= from_size) {
             /// Just cut column.
 
@@ -83,9 +89,8 @@ MutableColumnPtr ColumnString::clone_resized(size_t to_size) const {
             }
         }
     } else {
-        assert(to_size == this->size());
         res->set_ref_column(IColumn::ref_column);
-        res->set_ref_row_indice(IColumn::ref_row_indice);
+        res->set_ref_row_indice(IColumn::ref_row_indice->clone(to_size));
     }
 
     return res;
@@ -93,6 +98,8 @@ MutableColumnPtr ColumnString::clone_resized(size_t to_size) const {
 
 void ColumnString::insert_range_from(const IColumn& src, size_t start, size_t length) {
     if (length == 0) return;
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
 
     const ColumnString& src_concrete = assert_cast<const ColumnString&>(src);
 
@@ -121,6 +128,8 @@ void ColumnString::insert_range_from(const IColumn& src, size_t start, size_t le
 }
 
 void ColumnString::insert_indices_from(const IColumn& src, const int* indices_begin, const int* indices_end) {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(src.is_materialized());
     for (auto x = indices_begin; x != indices_end; ++x) {
         if (*x == -1) {
             ColumnString::insert_default();
@@ -131,6 +140,8 @@ void ColumnString::insert_indices_from(const IColumn& src, const int* indices_be
 }
 
 ColumnPtr ColumnString::filter(const Filter& filt, ssize_t result_size_hint) const {
+    materialize();
+
     if (offsets.size() == 0) return ColumnString::create();
 
     auto res = ColumnString::create();
@@ -143,7 +154,12 @@ ColumnPtr ColumnString::filter(const Filter& filt, ssize_t result_size_hint) con
 }
 
 ColumnPtr ColumnString::permute(const Permutation& perm, size_t limit) const {
-    size_t size = offsets.size();
+    size_t size;
+    if (IColumn::is_materialized()) {
+        size = offsets.size();
+    } else {
+        size = IColumn::ref_row_indice->size();
+    }
 
     if (limit == 0)
         limit = size;
@@ -161,11 +177,20 @@ ColumnPtr ColumnString::permute(const Permutation& perm, size_t limit) const {
     Chars& res_chars = res->chars;
     Offsets& res_offsets = res->offsets;
 
-    if (limit == size)
-        res_chars.resize(chars.size());
-    else {
+    if (IColumn::is_materialized()) {
+        if (limit == size)
+            res_chars.resize(chars.size());
+        else {
+            size_t new_chars_size = 0;
+            for (size_t i = 0; i < limit; ++i) new_chars_size += size_at(perm[i]);
+            res_chars.resize(new_chars_size);
+        }
+    } else {
+        const auto& ref_vec = assert_cast<const ColumnString&>(*IColumn::ref_column);
+        auto& indices = *(IColumn::ref_row_indice->get_indices());
+
         size_t new_chars_size = 0;
-        for (size_t i = 0; i < limit; ++i) new_chars_size += size_at(perm[i]);
+        for (size_t i = 0; i < limit; ++i) new_chars_size += ref_vec.size_at(indices[perm[i]]);
         res_chars.resize(new_chars_size);
     }
 
@@ -173,16 +198,33 @@ ColumnPtr ColumnString::permute(const Permutation& perm, size_t limit) const {
 
     Offset current_new_offset = 0;
 
-    for (size_t i = 0; i < limit; ++i) {
-        size_t j = perm[i];
-        size_t string_offset = offsets[j - 1];
-        size_t string_size = offsets[j] - string_offset;
+    if (IColumn::is_materialized()) {
+        for (size_t i = 0; i < limit; ++i) {
+            size_t j = perm[i];
+            size_t string_offset = offsets[j - 1];
+            size_t string_size = offsets[j] - string_offset;
 
-        memcpy_small_allow_read_write_overflow15(&res_chars[current_new_offset],
-                                                 &chars[string_offset], string_size);
+            memcpy_small_allow_read_write_overflow15(&res_chars[current_new_offset],
+                                                     &chars[string_offset], string_size);
 
-        current_new_offset += string_size;
-        res_offsets[i] = current_new_offset;
+            current_new_offset += string_size;
+            res_offsets[i] = current_new_offset;
+        }
+    } else {
+        const auto& ref_vec = assert_cast<const ColumnString&>(*IColumn::ref_column);
+        auto& indices = *(IColumn::ref_row_indice->get_indices());
+
+        for (size_t i = 0; i < limit; ++i) {
+            size_t j = indices[perm[i]];
+            size_t string_offset = ref_vec.offsets[j - 1];
+            size_t string_size = ref_vec.offsets[j] - string_offset;
+
+            memcpy_small_allow_read_write_overflow15(&res_chars[current_new_offset],
+                                                     &ref_vec.chars[string_offset], string_size);
+
+            current_new_offset += string_size;
+            res_offsets[i] = current_new_offset;
+        }
     }
 
     return res;
@@ -190,6 +232,7 @@ ColumnPtr ColumnString::permute(const Permutation& perm, size_t limit) const {
 
 StringRef ColumnString::serialize_value_into_arena(size_t n, Arena& arena,
                                                    char const*& begin) const {
+    DCHECK(IColumn::is_materialized());
     size_t string_size = size_at(n);
     size_t offset = offset_at(n);
 
@@ -204,6 +247,7 @@ StringRef ColumnString::serialize_value_into_arena(size_t n, Arena& arena,
 }
 
 const char* ColumnString::deserialize_and_insert_from_arena(const char* pos) {
+    DCHECK(IColumn::is_materialized());
     const size_t string_size = unaligned_load<size_t>(pos);
     pos += sizeof(string_size);
 
@@ -216,6 +260,7 @@ const char* ColumnString::deserialize_and_insert_from_arena(const char* pos) {
     return pos + string_size;
 }
 
+/*
 template <typename Type>
 ColumnPtr ColumnString::index_impl(const PaddedPODArray<Type>& indexes, size_t limit) const {
     if (limit == 0) return ColumnString::create();
@@ -247,6 +292,7 @@ ColumnPtr ColumnString::index_impl(const PaddedPODArray<Type>& indexes, size_t l
 
     return res;
 }
+*/
 
 template <bool positive>
 struct ColumnString::less {
@@ -263,6 +309,8 @@ struct ColumnString::less {
 
 void ColumnString::get_permutation(bool reverse, size_t limit, int /*nan_direction_hint*/,
                                    Permutation& res) const {
+    materialize();
+
     size_t s = offsets.size();
     res.resize(s);
     for (size_t i = 0; i < s; ++i) res[i] = i;
@@ -283,6 +331,8 @@ void ColumnString::get_permutation(bool reverse, size_t limit, int /*nan_directi
 }
 
 ColumnPtr ColumnString::replicate(const Offsets& replicate_offsets) const {
+    DCHECK(IColumn::is_materialized());
+
     size_t col_size = size();
     if (col_size != replicate_offsets.size()) {
         LOG(FATAL) << "Size of offsets doesn't match size of column.";
@@ -322,6 +372,8 @@ ColumnPtr ColumnString::replicate(const Offsets& replicate_offsets) const {
 }
 
 void ColumnString::replicate(const uint32_t* counts, size_t target_size, IColumn& column) const {
+    DCHECK(IColumn::is_materialized());
+
     size_t col_size = size();
     if (0 == col_size) return;
 
@@ -353,15 +405,18 @@ void ColumnString::replicate(const uint32_t* counts, size_t target_size, IColumn
 }
 
 void ColumnString::reserve(size_t n) {
+    DCHECK(IColumn::is_materialized());
     offsets.reserve(n);
     chars.reserve(n);
 }
 
 void ColumnString::resize(size_t n) {
+    DCHECK(IColumn::is_materialized());
     offsets.resize(n);
 }
 
 void ColumnString::get_extremes(Field& min, Field& max) const {
+    DCHECK(IColumn::is_materialized());
     min = String();
     max = String();
 
@@ -387,6 +442,9 @@ void ColumnString::get_extremes(Field& min, Field& max) const {
 
 int ColumnString::compare_at_with_collation(size_t n, size_t m, const IColumn& rhs_,
                                             const Collator& collator) const {
+    DCHECK(IColumn::is_materialized());
+    DCHECK(rhs_.is_materialized());
+
     const ColumnString& rhs = assert_cast<const ColumnString&>(rhs_);
 
     return collator.compare(reinterpret_cast<const char*>(&chars[offset_at(n)]), size_at(n),
@@ -415,6 +473,8 @@ struct ColumnString::lessWithCollation {
 
 void ColumnString::get_permutation_with_collation(const Collator& collator, bool reverse,
                                                   size_t limit, Permutation& res) const {
+    materialize();
+
     size_t s = offsets.size();
     res.resize(s);
     for (size_t i = 0; i < s; ++i) res[i] = i;

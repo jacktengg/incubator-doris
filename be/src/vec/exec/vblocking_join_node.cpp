@@ -122,6 +122,7 @@ Status VBlockingJoinNode::open(RuntimeState* state) {
 
             continue;
         } else {
+            _left_block.materialize_columns();
             init_get_next(_left_block_pos);
             break;
         }

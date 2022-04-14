@@ -164,7 +164,7 @@ struct ProcessHashTableProbe {
               _probe_block(join_node->_probe_block),
               _probe_index(join_node->_probe_index),
               _probe_raw_ptrs(join_node->_probe_columns),
-              // _items_counts(join_node->_items_counts),
+              _items_counts(join_node->_items_counts),
               _build_block_offsets(join_node->_build_block_offsets),
               _build_block_rows(join_node->_build_block_rows),
               _rows_returned_counter(join_node->_rows_returned_counter),
@@ -262,12 +262,12 @@ struct ProcessHashTableProbe {
     }
 
     // output probe side result column
-    // void probe_side_output_column(MutableColumns& mcol, int column_length, int size) {
-    //     for (int i = 0; i < column_length; ++i) {
-    //         auto& column = _probe_block.get_by_position(i).column;
-    //         column->replicate(&_items_counts[0], size, *mcol[i]);
-    //     }
-    // }
+    void probe_side_output_column(MutableColumns& mcol, int column_length, int size) {
+        for (int i = 0; i < column_length; ++i) {
+            auto& column = _probe_block.get_by_position(i).column;
+            column->replicate(&_items_counts[0], size, *mcol[i]);
+        }
+    }
 
     void probe_side_output_column_unmaterialized(MutableBlock& mutable_block, int column_length, int size) {
         if (0 == size)
@@ -312,14 +312,17 @@ struct ProcessHashTableProbe {
         int right_col_len = _join_node->_right_table_data_types.size();
 
         KeyGetter key_getter(_probe_raw_ptrs, _join_node->_probe_key_sz, nullptr);
-        // auto& mcol = mutable_block.mutable_columns();
+        auto& mcol = mutable_block.mutable_columns();
         int current_offset = 0;
 
-        // _items_counts.resize(_probe_rows);
+        if (!_join_node->_use_lazy_materialize) {
+            _items_counts.resize(_probe_rows);
+            memset(_items_counts.data(), 0, sizeof(uint32_t) * _probe_rows);
+        } else {
+            _probe_block_rows.resize(_batch_size);
+        }
         _build_block_offsets.resize(_batch_size);
         _build_block_rows.resize(_batch_size);
-        _probe_block_rows.resize(_batch_size);
-        // memset(_items_counts.data(), 0, sizeof(uint32_t) * _probe_rows);
 
         constexpr auto need_to_set_visited = JoinOpType::value == TJoinOp::RIGHT_ANTI_JOIN ||
                                        JoinOpType::value == TJoinOp::RIGHT_SEMI_JOIN ||
@@ -337,11 +340,14 @@ struct ProcessHashTableProbe {
             for (; _probe_index < _probe_rows;) {
                 if constexpr (ignore_null) {
                     if ((*null_map)[_probe_index]) {
+                        if (!_join_node->_use_lazy_materialize) {
+                            _items_counts[_probe_index] = (uint32_t)0;
+                        }
                         _probe_index++;
                         continue;
                     }
                 }
-                // int last_offset = current_offset;
+                int last_offset = current_offset;
                 auto find_result = (*null_map)[_probe_index]
                                     ? decltype(key_getter.find_key(hash_table_ctx.hash_table, _probe_index,
                                                                     _arena)) {nullptr, false}
@@ -349,11 +355,17 @@ struct ProcessHashTableProbe {
 
                 if constexpr (JoinOpType::value == TJoinOp::LEFT_ANTI_JOIN) {
                     if (!find_result.is_found()) {
-                        _probe_block_rows[current_offset++] = _probe_index;
+                        if (_join_node->_use_lazy_materialize) {
+                            _probe_block_rows[current_offset] = _probe_index;
+                        }
+                        current_offset++;
                     }
                 } else if constexpr (JoinOpType::value == TJoinOp::LEFT_SEMI_JOIN) {
                     if (find_result.is_found()) {
-                        _probe_block_rows[current_offset++] = _probe_index;
+                        if (_join_node->_use_lazy_materialize) {
+                            _probe_block_rows[current_offset] = _probe_index;
+                        }
+                        current_offset++;
                     }
                 } else {
                     if (find_result.is_found()) {
@@ -365,9 +377,12 @@ struct ProcessHashTableProbe {
                                 mapped.visited = true;
 
                             if constexpr (!is_right_semi_anti_join) {
-                                _build_block_offsets[current_offset] = mapped.block_offset;
+                                if (_join_node->_use_lazy_materialize) {
+                                    _probe_block_rows[current_offset] = _probe_index;
+                                } else {
+                                    _build_block_offsets[current_offset] = mapped.block_offset;
+                                }
                                 _build_block_rows[current_offset] = mapped.row_num;
-                                _probe_block_rows[current_offset] = _probe_index;
                                 ++current_offset;
                             }
                         } else {
@@ -378,13 +393,19 @@ struct ProcessHashTableProbe {
                             for (auto it = mapped.begin(); it.ok(); ++it) {
                                 if constexpr (!is_right_semi_anti_join) {
                                     if (current_offset < _batch_size) {
-                                        _build_block_offsets[current_offset] = it->block_offset;
+                                        if (_join_node->_use_lazy_materialize) {
+                                            _probe_block_rows[current_offset] = _probe_index;
+                                        } else {
+                                            _build_block_offsets[current_offset] = it->block_offset;
+                                        }
                                         _build_block_rows[current_offset] = it->row_num;
-                                        _probe_block_rows[current_offset] = _probe_index;
                                     } else {
-                                        _build_block_offsets.emplace_back(it->block_offset);
+                                        if (_join_node->_use_lazy_materialize) {
+                                            _probe_block_rows.emplace_back(_probe_index);
+                                        } else {
+                                            _build_block_offsets.emplace_back(it->block_offset);
+                                        }
                                         _build_block_rows.emplace_back(it->row_num);
-                                        _probe_block_rows.emplace_back(_probe_index);
                                     }
                                     ++current_offset;
                                 }
@@ -395,16 +416,20 @@ struct ProcessHashTableProbe {
                     } else {
                         if constexpr (probe_all) {
                             // only full outer / left outer need insert the data of right table
-                            _build_block_offsets[current_offset] = -1;
+                            if (_join_node->_use_lazy_materialize) {
+                                _build_block_offsets[current_offset] = -1;
+                            } else {
+                                _probe_block_rows[current_offset] = -1;
+                            }
                             _build_block_rows[current_offset] = -1;
-                            _probe_block_rows[current_offset] = -1;
                             ++current_offset;
                         }
                     }
                 }
-
+                if (!_join_node->_use_lazy_materialize) {
+                    _items_counts[_probe_index] = (uint32_t)(current_offset - last_offset);
+                }
                 _probe_index++;
-                // _items_counts[_probe_index++] = (uint32_t)(current_offset - last_offset);
                 if (current_offset >= _batch_size) {
                     break;
                 }
@@ -417,12 +442,20 @@ struct ProcessHashTableProbe {
 
         {
             SCOPED_TIMER(_build_side_output_timer);
-            build_side_output_column_unmaterialized(mutable_block, right_col_idx, right_col_len, current_offset);
+            if (_join_node->_use_lazy_materialize) {
+                build_side_output_column_unmaterialized(mutable_block, right_col_idx, right_col_len, current_offset);
+            } else {
+                build_side_output_column(mcol, right_col_idx, right_col_len, current_offset);
+            }
         }
 
         {
             SCOPED_TIMER(_probe_side_output_timer);
-            probe_side_output_column_unmaterialized(mutable_block, right_col_idx, current_offset);
+            if (_join_node->_use_lazy_materialize) {
+                probe_side_output_column_unmaterialized(mutable_block, right_col_idx, current_offset);
+            } else {
+                probe_side_output_column(mcol, right_col_idx, current_offset);
+            }
         }
 
         Block new_block = mutable_block.to_block();
@@ -482,6 +515,7 @@ struct ProcessHashTableProbe {
                     const Block& cur_blk = _build_blocks[it->block_offset];
                     for (size_t j = 0; j < right_col_len; ++j) {
                         auto& column = *cur_blk.get_by_position(j).column;
+                        column.materialize(); 
                         mcol[j + right_col_idx]->insert_from(column, it->row_num);
                     }
                     visited_map.emplace_back(&it->visited);
@@ -526,6 +560,7 @@ struct ProcessHashTableProbe {
         output_block->swap(mutable_block.to_block());
         for (int i = 0; i < right_col_idx; ++i) {
             auto& column = _probe_block.get_by_position(i).column;
+            column->materialize();
             output_block->get_by_position(i).column = column->replicate(offset_data);
         }
 
@@ -697,7 +732,7 @@ private:
     ColumnRawPtrs& _probe_raw_ptrs;
     Arena _arena;
 
-    // std::vector<uint32_t>& _items_counts;
+    std::vector<uint32_t>& _items_counts;
     std::vector<int8_t>& _build_block_offsets;
     std::vector<int>& _build_block_rows;
     std::vector<int> _probe_block_rows;
@@ -915,8 +950,11 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
                 }
                 _probe_column_disguise_null.clear();
             }
-            // release_block_memory(_probe_block);
-            _probe_block = Block();
+            if (_use_lazy_materialize) {
+                _probe_block = Block();
+            } else {
+                release_block_memory(_probe_block);
+            }
         }
 
         do {
@@ -962,8 +1000,6 @@ Status HashJoinNode::get_next(RuntimeState* state, Block* output_block, bool* eo
                 using HashTableCtxType = std::decay_t<decltype(arg)>;
                 using JoinOpType = std::decay_t<decltype(join_op_variants)>;
                 if constexpr (have_other_join_conjunct) {
-                        LOG(FATAL) << "FATAL: other join conjunct";
-
                     MutableBlock mutable_block(VectorizedUtils::create_empty_columnswithtypename(
                         _row_desc_for_other_join_conjunt));
 
@@ -1078,7 +1114,7 @@ Status HashJoinNode::_hash_table_build(RuntimeState* state) {
         if (block.rows() != 0) { mutable_block.merge(block); }
 
         // make one block for each 4 gigabytes
-        constexpr static auto BUILD_BLOCK_MAX_SIZE =  100 * 1024UL * 1024UL * 1024UL;
+        constexpr static auto BUILD_BLOCK_MAX_SIZE =  8 * 1024UL * 1024UL * 1024UL;
         if (_mem_used - last_mem_used > BUILD_BLOCK_MAX_SIZE) {
             auto new_block = mutable_block.to_block();
             new_block.set_ref_row_indices(mutable_block.get_ref_row_indices());
@@ -1097,6 +1133,11 @@ Status HashJoinNode::_hash_table_build(RuntimeState* state) {
     new_block.set_ref_row_indices(mutable_block.get_ref_row_indices());
     _build_blocks.emplace_back(new_block);
     RETURN_IF_ERROR(_process_build_block(state, _build_blocks[index], index));
+    // for implementation simlicity, support lazy materialization of output
+    // if there is only on build block
+    if (_build_blocks.size() == 1 && !_have_other_join_conjunct) {
+        _use_lazy_materialize = true;
+    }
 
     return std::visit(
             [&](auto&& arg) -> Status {

@@ -109,6 +109,7 @@ public:
         auto materialized_column = left_arg.column->convert_to_full_column_if_const();
 
         if (in_state->use_set) {
+            block.materialize_column(arguments[0]);
             for (size_t i = 0; i < input_rows_count; ++i) {
                 const auto& ref_data = materialized_column->get_data_at(i);
                 if (ref_data.data) {
@@ -125,6 +126,7 @@ public:
         } else {
             std::vector<ColumnPtr> set_columns;
             for (int i = 1; i < arguments.size(); ++i) {
+                block.materialize_column(arguments[i]);
                 set_columns.emplace_back(block.get_by_position(arguments[i]).column);
             }
 

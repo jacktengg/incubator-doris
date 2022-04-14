@@ -47,11 +47,11 @@ private:
     friend class COWHelper<IColumn, ColumnString>;
 
     /// Maps i'th position to offset to i+1'th element. Last offset maps to the end of all chars (is the size of all chars).
-    Offsets offsets;
+    mutable Offsets offsets;
 
     /// Bytes of strings, placed contiguously.
     /// For convenience, every string ends with terminating zero byte. Note that strings could contain zero bytes in the middle.
-    Chars chars;
+    mutable Chars chars;
 
     size_t ALWAYS_INLINE offset_at(ssize_t i) const { return offsets[i - 1]; }
 
@@ -67,13 +67,13 @@ private:
     ColumnString() = default;
 
     ColumnString(const ColumnString& src)
-            : offsets(src.offsets.begin(), src.offsets.end()),
-              chars(src.chars.begin(), src.chars.end()) {}
+            : offsets(((const decltype(src.offsets)&)src.offsets).begin(), ((const decltype(src.offsets)&)src.offsets).end()),
+              chars(((const decltype(src.chars)&)src.chars).begin(), ((const decltype(src.chars)&)src.chars).end()) {}
 
 public:
     const char* get_family_name() const override { return "String"; }
 
-    virtual void materialize();
+    void materialize() const override;
 
     size_t size() const override {
         if (nullptr != IColumn::ref_row_indice) {
@@ -82,10 +82,20 @@ public:
         return offsets.size();
     }
 
-    size_t byte_size() const override { return chars.size() + offsets.size() * sizeof(offsets[0]); }
+    size_t byte_size() const override {
+        if (IColumn::is_materialized()) {
+            return chars.size() + offsets.size() * sizeof(offsets[0]);
+        } else {
+            return IColumn::ref_row_indice->byte_size();
+        }
+    }
 
     size_t allocated_bytes() const override {
-        return chars.allocated_bytes() + offsets.allocated_bytes();
+        if (IColumn::is_materialized()) {
+            return chars.allocated_bytes() + offsets.allocated_bytes();
+        } else {
+            return IColumn::ref_row_indice->byte_size();
+        }
     }
 
     void protect() override;
@@ -93,23 +103,37 @@ public:
     MutableColumnPtr clone_resized(size_t to_size) const override;
 
     Field operator[](size_t n) const override {
+        DCHECK(IColumn::is_materialized());
         assert(n < size());
         return Field(&chars[offset_at(n)], size_at(n) - 1);
     }
 
     void get(size_t n, Field& res) const override {
+        DCHECK(IColumn::is_materialized());
         assert(n < size());
         res.assign_string(&chars[offset_at(n)], size_at(n) - 1);
     }
 
     StringRef get_data_at(size_t n) const override {
-        assert(n < size());
-        return StringRef(&chars[offset_at(n)], size_at(n) - 1);
+        if (IColumn::is_materialized()) {
+            assert(n < size());
+            return StringRef(&chars[offset_at(n)], size_at(n) - 1);
+        } else {
+            auto& indices = *(IColumn::ref_row_indice->get_indices());
+            const ColumnString& ref_vec = assert_cast<const ColumnString&>(*IColumn::ref_column);
+            return StringRef(&ref_vec.chars[ref_vec.offset_at(indices[n])], ref_vec.size_at(indices[n]) - 1);
+        }
     }
 
     StringRef get_data_at_with_terminating_zero(size_t n) const override {
-        assert(n < size());
-        return StringRef(&chars[offset_at(n)], size_at(n));
+        if (IColumn::is_materialized()) {
+            assert(n < size());
+            return StringRef(&chars[offset_at(n)], size_at(n));
+        } else {
+            auto& indices = *(IColumn::ref_row_indice->get_indices());
+            const ColumnString& ref_vec = assert_cast<const ColumnString&>(*IColumn::ref_column);
+            return StringRef(&ref_vec.chars[ref_vec.offset_at(indices[n])], ref_vec.size_at(indices[n]));
+        }
     }
 
 /// Suppress gcc 7.3.1 warning: '*((void*)&<anonymous> +8)' may be used uninitialized in this function
@@ -119,6 +143,7 @@ public:
 #endif
 
     void insert(const Field& x) override {
+        DCHECK(IColumn::is_materialized());
         const String& s = doris::vectorized::get<const String&>(x);
         const size_t old_size = chars.size();
         const size_t size_to_append = s.size() + 1;
@@ -134,6 +159,8 @@ public:
 #endif
 
     void insert_from(const IColumn& src_, size_t n) override {
+        DCHECK(IColumn::is_materialized());
+        DCHECK(src_.is_materialized());
         const ColumnString& src = assert_cast<const ColumnString&>(src_);
         const size_t size_to_append =
                 src.offsets[n] - src.offsets[n - 1]; /// -1th index is Ok, see PaddedPODArray.
@@ -155,6 +182,7 @@ public:
     }
 
     void insert_data(const char* pos, size_t length) override {
+        DCHECK(IColumn::is_materialized());
         const size_t old_size = chars.size();
         const size_t new_size = old_size + length + 1;
 
@@ -166,6 +194,7 @@ public:
 
     void insert_many_binary_data(char* data_array, uint32_t* len_array,
                                  uint32_t* start_offset_array, size_t num) override {
+        DCHECK(IColumn::is_materialized());
         for (size_t i = 0; i < num; i++) {
             uint32_t len = len_array[i];
             uint32_t start_offset = start_offset_array[i];
@@ -175,6 +204,7 @@ public:
 
     void insert_many_dict_data(const int32_t* data_array, size_t start_index, const StringRef* dict,
                                size_t num, uint32_t /*dict_num*/) override {
+        DCHECK(IColumn::is_materialized());
         for (size_t end_index = start_index + num; start_index < end_index; ++start_index) {
             int32_t codeword = data_array[start_index];
             insert_data(dict[codeword].data, dict[codeword].size);
@@ -183,6 +213,7 @@ public:
 
     /// Like getData, but inserting data should be zero-ending (i.e. length is 1 byte greater than real string size).
     void insert_data_with_terminating_zero(const char* pos, size_t length) {
+        DCHECK(IColumn::is_materialized());
         const size_t old_size = chars.size();
         const size_t new_size = old_size + length;
 
@@ -192,6 +223,7 @@ public:
     }
 
     void pop_back(size_t n) override {
+        DCHECK(IColumn::is_materialized());
         size_t nested_n = offsets.back() - offset_at(offsets.size() - n);
         chars.resize(chars.size() - nested_n);
         offsets.resize_assume_reserved(offsets.size() - n);
@@ -202,6 +234,7 @@ public:
     const char* deserialize_and_insert_from_arena(const char* pos) override;
 
     void update_hash_with_value(size_t n, SipHash& hash) const override {
+        DCHECK(IColumn::is_materialized());
         size_t string_size = size_at(n);
         size_t offset = offset_at(n);
 
@@ -224,11 +257,13 @@ public:
     ColumnPtr index_impl(const PaddedPODArray<Type>& indexes, size_t limit) const;
 
     void insert_default() override {
+        DCHECK(IColumn::is_materialized());
         chars.push_back(0);
         offsets.push_back(offsets.back() + 1);
     }
 
     void insert_many_defaults(size_t length) override {
+        DCHECK(IColumn::is_materialized());
         size_t chars_old_size = chars.size();
         chars.resize(chars_old_size + length);
         memset(chars.data() + chars_old_size, 0, length);
@@ -244,6 +279,8 @@ public:
 
     int compare_at(size_t n, size_t m, const IColumn& rhs_,
                    int /*nan_direction_hint*/) const override {
+        DCHECK(IColumn::is_materialized());
+        DCHECK(rhs_.is_materialized());
         const ColumnString& rhs = assert_cast<const ColumnString&>(rhs_);
         return memcmp_small_allow_overflow15(chars.data() + offset_at(n), size_at(n) - 1,
                                              rhs.chars.data() + rhs.offset_at(m),
@@ -266,6 +303,7 @@ public:
     void replicate(const uint32_t* counts, size_t target_size, IColumn& column) const override;
 
     MutableColumns scatter(ColumnIndex num_columns, const Selector& selector) const override {
+        DCHECK(IColumn::is_materialized());
         return scatter_impl<ColumnString>(num_columns, selector);
     }
 
@@ -285,18 +323,35 @@ public:
         return typeid(rhs) == typeid(ColumnString);
     }
 
-    Chars& get_chars() { return chars; }
-    const Chars& get_chars() const { return chars; }
+    Chars& get_chars() {
+        materialize();
+        return chars;
+    }
+    const Chars& get_chars() const {
+        materialize();
+        return chars;
+    }
 
-    Offsets& get_offsets() { return offsets; }
-    const Offsets& get_offsets() const { return offsets; }
+    Offsets& get_offsets() {
+        materialize();
+        return offsets;
+    }
+    const Offsets& get_offsets() const {
+        materialize();
+        return offsets;
+    }
 
     void clear() override {
         chars.clear();
         offsets.clear();
+        if (IColumn::is_materialized()) {
+            IColumn::ref_column = nullptr;
+            IColumn::ref_row_indice = nullptr;
+        }
     }
 
     void replace_column_data(const IColumn& rhs, size_t row, size_t self_row = 0) override {
+        DCHECK(IColumn::is_materialized());
         DCHECK(size() > self_row);
         const auto& r = assert_cast<const ColumnString&>(rhs);
         auto data = r.get_data_at(row);
@@ -313,6 +368,7 @@ public:
 
     // should replace according to 0,1,2... ,size,0,1,2...
     void replace_column_data_default(size_t self_row = 0) override {
+        DCHECK(IColumn::is_materialized());
         DCHECK(size() > self_row);
 
         if (!self_row) {
@@ -326,6 +382,7 @@ public:
     }
 
     MutableColumnPtr get_shinked_column() const {
+        DCHECK(IColumn::is_materialized());
         auto shrinked_column = ColumnString::create();
         for (int i = 0; i < size(); i++) {
             StringRef str = get_data_at(i);

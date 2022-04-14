@@ -38,6 +38,13 @@ ColumnConst::ColumnConst(const ColumnPtr& data_, size_t s_) : data(data_), s(s_)
     }
 }
 
+void ColumnConst::materialize() const {
+    if(IColumn::is_materialized()) {
+        return;
+    }
+    LOG(FATAL) << "ColumnConst::materialize not implemented";
+}
+
 ColumnPtr ColumnConst::convert_to_full_column() const {
     return data->replicate(Offsets(1, s));
 }

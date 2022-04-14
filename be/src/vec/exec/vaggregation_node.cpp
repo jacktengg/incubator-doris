@@ -645,6 +645,8 @@ Status AggregationNode::_pre_agg_with_serialized_key(doris::vectorized::Block* i
     SCOPED_TIMER(_build_timer);
     DCHECK(!_probe_expr_ctxs.empty());
 
+    in_block->materialize_columns();
+
     size_t key_size = _probe_expr_ctxs.size();
     ColumnRawPtrs key_columns(key_size);
     {
@@ -655,6 +657,7 @@ Status AggregationNode::_pre_agg_with_serialized_key(doris::vectorized::Block* i
             in_block->get_by_position(result_column_id).column =
                     in_block->get_by_position(result_column_id)
                             .column->convert_to_full_column_if_const();
+            in_block->materialize_column(result_column_id);
             key_columns[i] = in_block->get_by_position(result_column_id).column.get();
         }
     }

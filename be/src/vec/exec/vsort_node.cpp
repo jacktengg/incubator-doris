@@ -128,8 +128,6 @@ Status VSortNode::sort_input(RuntimeState* state) {
         auto rows = block.rows();
 
         if (rows != 0) {
-            block.materialize_columns();
-
             RETURN_IF_ERROR(pretreat_block(block));
             size_t mem_usage = block.allocated_bytes();
 
@@ -178,13 +176,25 @@ Status VSortNode::pretreat_block(doris::vectorized::Block& block) {
         std::vector<int> valid_column_ids(output_tuple_expr_ctxs.size());
         for (int i = 0; i < output_tuple_expr_ctxs.size(); ++i) {
             RETURN_IF_ERROR(output_tuple_expr_ctxs[i]->execute(&block, &valid_column_ids[i]));
+        auto rows = block.get_by_position(valid_column_ids[i]).column->size();
+        if (0 == rows) {
+            std::cout << "0 rows!!!\n";
+        }
         }
 
         Block new_block;
         for (auto column_id : valid_column_ids) {
             new_block.insert(block.get_by_position(column_id));
         }
+        auto rows = new_block.rows();
+        if (0 == rows) {
+            std::cout << "0 rows!!!\n";
+        }
         block.swap(new_block);
+        rows = block.rows();
+        if (0 == rows) {
+            std::cout << "0 rows!!!\n";
+        }
     }
 
     _sort_description.resize(_vsort_exec_exprs.lhs_ordering_expr_ctxs().size());
@@ -195,6 +205,10 @@ Status VSortNode::pretreat_block(doris::vectorized::Block& block) {
         _sort_description[i].direction = _is_asc_order[i] ? 1 : -1;
         _sort_description[i].nulls_direction =
                 _nulls_first[i] ? -_sort_description[i].direction : _sort_description[i].direction;
+        auto rows = block.rows();
+        if (0 == rows) {
+            std::cout << "0 rows!!!\n";
+        }
     }
 
     sort_block(block, _sort_description, _offset + _limit);

@@ -80,32 +80,29 @@ IndiceArrayPtr RowIndice::get_indices() {
     return indice_array;
 }
 
-void IColumn::materialize() {
-    if(is_materialized()) {
-        return;
+RowIndicePtr RowIndice::clone(size_t size) {
+    auto res = std::make_shared<RowIndice>();
+    if (0 == size) {
+        return res;
     }
-    const auto& ref_row_indices_array = ref_row_indice->get_indices_array();
-    auto& column = *ref_column;
-    for (auto& indice_array : ref_row_indices_array) {
-        // for (auto index : *indice_array) {
-        //     insert_from(column, index);
-        // }
-        // dump_indices(indice_array, 512);
-        // auto size = std::min(indice_array->size(), (size_t)512);
-        // dump_indices(indice_array->data(), indice_array->data() + size);
-
-        insert_indices_from(column, indice_array->data(), indice_array->data() + indice_array->size());
+    if (size > this->size()) {
+        LOG(FATAL) << fmt::format(
+                "row indices clone count = {} is bigger than indice count = {}",
+                size, this->size());
     }
-    ref_column = nullptr;
-    ref_row_indice = nullptr;
-}
-
-MutableColumnPtr IColumn::make_unmaterialized_column(const Ptr column, const RowIndicePtr row_indice) {
-    assert(column->size() > 0);
-    auto new_column = column->clone_empty();
-    new_column->ref_column = column;
-    new_column->ref_row_indice = row_indice;
-    return new_column;
+    size_t count = std::min(this->size(), size);
+    size_t count_copied = 0;
+    for (const auto& indice_array : _indices) {
+        if (count_copied >= count) {
+            break;
+        }
+        size_t count_to_copy = std::min(count - count_copied, indice_array->size());
+        auto array_ptr = std::make_shared<IndiceArray>(count_to_copy);
+        memcpy(array_ptr->data(), indice_array->data(), count_to_copy);
+        res->add_indice(array_ptr);
+        count_copied += count_to_copy;
+    }
+    return res; 
 }
 
 std::string IColumn::dump_structure() const {

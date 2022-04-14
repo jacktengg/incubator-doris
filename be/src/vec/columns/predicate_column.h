@@ -138,6 +138,10 @@ public:
     using value_type = T;
     using Container = PaddedPODArray<value_type>;
 
+    void materialize() const override {
+        LOG(FATAL) << "PredicateColumnType::materialize not implemented";
+    }
+
     bool is_numeric() const override { return false; }
 
     bool is_predicate_column() const override { return true; }

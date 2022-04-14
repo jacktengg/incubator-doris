@@ -40,6 +40,13 @@ public:
     ColumnSet(size_t s_, const ConstSetPtr & data_) : data(data_) { s = s_; }
     ColumnSet(const ColumnSet &) = default;
 
+    void materialize() const override {
+        if(IColumn::is_materialized()) {
+            return;
+        }
+        LOG(FATAL) << "ColumnSet::materialize not implemented";
+    }
+
     const char * get_family_name() const override { return "Set"; }
     MutableColumnPtr clone_dummy(size_t s_) const override { return ColumnSet::create(s_, data); }
 
