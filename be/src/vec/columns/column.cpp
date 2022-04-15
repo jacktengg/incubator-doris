@@ -90,18 +90,17 @@ RowIndicePtr RowIndice::clone(size_t size) {
                 "row indices clone count = {} is bigger than indice count = {}",
                 size, this->size());
     }
-    size_t count = std::min(this->size(), size);
+    auto array_ptr = std::make_shared<IndiceArray>(size);
     size_t count_copied = 0;
     for (const auto& indice_array : _indices) {
-        if (count_copied >= count) {
+        size_t count_to_copy = std::min(size - count_copied, indice_array->size());
+        memcpy(array_ptr->data() + count_copied, indice_array->data(), count_to_copy * sizeof(RowIndiceType));
+        count_copied += count_to_copy;
+        if (count_copied >= size) {
             break;
         }
-        size_t count_to_copy = std::min(count - count_copied, indice_array->size());
-        auto array_ptr = std::make_shared<IndiceArray>(count_to_copy);
-        memcpy(array_ptr->data(), indice_array->data(), count_to_copy);
-        res->add_indice(array_ptr);
-        count_copied += count_to_copy;
     }
+    res->add_indice(array_ptr);
     return res; 
 }
 

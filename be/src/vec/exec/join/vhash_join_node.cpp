@@ -241,7 +241,7 @@ struct ProcessHashTableProbe {
                 }
                 {
                     SCOPED_TIMER(_build_side_update_indice_timer);
-                    new_block = new_block.get_unmaterialized_block(indice_array_ptr );
+                    new_block = new_block.get_unmaterialized_block(indice_array_ptr);
                 }
 
                 MutableColumns mutated_columns;
@@ -417,9 +417,9 @@ struct ProcessHashTableProbe {
                         if constexpr (probe_all) {
                             // only full outer / left outer need insert the data of right table
                             if (_join_node->_use_lazy_materialize) {
-                                _build_block_offsets[current_offset] = -1;
+                                _probe_block_rows[current_offset] = _probe_index;
                             } else {
-                                _probe_block_rows[current_offset] = -1;
+                                _build_block_offsets[current_offset] = -1;
                             }
                             _build_block_rows[current_offset] = -1;
                             ++current_offset;
@@ -689,6 +689,7 @@ struct ProcessHashTableProbe {
             block_size++;
             for (size_t j = 0; j < right_col_len; ++j) {
                 auto& column = *_build_blocks[offset].get_by_position(j).column;
+                column.materialize();
                 mcol[j + right_col_idx]->insert_from(column, row_num);
             }
         };

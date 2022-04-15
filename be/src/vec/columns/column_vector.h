@@ -158,11 +158,11 @@ public:
 
     StringRef get_data_at(size_t n) const override {
         if (IColumn::is_materialized()) {
-            return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[n]));
+            return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[0]));
         } else {
             auto& indices = *(IColumn::ref_row_indice->get_indices());
             const Self& ref_vec = assert_cast<const Self&>(*IColumn::ref_column);
-            return StringRef(reinterpret_cast<const char*>(&ref_vec.data[indices[n]]), sizeof(ref_vec.data[indices[n]]));
+            return StringRef(reinterpret_cast<const char*>(&ref_vec.data[indices[n]]), sizeof(ref_vec.data[0]));
         }
     }
 
