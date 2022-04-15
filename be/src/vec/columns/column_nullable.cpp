@@ -51,13 +51,15 @@ void ColumnNullable::materialize() const {
 
     const auto& ref_vec = assert_cast<const ColumnNullable&>(*IColumn::ref_column);
     auto new_nested_column = nested_column->clone_resized(0);
-    new_nested_column->set_ref_column(ref_vec.get_nested_column_ptr());
-    new_nested_column->set_ref_row_indice(IColumn::ref_row_indice);
+    new_nested_column->set_ref_column_info(
+        ref_vec.get_nested_column_ptr(),
+        IColumn::ref_row_indice);
     new_nested_column->materialize();
 
     auto new_null_map = ColumnUInt8::create();
-    new_null_map->set_ref_column(ref_vec.get_null_map_column_ptr());
-    new_null_map->set_ref_row_indice(IColumn::ref_row_indice);
+    new_null_map->set_ref_column_info(
+        ref_vec.get_null_map_column_ptr(),
+        IColumn::ref_row_indice);
     new_null_map->materialize();
 
     nested_column = std::move(new_nested_column);
@@ -100,8 +102,9 @@ MutableColumnPtr ColumnNullable::clone_resized(size_t new_size) const {
         new_nested_col = nested_column->clone_resized(0);
         res = ColumnNullable::create(std::move(new_nested_col), std::move(new_null_map));
 
-        res->set_ref_column(IColumn::ref_column);
-        res->set_ref_row_indice(IColumn::ref_row_indice->clone(new_size));
+        res->set_ref_column_info(
+            IColumn::ref_column,
+            IColumn::ref_row_indice->clone(new_size));
     }
     return res;
 }
@@ -231,7 +234,7 @@ void ColumnNullable::insert_range_from_not_nullable(const IColumn& src, size_t s
     DCHECK(IColumn::is_materialized());
     DCHECK(src.is_materialized());
     nested_column->insert_range_from(src, start, length);
-    null_map_raw_ptr->get_data().resize_fill(null_map->size() + length, 0);
+    null_map_raw_ptr->get_data().resize_fill(null_map_raw_ptr->get_data().size() + length, 0);
 }
 
 void ColumnNullable::insert_many_from_not_nullable(const IColumn& src, size_t position,
@@ -275,13 +278,11 @@ ColumnPtr ColumnNullable::permute(const Permutation& perm, size_t limit) const {
         return ColumnNullable::create(permuted_data, permuted_null_map);
     } else {
         auto new_nested_column = nested_column->clone_resized(0);
-        new_nested_column->set_ref_column(nested_column);
-        new_nested_column->set_ref_row_indice(IColumn::ref_row_indice);
+        new_nested_column->set_ref_column_info(nested_column, IColumn::ref_row_indice);
         ColumnPtr permuted_data = new_nested_column->permute(perm, limit);
 
         auto new_null_map = ColumnUInt8::create();
-        new_null_map->set_ref_column(null_map);
-        new_null_map->set_ref_row_indice(IColumn::ref_row_indice);
+        new_null_map->set_ref_column_info(null_map, IColumn::ref_row_indice);
         ColumnPtr permuted_null_map = new_null_map->permute(perm, limit);
 
         return ColumnNullable::create(permuted_data, permuted_null_map);
@@ -307,7 +308,7 @@ int ColumnNullable::compare_at(size_t n, size_t m, const IColumn& rhs_,
     }
 
     return nested_column->compare_at(n, m, nullable_rhs.get_nested_column(),
-                                          null_direction_hint);
+                                     null_direction_hint);
 }
 
 void ColumnNullable::get_permutation(bool reverse, size_t limit, int null_direction_hint,

@@ -45,7 +45,7 @@ void ColumnString::materialize() const {
     for (auto& indice_array_ptr : ref_row_indices_array) {
         const auto& indice_array = *indice_array_ptr;
         auto size = indice_array.size();
-        for (int i = 0; i < size; ++i) {
+        for (size_t i = 0; i < size; ++i) {
             if (indice_array[i] == -1) {
                 const_cast<ColumnString*>(this)->insert_default();
             } else {
@@ -89,8 +89,9 @@ MutableColumnPtr ColumnString::clone_resized(size_t to_size) const {
             }
         }
     } else {
-        res->set_ref_column(IColumn::ref_column);
-        res->set_ref_row_indice(IColumn::ref_row_indice->clone(to_size));
+        res->set_ref_column_info(
+            IColumn::ref_column,
+            IColumn::ref_row_indice->clone(to_size));
     }
 
     return res;

@@ -90,10 +90,11 @@ public:
     size_t size_of_value_if_fixed() const override { return sizeof(T); }
 
     size_t size() const override {
-        if (nullptr != IColumn::ref_row_indice) {
+        if (IColumn::is_materialized()) {
+            return data.size();
+        } else {
             return IColumn::ref_row_indice->size();
         }
-        return data.size();
     }
     size_t byte_size() const override {
         if (IColumn::is_materialized()) {
@@ -208,10 +209,7 @@ public:
 
     void clear() override {
         data.clear();
-        if (IColumn::is_materialized()) {
-            IColumn::ref_column = nullptr;
-            IColumn::ref_row_indice = nullptr;
-        }
+        IColumn::clear();
     }
 
     ColumnPtr filter(const IColumn::Filter& filt, ssize_t result_size_hint) const override;

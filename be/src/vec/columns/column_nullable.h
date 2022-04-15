@@ -69,17 +69,18 @@ public:
     std::string get_name() const override { return "Nullable(" + nested_column->get_name() + ")"; }
     MutableColumnPtr clone_resized(size_t size) const override;
     size_t size() const override {
-        if (nullptr != IColumn::ref_row_indice) {
+        if (IColumn::is_materialized()) {
+            return nested_column->size();
+        } else {
             return IColumn::ref_row_indice->size();
         }
-        return nested_column->size();
     }
     bool is_null_at(size_t n) const override {
-        if (nullptr != IColumn::ref_row_indice) {
+        if (IColumn::is_materialized()) {
+            return assert_cast<const ColumnUInt8&>(*null_map).get_data()[n] != 0;
+        } else {
             auto& indices = *(IColumn::ref_row_indice->get_indices());
             return assert_cast<const ColumnUInt8&>(*null_map).get_data()[indices[n]] != 0;
-        } else {
-            return assert_cast<const ColumnUInt8&>(*null_map).get_data()[n] != 0;
         }
     }
     Field operator[](size_t n) const override;
@@ -245,10 +246,7 @@ public:
     void clear() override {
         null_map->clear();
         nested_column->clear();
-        if (IColumn::is_materialized()) {
-            IColumn::ref_column = nullptr;
-            IColumn::ref_row_indice = nullptr;
-        }
+        IColumn::clear();
     }
 
     NullMap& get_null_map_data() {

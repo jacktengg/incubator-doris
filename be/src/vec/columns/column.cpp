@@ -41,16 +41,6 @@ void dump_indices(const IndiceArrayPtr indice_array, int count = 100) {
     std::cout << "\n";
 }
 
-void dump_indices(const int* indices_begin, const int* indices_end) {
-    auto count = indices_end - indices_begin;
-    std::cout << "dump indices2:\n";
-    for (int i = 0; i < count; ++i) {
-        std::cout << indices_begin[i] << ", ";
-        if (i > 0 && 0 == (i + 1) % 8) std::cout << "\n";
-    }
-    std::cout << "\n";
-}
-
 void RowIndice::add_indice(IndiceArrayPtr indice_array) {
     _total_rows += indice_array->size();
     _indices.emplace_back(indice_array);
@@ -61,12 +51,11 @@ IndiceArrayPtr RowIndice::get_indices() {
     if (_indices.size() == 1) {
         return _indices[0];
     }
-    std::cout << "RowIndice::get_indices, more than one indice array\n";
     auto indice_array = std::make_shared<IndiceArray>();
     indice_array->resize(_total_rows);
     auto* p = indice_array->data();
+    const auto item_size = sizeof(IndiceArray::value_type);
     for (auto& indice : _indices) {
-        auto item_size = sizeof(IndiceArray::value_type);
         memcpy(p, indice->data(), indice->size() * item_size);
         p += indice->size();
     }

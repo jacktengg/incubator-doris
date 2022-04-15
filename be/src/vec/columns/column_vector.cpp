@@ -63,7 +63,7 @@ void ColumnVector<T>::materialize() const {
     for (auto& indice_array_ptr : ref_row_indices_array) {
         const auto& indice_array = *indice_array_ptr;
         auto size = indice_array.size();
-        for (int i = 0; i < size; ++i) {
+        for (size_t i = 0; i < size; ++i) {
             if constexpr (std::is_same_v<T, UInt8>) {
                 // Now Uint8 use to identify null and non null
                 // 1. nullable column : offset == -1 means is null at the here, set true here
@@ -237,8 +237,9 @@ MutableColumnPtr ColumnVector<T>::clone_resized(size_t size) const {
                 memset(static_cast<void*>(&new_col.data[count]), static_cast<int>(value_type()),
                        (size - count) * sizeof(value_type));
         } else {
-            res->set_ref_column(IColumn::ref_column);
-            res->set_ref_row_indice(IColumn::ref_row_indice->clone(size));
+            res->set_ref_column_info(
+                IColumn::ref_column,
+                IColumn::ref_row_indice->clone(size));
         }
     }
 

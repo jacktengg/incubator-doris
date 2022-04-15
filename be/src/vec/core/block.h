@@ -415,8 +415,9 @@ public:
                     } else {
                         _columns[i] = _data_types[i]->create_column();
                         assert(block.get_by_position(i).column->get_ref_column()->size() > 0);
-                        _columns[i]->set_ref_column(block.get_by_position(i).column->get_ref_column());
-                        _columns[i]->set_ref_row_indice(block.get_by_position(i).column->get_ref_row_indice());
+                        _columns[i]->set_ref_column_info(
+                            block.get_by_position(i).column->get_ref_column(),
+                            block.get_by_position(i).column->get_ref_row_indice());
                     }
                 } else {
                     _columns[i] = _data_types[i]->create_column();

@@ -63,7 +63,7 @@ protected:
     mutable RowIndicePtr ref_row_indice;
 
 public:
-    virtual bool is_materialized() const {
+    bool is_materialized() const {
         return nullptr == ref_row_indice;
     }
     
@@ -71,16 +71,14 @@ public:
     // it may will be called by get_data and actually modify data
     virtual void materialize() const = 0;
 
-    void set_ref_column(const Ptr column) {
+    void set_ref_column_info(const Ptr column, const RowIndicePtr indice) {
         DCHECK(column->is_materialized());
         ref_column = column;
-    }
-    const Ptr get_ref_column() const {
-        return ref_column;
+        ref_row_indice = indice;
     }
 
-    void set_ref_row_indice(const RowIndicePtr indice) {
-        ref_row_indice = indice;
+    const Ptr get_ref_column() const {
+        return ref_column;
     }
 
     RowIndicePtr get_ref_row_indice() const {
@@ -94,8 +92,6 @@ public:
             return false;
         }
     }
-
-    virtual void insert_from_no_copy(const IColumn& src) {};
 
     /// Name of a Column. It is used in info messages.
     virtual std::string get_name() const { return get_family_name(); }
@@ -429,7 +425,12 @@ public:
     virtual bool is_dummy() const { return false; }
 
     /// Clear data of column, just like vector clear
-    virtual void clear() {};
+    virtual void clear() {
+        if (!is_materialized()) {
+            ref_column = nullptr;
+            ref_row_indice = nullptr;
+        }
+    };
 
     /** Memory layout properties.
       *

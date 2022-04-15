@@ -111,7 +111,10 @@ public:
         data.resize(old_size + length);
     }
 
-    void clear() override { data.clear(); }
+    void clear() override {
+        data.clear();
+        IColumn::clear();
+    }
 
     // TODO: value_type is not a pod type, so we also need to
     // calculate the memory requested by value_type

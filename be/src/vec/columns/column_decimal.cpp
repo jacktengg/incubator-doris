@@ -57,7 +57,7 @@ void ColumnDecimal<T>::materialize() const {
     for (auto& indice_array_ptr : ref_row_indices_array) {
         const auto& indice_array = *indice_array_ptr;
         auto size = indice_array.size();
-        for (int i = 0; i < size; ++i) {
+        for (size_t i = 0; i < size; ++i) {
             data[dst_offset++] = indice_array[i] == -1 ? T{} : src_vec.data[indice_array[i]];
         }
     }
@@ -152,7 +152,7 @@ ColumnPtr ColumnDecimal<T>::permute(const IColumn::Permutation& perm, size_t lim
         const Self& ref_vec = assert_cast<const Self&>(*IColumn::ref_column);
         const auto& ref_data = ref_vec.get_data();
         auto& indices = *(IColumn::ref_row_indice->get_indices());
-        for (size_t i = 0; i < limit; ++i) res_data[i] = ref_data[indices[perm[i]]];
+        for (size_t i = 0; i < size; ++i) res_data[i] = ref_data[indices[perm[i]]];
     }
 
     return res;
@@ -177,8 +177,9 @@ MutableColumnPtr ColumnDecimal<T>::clone_resized(size_t size) const {
                 memset(tail, 0, (size - count) * sizeof(T));
             }
         } else {
-            res->set_ref_column(IColumn::ref_column);
-            res->set_ref_row_indice(IColumn::ref_row_indice->clone(size));
+            res->set_ref_column_info(
+                IColumn::ref_column,
+                IColumn::ref_row_indice->clone(size));
         }
     }
 

@@ -150,10 +150,11 @@ public:
     bool is_numeric() const override { return IsNumber<T>; }
 
     size_t size() const override {
-        if (nullptr != IColumn::ref_row_indice) {
+        if (IColumn::is_materialized()) {
+            return data.size();
+        } else {
             return IColumn::ref_row_indice->size();
         }
-        return data.size();
     }
 
     StringRef get_data_at(size_t n) const override {
@@ -324,10 +325,7 @@ public:
 
     void clear() override {
         data.clear();
-        if (IColumn::is_materialized()) {
-            IColumn::ref_column = nullptr;
-            IColumn::ref_row_indice = nullptr;
-        }
+        IColumn::clear();
     }
 
     UInt64 get_uint(size_t n) const override {

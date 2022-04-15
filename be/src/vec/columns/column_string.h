@@ -76,10 +76,11 @@ public:
     void materialize() const override;
 
     size_t size() const override {
-        if (nullptr != IColumn::ref_row_indice) {
+        if (IColumn::is_materialized()) {
+            return offsets.size();
+        } else {
             return IColumn::ref_row_indice->size();
         }
-        return offsets.size();
     }
 
     size_t byte_size() const override {
@@ -344,10 +345,7 @@ public:
     void clear() override {
         chars.clear();
         offsets.clear();
-        if (IColumn::is_materialized()) {
-            IColumn::ref_column = nullptr;
-            IColumn::ref_row_indice = nullptr;
-        }
+        IColumn::clear();
     }
 
     void replace_column_data(const IColumn& rhs, size_t row, size_t self_row = 0) override {

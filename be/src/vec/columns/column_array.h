@@ -149,6 +149,7 @@ public:
     void clear() override {
         data->clear();
         offsets->clear();
+        IColumn::clear();
     }
 
 private:
