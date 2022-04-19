@@ -432,6 +432,8 @@ public:
                                    ->get_nested_type()
                                    ->equals(*block.get_by_position(i).type));
                     DCHECK(!block.get_by_position(i).type->is_nullable());
+                    _columns[i]->materialize();
+                    block.materialize_column(i);
                     _columns[i]->insert_range_from(*make_nullable(block.get_by_position(i).column)
                                                             ->convert_to_full_column_if_const(),
                                                    0, block.rows());

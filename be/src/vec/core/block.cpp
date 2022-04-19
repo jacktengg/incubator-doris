@@ -108,14 +108,14 @@ Block Block::make_table_by_columns(const std::vector<size_t>& positions) {
     auto column_count = positions.size();
     for (size_t i = 0; i < column_count; ++i) {
         columns[i] = data[positions[i]];
-        if (!data[positions[i]].column->is_materialized()) {
+        if (!columns[i].column->is_materialized()) {
             row_indices.insert(data[positions[i]].column->get_ref_row_indice());
         }
     }
     Block res(columns);
     if (row_indices.size() > 0) {
         std::vector<RowIndicePtr> row_indices_vec(row_indices.begin(), row_indices.end());
-        res.set_ref_row_indices(row_indices_vec);
+        res.set_ref_row_indices(std::move(row_indices_vec));
     }
     return res;
 }
