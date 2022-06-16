@@ -89,6 +89,9 @@ public:
 
     Status merge_filter(const PMergeFilterRequest* request, const char* attach_data);
 
+    Status apply_filter_data_row_count(const PPublishFilterDataRowCountRequest* request);
+    Status merge_filter_data_row_count(const PMergeFilterDataRowCountRequest* request);
+
     void set_pipe(const TUniqueId& fragment_instance_id, std::shared_ptr<StreamLoadPipe> pipe);
 
     std::shared_ptr<StreamLoadPipe> get_pipe(const TUniqueId& fragment_instance_id);

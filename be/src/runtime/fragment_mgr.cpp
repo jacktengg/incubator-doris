@@ -894,4 +894,41 @@ Status FragmentMgr::merge_filter(const PMergeFilterRequest* request, const char*
     return Status::OK();
 }
 
+Status FragmentMgr::apply_filter_data_row_count(const PPublishFilterDataRowCountRequest* request) {
+    UniqueId fragment_instance_id = request->fragment_id();
+    TUniqueId tfragment_instance_id = fragment_instance_id.to_thrift();
+    std::shared_ptr<FragmentExecState> fragment_state;
+
+    {
+        std::unique_lock<std::mutex> lock(_lock);
+        if (!_fragment_map.count(tfragment_instance_id)) {
+            VLOG_NOTICE << "wait for fragment start execute, fragment-id:" << fragment_instance_id;
+            _cv.wait_for(lock, std::chrono::milliseconds(1000),
+                         [&] { return _fragment_map.count(tfragment_instance_id); });
+        }
+
+        auto iter = _fragment_map.find(tfragment_instance_id);
+        if (iter == _fragment_map.end()) {
+            VLOG_CRITICAL << "unknown.... fragment-id:" << fragment_instance_id;
+            return Status::InvalidArgument("fragment-id: " + fragment_instance_id.to_string());
+        }
+        fragment_state = iter->second;
+    }
+
+    DCHECK(fragment_state != nullptr);
+    RuntimeFilterMgr* runtime_filter_mgr =
+            fragment_state->executor()->runtime_state()->runtime_filter_mgr();
+
+    Status st = runtime_filter_mgr->update_filter_data_row_count(request);
+    return st;
+
+}
+Status FragmentMgr::merge_filter_data_row_count(const PMergeFilterDataRowCountRequest* request) {
+    UniqueId queryid = request->query_id();
+    std::shared_ptr<RuntimeFilterMergeControllerEntity> filter_controller;
+    RETURN_IF_ERROR(_runtimefilter_controller.acquire(queryid, &filter_controller));
+    RETURN_IF_ERROR(filter_controller->merge_data_row_count(request));
+    return Status::OK();
+}
+
 } // namespace doris

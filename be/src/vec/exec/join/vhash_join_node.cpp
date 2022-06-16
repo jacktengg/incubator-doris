@@ -132,6 +132,11 @@ struct ProcessRuntimeFilterBuild {
         if (_join_node->_runtime_filter_descs.empty()) {
             return Status::OK();
         }
+
+        update_data_row_count(state,
+                              _join_node->_runtime_filter_descs,
+                              hash_table_ctx.hash_table.get_size() );
+
         VRuntimeFilterSlots runtime_filter_slots(_join_node->_probe_expr_ctxs,
                                                  _join_node->_build_expr_ctxs,
                                                  _join_node->_runtime_filter_descs);
@@ -147,6 +152,26 @@ struct ProcessRuntimeFilterBuild {
         {
             SCOPED_TIMER(_join_node->_push_down_timer);
             runtime_filter_slots.publish();
+        }
+
+        return Status::OK();
+    }
+
+    Status update_data_row_count(RuntimeState* state,
+                                 const std::vector<TRuntimeFilterDesc>& runtime_filter_descs,
+                                 int64_t row_count) {
+        std::vector<IRuntimeFilter*> runtime_filters(runtime_filter_descs.size());
+        for (size_t i = 0; i < runtime_filter_descs.size(); ++i) {
+            IRuntimeFilter* runtime_filter = nullptr;
+            RETURN_IF_ERROR(state->runtime_filter_mgr()->get_producer_filter(runtime_filter_descs[i].filter_id,
+                                                                             &runtime_filter));
+            runtime_filter->publish_data_row_count(row_count);
+
+            runtime_filters[i] = runtime_filter;
+        }
+
+        for (auto& runtime_filter : runtime_filters) {
+            runtime_filter->publish_finally();
         }
 
         return Status::OK();

@@ -120,6 +120,16 @@ public:
                       const ::doris::PPublishFilterRequest* request,
                       ::doris::PPublishFilterResponse* response,
                       ::google::protobuf::Closure* done) override;
+
+    void merge_filter_data_row_count(::google::protobuf::RpcController* controller,
+                                     const ::doris::PMergeFilterDataRowCountRequest* request,
+                                     ::doris::PMergeFilterDataRowCountResponse* response,
+                                     ::google::protobuf::Closure* done) override;
+    void apply_filter_data_row_count(::google::protobuf::RpcController* controller,
+                                     const ::doris::PPublishFilterDataRowCountRequest* request,
+                                     ::doris::PPublishFilterDataRowCountResponse* response,
+                                     ::google::protobuf::Closure* done) override;
+
     void transmit_block(::google::protobuf::RpcController* controller,
                         const ::doris::PTransmitDataParams* request,
                         ::doris::PTransmitDataResult* response,

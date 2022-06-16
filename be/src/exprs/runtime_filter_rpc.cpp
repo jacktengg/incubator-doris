@@ -36,6 +36,54 @@ struct IRuntimeFilter::rpc_context {
     brpc::CallId cid;
 };
 
+struct IRuntimeFilter::rpc_merge_data_row_count_context{
+    PMergeFilterDataRowCountRequest request;
+    PMergeFilterDataRowCountResponse response;
+    brpc::Controller cntl;
+    brpc::CallId cid;
+};
+
+Status IRuntimeFilter::push_data_row_count_to_remote(RuntimeState* state, const TNetworkAddress* addr, int64_t data_row_count) {
+    DCHECK(is_producer());
+    DCHECK(_data_row_count_rpc_context == nullptr);
+    std::shared_ptr<PBackendService_Stub> stub(
+            state->exec_env()->brpc_internal_client_cache()->get_client(*addr));
+    if (!stub) {
+        std::string msg =
+                fmt::format("Get rpc stub failed, host={},  port=", addr->hostname, addr->port);
+        LOG(WARNING) << msg;
+        return Status::InternalError(msg);
+    }
+    _data_row_count_rpc_context = std::make_shared<IRuntimeFilter::rpc_merge_data_row_count_context>();
+
+    auto pquery_id = _data_row_count_rpc_context->request.mutable_query_id();
+    pquery_id->set_hi(_state->query_id().hi);
+    pquery_id->set_lo(_state->query_id().lo);
+
+    auto pfragment_instance_id = _data_row_count_rpc_context->request.mutable_fragment_id();
+    pfragment_instance_id->set_hi(state->fragment_instance_id().hi);
+    pfragment_instance_id->set_lo(state->fragment_instance_id().lo);
+
+    _data_row_count_rpc_context->request.set_filter_id(_filter_id);
+    _data_row_count_rpc_context->request.set_data_row_count(data_row_count);
+
+    _data_row_count_rpc_context->cntl.set_timeout_ms(1000);
+    _data_row_count_rpc_context->cid = _data_row_count_rpc_context->cntl.call_id();
+
+    VLOG_NOTICE << "Producer:" << _data_row_count_rpc_context->request.ShortDebugString() << addr->hostname
+                << ":" << addr->port;
+    if (config::runtime_filter_use_async_rpc) {
+        stub->merge_filter_data_row_count(&_data_row_count_rpc_context->cntl, &_data_row_count_rpc_context->request, &_data_row_count_rpc_context->response,
+                           brpc::DoNothing());
+    } else {
+        stub->merge_filter_data_row_count(&_data_row_count_rpc_context->cntl, &_data_row_count_rpc_context->request, &_data_row_count_rpc_context->response,
+                           nullptr);
+        _data_row_count_rpc_context.reset();
+    }
+
+    return Status::OK();
+}
+
 Status IRuntimeFilter::push_to_remote(RuntimeState* state, const TNetworkAddress* addr) {
     DCHECK(is_producer());
     DCHECK(_rpc_context == nullptr);
@@ -96,6 +144,16 @@ Status IRuntimeFilter::join_rpc() {
             // reset stub cache
             ExecEnv::GetInstance()->brpc_internal_client_cache()->erase(
                     _rpc_context->cntl.remote_side());
+        }
+    }
+
+    if (_data_row_count_rpc_context != nullptr) {
+        brpc::Join(_data_row_count_rpc_context->cid);
+        if (_data_row_count_rpc_context->cntl.Failed()) {
+            LOG(WARNING) << "runtimefilter rpc err:" << _data_row_count_rpc_context->cntl.ErrorText();
+            // reset stub cache
+            ExecEnv::GetInstance()->brpc_internal_client_cache()->erase(
+                    _data_row_count_rpc_context->cntl.remote_side());
         }
     }
     return Status::OK();

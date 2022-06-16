@@ -122,6 +122,14 @@ Status RuntimeFilterMgr::update_filter(const PPublishFilterRequest* request, con
     return real_filter->update_filter(&params);
 }
 
+Status RuntimeFilterMgr::update_filter_data_row_count(const PPublishFilterDataRowCountRequest* request) {
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_tracker);
+    int filter_id = request->filter_id();
+    IRuntimeFilter* real_filter = nullptr;
+    RETURN_IF_ERROR(get_consume_filter(filter_id, &real_filter));
+    return real_filter->update_filter_data_row_cunt(request->data_row_count());
+}
+
 void RuntimeFilterMgr::set_runtime_filter_params(
         const TRuntimeFilterParams& runtime_filter_params) {
     this->_merge_addr = runtime_filter_params.runtime_filter_merge_addr;
@@ -182,6 +190,84 @@ Status RuntimeFilterMergeControllerEntity::init(UniqueId query_id, UniqueId frag
         }
         _init_with_desc(&filterid_to_desc.second, &query_options, &target_iter->second,
                         build_iter->second);
+    }
+    return Status::OK();
+}
+
+// merge data row count
+Status RuntimeFilterMergeControllerEntity::merge_data_row_count(const PMergeFilterDataRowCountRequest* request) {
+    SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(_mem_tracker);
+    std::shared_ptr<RuntimeFilterCntlVal> cntVal;
+    int merged_size = 0;
+    {
+        std::lock_guard<std::mutex> guard(_filter_map_mutex);
+        auto iter = _filter_map.find(std::to_string(request->filter_id()));
+        VLOG_ROW << "recv filter id:" << request->filter_id() << " " << request->ShortDebugString();
+        if (iter == _filter_map.end()) {
+            LOG(WARNING) << "unknown filter id:" << std::to_string(request->filter_id());
+            return Status::InvalidArgument("unknown filter id");
+        }
+        cntVal = iter->second;
+        SCOPED_SWITCH_THREAD_LOCAL_MEM_TRACKER(cntVal->tracker);
+        cntVal->data_row_count_arrive_id.insert(UniqueId(request->fragment_id()).to_string());
+        cntVal->data_row_count += request->data_row_count();
+        merged_size = cntVal->data_row_count_arrive_id.size();
+        // TODO: avoid log when we had acquired a lock
+        VLOG_ROW << "merge size:" << merged_size << ":" << cntVal->producer_size;
+        DCHECK_LE(merged_size, cntVal->producer_size);
+        if (merged_size < cntVal->producer_size) {
+            return Status::OK();
+        }
+    }
+
+    if (merged_size == cntVal->producer_size) {
+        // prepare rpc context
+        using PPublishFilterRowCountRpcContext =
+                async_rpc_context<PPublishFilterDataRowCountRequest, PPublishFilterDataRowCountResponse>;
+        std::vector<std::unique_ptr<PPublishFilterRowCountRpcContext>> rpc_contexts;
+        rpc_contexts.reserve(cntVal->target_info.size());
+
+        PPublishFilterDataRowCountRequest apply_request;
+
+        std::vector<TRuntimeFilterTargetParams>& targets = cntVal->target_info;
+        for (size_t i = 0; i < targets.size(); i++) {
+            rpc_contexts.emplace_back(new PPublishFilterRowCountRpcContext);
+
+            rpc_contexts[i]->request = apply_request;
+            rpc_contexts[i]->request.set_filter_id(request->filter_id());
+            *rpc_contexts[i]->request.mutable_query_id() = request->query_id();
+
+            // set fragment-id
+            auto request_fragment_id = rpc_contexts[i]->request.mutable_fragment_id();
+            request_fragment_id->set_hi(targets[i].target_fragment_instance_id.hi);
+            request_fragment_id->set_lo(targets[i].target_fragment_instance_id.lo);
+
+            rpc_contexts[i]->request.set_data_row_count(cntVal->data_row_count);
+
+            rpc_contexts[i]->cid = rpc_contexts[i]->cntl.call_id();
+
+            std::shared_ptr<PBackendService_Stub> stub(
+                    ExecEnv::GetInstance()->brpc_internal_client_cache()->get_client(
+                            targets[i].target_fragment_instance_addr));
+            VLOG_NOTICE << "send filter " << rpc_contexts[i]->request.filter_id()
+                        << " to:" << targets[i].target_fragment_instance_addr.hostname << ":"
+                        << targets[i].target_fragment_instance_addr.port
+                        << rpc_contexts[i]->request.ShortDebugString();
+            if (stub == nullptr) {
+                rpc_contexts.pop_back();
+                continue;
+            }
+            stub->apply_filter_data_row_count(&rpc_contexts[i]->cntl, &rpc_contexts[i]->request,
+                                              &rpc_contexts[i]->response, brpc::DoNothing());
+        }
+        for (auto& rpc_context : rpc_contexts) {
+            brpc::Join(rpc_context->cid);
+            if (rpc_context->cntl.Failed()) {
+                LOG(WARNING) << "runtimefilter rpc err:" << rpc_context->cntl.ErrorText();
+                ExecEnv::GetInstance()->brpc_internal_client_cache()->erase(
+                        rpc_context->cntl.remote_side());
+            }
+        }
     }
     return Status::OK();
 }

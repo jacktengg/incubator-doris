@@ -38,6 +38,8 @@ class FragmentExecState;
 class PlanFragmentExecutor;
 class PPublishFilterRequest;
 class PMergeFilterRequest;
+class PPublishFilterDataRowCountRequest;
+class PMergeFilterDataRowCountRequest;
 
 /// producer:
 /// Filter filter;
@@ -69,6 +71,9 @@ public:
 
     // update filter by remote
     Status update_filter(const PPublishFilterRequest* request, const char* data);
+
+    // update filter data row count by remote
+    Status update_filter_data_row_count(const PPublishFilterDataRowCountRequest* request);
 
     void set_runtime_filter_params(const TRuntimeFilterParams& runtime_filter_params);
 
@@ -114,6 +119,9 @@ public:
     // handle merge rpc
     Status merge(const PMergeFilterRequest* request, const char* data);
 
+    // handle merge row count rpc
+    Status merge_data_row_count(const PMergeFilterDataRowCountRequest* request);
+
     UniqueId query_id() { return _query_id; }
 
 private:
@@ -124,11 +132,13 @@ private:
 
     struct RuntimeFilterCntlVal {
         int64_t create_time;
+        int64_t data_row_count = 0;
         int producer_size;
         TRuntimeFilterDesc runtime_filter_desc;
         std::vector<doris::TRuntimeFilterTargetParams> target_info;
         IRuntimeFilter* filter;
         std::unordered_set<std::string> arrive_id; // fragment_instance_id ?
+        std::unordered_set<std::string> data_row_count_arrive_id;
         std::shared_ptr<MemTracker> tracker;
         std::shared_ptr<ObjectPool> pool;
     };

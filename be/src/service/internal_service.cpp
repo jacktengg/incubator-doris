@@ -514,6 +514,36 @@ void PInternalServiceImpl::apply_filter(::google::protobuf::RpcController* contr
     st.to_protobuf(response->mutable_status());
 }
 
+void PInternalServiceImpl::merge_filter_data_row_count(::google::protobuf::RpcController* controller,
+                                                       const ::doris::PMergeFilterDataRowCountRequest* request,
+                                                       ::doris::PMergeFilterDataRowCountResponse* response,
+                                                       ::google::protobuf::Closure* done) {
+    LOG(WARNING) << "PInternalServiceImpl::merge_filter_data_row_count";
+    SCOPED_SWITCH_BTHREAD();
+    brpc::ClosureGuard closure_guard(done);
+    Status st = _exec_env->fragment_mgr()->merge_filter_data_row_count(request);
+    if (!st.ok()) {
+        LOG(WARNING) << "merge row count meet error" << st.to_string();
+    }
+    st.to_protobuf(response->mutable_status());
+}
+
+void PInternalServiceImpl::apply_filter_data_row_count(::google::protobuf::RpcController* controller,
+                                                       const ::doris::PPublishFilterDataRowCountRequest* request,
+                                                       ::doris::PPublishFilterDataRowCountResponse* response,
+                                                       ::google::protobuf::Closure* done) {
+    LOG(WARNING) << "PInternalServiceImpl::apply_filter_data_row_count";
+    SCOPED_SWITCH_BTHREAD();
+    brpc::ClosureGuard closure_guard(done);
+    UniqueId unique_id(request->query_id());
+    VLOG_NOTICE << "rpc apply_filter_data_row_count recv";
+    Status st = _exec_env->fragment_mgr()->apply_filter_data_row_count(request);
+    if (!st.ok()) {
+        LOG(WARNING) << "apply filter count meet error: " << st.to_string();
+    }
+    st.to_protobuf(response->mutable_status());
+}
+
 void PInternalServiceImpl::send_data(google::protobuf::RpcController* controller,
                                      const PSendDataRequest* request, PSendDataResult* response,
                                      google::protobuf::Closure* done) {

@@ -428,6 +428,28 @@ message PPublishFilterResponse {
     required PStatus status = 1;
 };
 
+message PMergeFilterDataRowCountRequest {
+    required int32 filter_id = 1;
+    required PUniqueId query_id = 2;
+    required PUniqueId fragment_id = 3;
+    required int64 data_row_count = 4;
+};
+
+message PMergeFilterDataRowCountResponse {
+    required PStatus status = 1;
+};
+
+message PPublishFilterDataRowCountRequest {
+    required int32 filter_id = 1;
+    required PUniqueId query_id = 2;
+    required PUniqueId fragment_id = 3;
+    required int64 data_row_count = 4;
+};
+
+message PPublishFilterDataRowCountResponse {
+    required PStatus status = 1;
+};
+
 message PExprResult {
     required PScalarType type = 1;
     required string content = 2;
@@ -494,6 +516,8 @@ service PBackendService {
     rpc rollback(PRollbackRequest) returns (PRollbackResult);
     rpc merge_filter(PMergeFilterRequest) returns (PMergeFilterResponse);
     rpc apply_filter(PPublishFilterRequest) returns (PPublishFilterResponse);
+    rpc merge_filter_data_row_count(PMergeFilterDataRowCountRequest) returns (PMergeFilterDataRowCountResponse);
+    rpc apply_filter_data_row_count(PPublishFilterDataRowCountRequest) returns (PPublishFilterDataRowCountResponse);
     rpc fold_constant_expr(PConstantExprRequest) returns (PConstantExprResult);
     rpc transmit_block(PTransmitDataParams) returns (PTransmitDataResult);
     rpc transmit_block_by_http(PEmptyRequest) returns (PTransmitDataResult);

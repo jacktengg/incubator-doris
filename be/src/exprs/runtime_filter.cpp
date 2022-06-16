@@ -950,6 +950,26 @@ Status IRuntimeFilter::publish() {
     }
 }
 
+Status IRuntimeFilter::publish_data_row_count(int64_t data_row_count) {
+    DCHECK(is_producer());
+    if (_has_local_target) {
+        IRuntimeFilter* consumer_filter = nullptr;
+        // TODO: log if err
+        Status status =
+                _state->runtime_filter_mgr()->get_consume_filter(_filter_id, &consumer_filter);
+        DCHECK(status.ok());
+        // push down
+        std::swap(this->_wrapper, consumer_filter->_wrapper);
+        consumer_filter->update_runtime_filter_type_to_profile();
+        // consumer_filter->signal();
+        return Status::OK();
+    } else {
+        TNetworkAddress addr;
+        RETURN_IF_ERROR(_state->runtime_filter_mgr()->get_merge_addr(&addr));
+        return push_data_row_count_to_remote(_state, &addr, data_row_count);
+    }
+}
+
 void IRuntimeFilter::publish_finally() {
     DCHECK(is_producer());
     join_rpc();
@@ -1393,6 +1413,11 @@ Status IRuntimeFilter::update_filter(const UpdateRuntimeFilterParams* param) {
         update_runtime_filter_type_to_profile();
     }
     this->signal();
+    return Status::OK();
+}
+
+Status IRuntimeFilter::update_filter_data_row_cunt(const int64_t data_row_count) {
+    _data_row_count = data_row_count;
     return Status::OK();
 }
 

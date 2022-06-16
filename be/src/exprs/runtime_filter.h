@@ -141,6 +141,10 @@ public:
 
     void publish_finally();
 
+    // publish filter
+    // push filter data row count to remote node or push down it to scan_node
+    Status publish_data_row_count(int64_t data_row_count);
+
     RuntimeFilterType type() const { return _runtime_filter_type; }
 
     // get push down expr context
@@ -196,6 +200,7 @@ public:
                                  std::unique_ptr<RuntimePredicateWrapper>* wrapper);
     void change_to_bloom_filter();
     Status update_filter(const UpdateRuntimeFilterParams* param);
+    Status update_filter_data_row_cunt(const int64_t data_row_count);
 
     void set_ignored() { _is_ignored = true; }
 
@@ -213,6 +218,8 @@ public:
     // async push runtimefilter to remote node
     Status push_to_remote(RuntimeState* state, const TNetworkAddress* addr);
     Status join_rpc();
+
+    Status push_data_row_count_to_remote(RuntimeState* state, const TNetworkAddress* addr, int64_t data_row_count);
 
     void init_profile(RuntimeProfile* parent_profile);
 
@@ -241,6 +248,10 @@ protected:
     RuntimePredicateWrapper* _wrapper = nullptr;
     // runtime filter type
     RuntimeFilterType _runtime_filter_type;
+
+    // total data row count for building this runtime filter
+    int64_t _data_row_count = 0;
+
     // runtime filter id
     int _filter_id;
     // Specific types BoardCast or Shuffle
@@ -282,6 +293,9 @@ protected:
 
     struct rpc_context;
     std::shared_ptr<rpc_context> _rpc_context;
+
+    struct rpc_merge_data_row_count_context;
+    std::shared_ptr<rpc_merge_data_row_count_context> _data_row_count_rpc_context;
 
     // parent profile
     // only effect on consumer
