@@ -29,6 +29,7 @@
 
 #include "gutil/strings/substitute.h"
 #include "util/faststring.h"
+#include "LZ4_decompress_faster.h"
 
 namespace doris {
 
@@ -84,6 +85,47 @@ public:
         }
         return LZ4_compressBound(len);
     }
+};
+
+class Lz4CKBlockCompression : public BlockCompressionCodec {
+public:
+    static const Lz4CKBlockCompression* instance() {
+        static Lz4CKBlockCompression s_instance;
+        return &s_instance;
+    }
+    ~Lz4CKBlockCompression() override {}
+
+    Status compress(const Slice& input, Slice* output) const override {
+        if (input.size > std::numeric_limits<int32_t>::max() ||
+            output->size > std::numeric_limits<int32_t>::max()) {
+            return Status::InvalidArgument("LZ4 cannot handle data large than 2G");
+        }
+        auto compressed_len =
+                LZ4_compress_default(input.data, output->data, input.size, output->size);
+        if (compressed_len == 0) {
+            return Status::InvalidArgument("Output buffer's capacity is not enough, size={}",
+                                           output->size);
+        }
+        output->size = compressed_len;
+        return Status::OK();
+    }
+
+    Status decompress(const Slice& input, Slice* output) const override {
+        if (LZ4::decompress(input.data, output->data, input.size, output->size, lz4_stat) ) {
+            return Status::OK();
+        } else {
+            return Status::InvalidArgument("Fail to do LZ_CK decompress");
+        }
+    }
+
+    size_t max_compressed_len(size_t len) const override {
+        if (len > std::numeric_limits<int32_t>::max()) {
+            return 0;
+        }
+        return LZ4_compressBound(len);
+    }
+private:
+    mutable LZ4::PerformanceStatistics lz4_stat;
 };
 
 // Used for LZ4 frame format, decompress speed is two times faster than LZ4.
@@ -597,6 +639,9 @@ Status get_block_compression_codec(segment_v2::CompressionTypePB type,
         break;
     case segment_v2::CompressionTypePB::LZ4:
         ptr = new Lz4BlockCompression();
+        break;
+    case segment_v2::CompressionTypePB::LZ4_CK:
+        ptr = new Lz4CKBlockCompression();
         break;
     case segment_v2::CompressionTypePB::LZ4F:
         ptr = new Lz4fBlockCompression();

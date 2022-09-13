@@ -113,6 +113,7 @@ set(UTIL_FILES
   telemetry/open_telemetry_scop_wrapper.hpp
   quantile_state.cpp
   jni-util.cpp
+  LZ4_decompress_faster.cpp
 )
 
 if (WITH_MYSQL)
