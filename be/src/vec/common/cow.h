@@ -81,11 +81,15 @@
   * - as 'mutable_ptr' should be unique, it's refcount is redundant - probably it would be better
   *   to use std::unique_ptr for it somehow.
   */
+
+
 template <typename Derived>
 class COW {
     std::atomic_uint ref_counter;
 
 protected:
+    bool is_pooled = false;
+
     COW() : ref_counter(0) {}
 
     COW(COW const&) : ref_counter(0) {}
@@ -96,7 +100,9 @@ protected:
 
     void release_ref() {
         if (--ref_counter == 0) {
-            delete static_cast<const Derived*>(this);
+            if (!is_pooled) {
+                delete static_cast<const Derived*>(this);
+            }
         }
     }
 
@@ -109,9 +115,12 @@ protected:
     public:
         intrusive_ptr() : t(nullptr) {}
 
-        intrusive_ptr(T* t, bool add_ref = true) : t(t) {
-            if (t && add_ref) {
-                ((std::remove_const_t<T>*)t)->add_ref();
+        intrusive_ptr(T* t, bool pooled, bool add_ref = true) : t(t){
+            if (t) {
+                ((std::remove_const_t<T>*)t)->is_pooled = pooled;
+                if (add_ref) {
+                    ((std::remove_const_t<T>*)t)->add_ref();
+                }
             }
         }
 
@@ -226,7 +235,7 @@ protected:
         template <typename, typename>
         friend class COWHelper;
 
-        explicit mutable_ptr(T* ptr) : Base(ptr) {}
+        explicit mutable_ptr(T* ptr, bool pooled) : Base(ptr, pooled) {}
 
     public:
         /// Copy: not possible.
@@ -261,7 +270,7 @@ protected:
         template <typename, typename>
         friend class COWHelper;
 
-        explicit immutable_ptr(const T* ptr) : Base(ptr) {}
+        explicit immutable_ptr(const T* ptr, bool pool) : Base(ptr, pool) {}
 
     public:
         /// Copy from immutable ptr: ok.
@@ -297,17 +306,17 @@ public:
 
     template <typename... Args>
     static MutablePtr create(Args&&... args) {
-        return MutablePtr(new Derived(std::forward<Args>(args)...));
+        return MutablePtr(new Derived(std::forward<Args>(args)...), false);
     }
 
     template <typename T>
     static MutablePtr create(std::initializer_list<T>&& arg) {
-        return create(std::forward<std::initializer_list<T>>(arg));
+        return create(std::forward<std::initializer_list<T>>(arg), false);
     }
 
 public:
-    Ptr get_ptr() const { return Ptr(derived()); }
-    MutablePtr get_ptr() { return MutablePtr(derived()); }
+    Ptr get_ptr() const { return Ptr(derived(), is_pooled); }
+    MutablePtr get_ptr() { return MutablePtr(derived(), is_pooled); }
 
 protected:
     MutablePtr shallow_mutate() const {
@@ -401,6 +410,24 @@ public:
   *
   * See example in "cow_columns.cpp".
   */
+
+/*
+template <typename T>
+struct DefaultColumnDeleter {
+    DefaultColumnDeleter() {}
+    void operator()(COW* ptr) const {
+        delete static_cast<const T*>(this);
+    }
+};
+
+template <typename T>
+struct PoolColumnDeleter {
+    PoolColumnDeleter (uint32_t block_size) : _block_size(block_size) {}
+    // void operator()(COW* ptr) const { vectorized::return_column<T>(down_cast<T*>(ptr), chunk_size); }
+    uint32_t _block_size;
+};
+*/
+
 template <typename Base, typename Derived>
 class COWHelper : public Base {
 public:
@@ -409,15 +436,24 @@ public:
 
     template <typename... Args>
     static MutablePtr create(Args&&... args) {
-        return MutablePtr(new Derived(std::forward<Args>(args)...));
+        return MutablePtr(new Derived(std::forward<Args>(args)...), false);
+    }
+
+    template <typename... Args>
+    static MutablePtr create_pooled(Args&&... args) {
+        return MutablePtr(new Derived(std::forward<Args>(args)...), true);
     }
 
     typename Base::MutablePtr clone() const override {
-        return typename Base::MutablePtr(new Derived(static_cast<const Derived&>(*this)));
+        return typename Base::MutablePtr(new Derived(static_cast<const Derived&>(*this)), false);
+    }
+
+    static MutablePtr from_raw_ptr(Derived* ptr, bool pooled) {
+        return MutablePtr(ptr, pooled);
     }
 
 protected:
     MutablePtr shallow_mutate() const {
-        return MutablePtr(static_cast<Derived*>(Base::shallow_mutate().get()));
+        return MutablePtr(static_cast<Derived*>(Base::shallow_mutate().get()), false);
     }
 };

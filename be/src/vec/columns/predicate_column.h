@@ -159,6 +159,8 @@ public:
 
     size_t size() const override { return data.size(); }
 
+    size_t capacity() const override { return data.capacity(); }
+
     [[noreturn]] StringRef get_data_at(size_t n) const override {
         LOG(FATAL) << "get_data_at not supported in PredicateColumnType";
     }

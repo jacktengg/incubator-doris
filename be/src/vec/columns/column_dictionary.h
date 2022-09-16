@@ -64,6 +64,8 @@ public:
 
     size_t size() const override { return _codes.size(); }
 
+    size_t capacity() const override { return _codes.capacity(); }
+
     [[noreturn]] StringRef get_data_at(size_t n) const override {
         LOG(FATAL) << "get_data_at not supported in ColumnDictionary";
     }

@@ -74,6 +74,8 @@ public:
 
     size_t size() const override { return offsets.size(); }
 
+    size_t capacity() const override { return offsets.capacity(); }
+
     size_t byte_size() const override { return chars.size() + offsets.size() * sizeof(offsets[0]); }
 
     size_t allocated_bytes() const override {

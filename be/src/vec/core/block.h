@@ -81,6 +81,8 @@ public:
     Block(const PBlock& pblock);
     Block(const std::vector<SlotDescriptor*>& slots, size_t block_size);
 
+    static Block* new_block_pooled(const std::vector<SlotDescriptor*>& slots, size_t block_size);
+
     /// insert the column at the specified position
     void insert(size_t position, const ColumnWithTypeAndName& elem);
     void insert(size_t position, ColumnWithTypeAndName&& elem);

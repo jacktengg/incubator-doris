@@ -132,6 +132,9 @@ public:
     /// Returns number of values in column.
     virtual size_t size() const = 0;
 
+    /// Returns capacity in column.
+    virtual size_t capacity() const = 0;
+
     /// There are no values in columns.
     bool empty() const { return size() == 0; }
 

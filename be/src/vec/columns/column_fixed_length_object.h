@@ -47,6 +47,8 @@ public:
 
     size_t size() const override { return _item_count; }
 
+    size_t capacity() const override { return _item_count; }
+
     const Container& get_data() const { return _data; }
 
     Container& get_data() { return _data; }

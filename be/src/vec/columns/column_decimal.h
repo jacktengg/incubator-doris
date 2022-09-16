@@ -90,6 +90,7 @@ public:
     size_t size_of_value_if_fixed() const override { return sizeof(T); }
 
     size_t size() const override { return data.size(); }
+    size_t capacity() const override { return data.capacity(); }
     size_t byte_size() const override { return data.size() * sizeof(data[0]); }
     size_t allocated_bytes() const override { return data.allocated_bytes(); }
     void protect() override { data.protect(); }

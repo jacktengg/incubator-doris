@@ -149,6 +149,8 @@ public:
 
     size_t size() const override { return data.size(); }
 
+    size_t capacity() const override { return data.capacity(); }
+
     StringRef get_data_at(size_t n) const override {
         return StringRef(reinterpret_cast<const char*>(&data[n]), sizeof(data[n]));
     }

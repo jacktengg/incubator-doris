@@ -60,6 +60,8 @@ public:
 
     size_t size() const override { return s; }
 
+    size_t capacity() const override { return s; }
+
     Field operator[](size_t) const override { return (*data)[0]; }
 
     void get(size_t, Field& res) const override { data->get(0, res); }

@@ -43,6 +43,7 @@
 #include "vec/common/string_ref.h"
 #include "vec/common/typeid_cast.h"
 #include "vec/data_types/data_type_factory.hpp"
+#include "vec/columns/column_pool.h"
 
 namespace doris::vectorized {
 
@@ -61,6 +62,70 @@ Block::Block(const std::vector<SlotDescriptor*>& slots, size_t block_size) {
         insert(ColumnWithTypeAndName(std::move(column_ptr), slot_desc->get_data_type_ptr(),
                                      slot_desc->col_name()));
     }
+}
+
+Block* Block::new_block_pooled(const std::vector<SlotDescriptor*>& slots, size_t block_size) {
+    Block* block = new Block();
+    for (const auto slot_desc : slots) {
+        switch (slot_desc->type().type) {
+#define M_DECIMAL(NAME)                           \
+    case TYPE_##NAME: {                   \
+        using DecimalValueType = PrimitiveTypeTraits<TYPE_##NAME>::CppType; \
+        auto data_type = assert_cast<DataTypeDecimal<DecimalValueType>>(slot_desc->get_data_type_ptr()); \
+        MutableColumnPtr column_ptr; \
+        if (config::enable_decimalv3) { \
+            column_ptr = get_column<PrimitiveTypeTraits<TYPE_##NAME>::ColumnType, true>(data_type->get_scale()); \
+        } else { \
+            column_ptr = get_column<ColumnDecimal128, true>(data_type->get_scale()); \
+            column_ptr->set_decimalv2_type(); \
+        } \
+        column_ptr->reserve(block_size);  \
+        block->insert(ColumnWithTypeAndName(std::move(column_ptr), slot_desc->get_data_type_ptr(), \
+                                     slot_desc->col_name()));                  \
+        break;    \
+    }
+#define APPLY_FOR_DECIMAL_TYPE(M_DECIMAL) \
+    M_DECIMAL(DECIMAL32)                    \
+    M_DECIMAL(DECIMAL64)                    \
+    M_DECIMAL(DECIMAL128)                   \
+    M_DECIMAL(DECIMALV2)                    \
+            APPLY_FOR_DECIMAL_TYPE(M_DECIMAL)
+#undef M_DECIMAL
+
+#define M(NAME)                           \
+    case TYPE_##NAME: {                   \
+        auto column_ptr = get_column<PrimitiveTypeTraits<TYPE_##NAME>::ColumnType, true>(); \
+        column_ptr->reserve(block_size);  \
+        block->insert(ColumnWithTypeAndName(std::move(column_ptr), slot_desc->get_data_type_ptr(), \
+                                     slot_desc->col_name()));                  \
+        break;                                                                 \
+    }
+#define APPLY_FOR_PRIMITIVE_TYPE(M) \
+    M(TINYINT)                      \
+    M(SMALLINT)                     \
+    M(INT)                          \
+    M(BIGINT)                       \
+    M(LARGEINT)                     \
+    M(CHAR)                         \
+    M(DATE)                         \
+    M(DATETIME)                     \
+    M(DATEV2)                       \
+    M(DATETIMEV2)                   \
+    M(VARCHAR)                      \
+    M(STRING)                       \
+    M(HLL)                          \
+    M(BOOLEAN)
+            APPLY_FOR_PRIMITIVE_TYPE(M)
+#undef M
+        default: {
+            VLOG_CRITICAL << "Unsupported Normalize Slot [ColName=" << slot_desc->col_name()
+                          << "]";
+            break;
+        }
+        }
+    }
+
+    return block;
 }
 
 Block::Block(const PBlock& pblock) {
