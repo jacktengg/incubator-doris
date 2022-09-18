@@ -77,9 +77,9 @@ Block* Block::new_block_pooled(const std::vector<SlotDescriptor*>& slots, size_t
         using DecimalValueType = PrimitiveTypeTraits<TYPE_##NAME>::CppType; \
         auto data_type = assert_cast<DataTypeDecimal<DecimalValueType>>(slot_desc->get_data_type_ptr()); \
         if (config::enable_decimalv3) { \
-            column_ptr = get_column_pooled<PrimitiveTypeTraits<TYPE_##NAME>::ColumnType>(data_type->get_scale()); \
+            column_ptr = get_column_pooled<PrimitiveTypeTraits<TYPE_##NAME>::ColumnType>(block_size, data_type->get_scale()); \
         } else { \
-            column_ptr = get_column_pooled<ColumnDecimal128>(data_type->get_scale()); \
+            column_ptr = get_column_pooled<ColumnDecimal128>(block_size, data_type->get_scale()); \
             column_ptr->set_decimalv2_type(); \
         } \
         break; \
@@ -96,7 +96,7 @@ Block* Block::new_block_pooled(const std::vector<SlotDescriptor*>& slots, size_t
 
 #define M(NAME)          \
     case TYPE_##NAME: {  \
-        column_ptr = get_column_pooled<PrimitiveTypeTraits<TYPE_##NAME>::ColumnType>(); \
+        column_ptr = get_column_pooled<PrimitiveTypeTraits<TYPE_##NAME>::ColumnType>(block_size); \
         break; \
     }
 

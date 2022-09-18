@@ -82,13 +82,18 @@
   *   to use std::unique_ptr for it somehow.
   */
 
-
+namespace doris::vectorized {
+    template <typename T>
+    void return_column_pooled(T* col, std::size_t block_size);
+}
 template <typename Derived>
 class COW {
     std::atomic_uint ref_counter;
 
 protected:
     bool is_pooled = false;
+    // block size when created in column pool
+    std::size_t pool_block_size = UINT64_MAX;
 
     COW() : ref_counter(0) {}
 
@@ -103,9 +108,13 @@ protected:
             if (!is_pooled) {
                 delete static_cast<const Derived*>(this);
             } else {
-
+                doris::vectorized::return_column_pooled(static_cast<Derived*>(this), pool_block_size);
             }
         }
+    }
+
+    void set_pool_block_size(std::size_t block_size) {
+        pool_block_size = block_size;
     }
 
     Derived* derived() { return static_cast<Derived*>(this); }
@@ -117,7 +126,7 @@ protected:
     public:
         intrusive_ptr() : t(nullptr) {}
 
-        intrusive_ptr(T* t, bool pooled, bool add_ref = true) : t(t){
+        intrusive_ptr(T* t, bool pooled = false, bool add_ref = true) : t(t){
             if (t) {
                 ((std::remove_const_t<T>*)t)->is_pooled = pooled;
                 if (add_ref) {
@@ -237,7 +246,7 @@ protected:
         template <typename, typename>
         friend class COWHelper;
 
-        explicit mutable_ptr(T* ptr, bool pooled) : Base(ptr, pooled) {}
+        explicit mutable_ptr(T* ptr, bool pooled = false) : Base(ptr, pooled) {}
 
     public:
         /// Copy: not possible.
@@ -308,12 +317,12 @@ public:
 
     template <typename... Args>
     static MutablePtr create(Args&&... args) {
-        return MutablePtr(new Derived(std::forward<Args>(args)...), false);
+        return MutablePtr(new Derived(std::forward<Args>(args)...));
     }
 
     template <typename T>
     static MutablePtr create(std::initializer_list<T>&& arg) {
-        return create(std::forward<std::initializer_list<T>>(arg), false);
+        return create(std::forward<std::initializer_list<T>>(arg));
     }
 
 public:
@@ -438,16 +447,18 @@ public:
 
     template <typename... Args>
     static MutablePtr create(Args&&... args) {
-        return MutablePtr(new Derived(std::forward<Args>(args)...), false);
+        return MutablePtr(new Derived(std::forward<Args>(args)...));
     }
 
     template <typename... Args>
-    static MutablePtr create_pooled(Args&&... args) {
-        return MutablePtr(new Derived(std::forward<Args>(args)...), true);
+    static MutablePtr create_pooled(std::size_t block_size, Args&&... args) {
+        auto ptr =  MutablePtr(new Derived(std::forward<Args>(args)...), true);
+        ptr->set_pool_block_size(block_size);
+        return ptr;
     }
 
     typename Base::MutablePtr clone() const override {
-        return typename Base::MutablePtr(new Derived(static_cast<const Derived&>(*this)), false);
+        return typename Base::MutablePtr(new Derived(static_cast<const Derived&>(*this)));
     }
 
     static MutablePtr from_raw_ptr(Derived* ptr, bool pooled) {

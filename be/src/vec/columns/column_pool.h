@@ -19,6 +19,9 @@
 
 #include <atomic>
 #include <sanitizer/asan_interface.h>
+#include <butil/thread_local.h>
+#include <butil/time.h>
+// #include "gutil/casts.h"
 
 #include "vec/columns/column.h"
 
@@ -126,14 +129,14 @@ public:
     }
 
     template <typename... Args>
-    MutableColumnPtr get_column(Args&&... args) {
+    MutableColumnPtr get_column(size_t block_size, Args&&... args) {
         LocalPool* lp = _get_or_new_local_pool();
         if (UNLIKELY(lp == nullptr)) {
             return nullptr;
         }
         T* col = lp->get_object();
         if (col == nullptr) {
-            return T::create_pooled(std::forward<Args>(args)...);
+            return T::create_pooled(block_size, std::forward<Args>(args)...);
         } else {
             return T::from_raw_ptr(col, true);
         }
@@ -158,7 +161,7 @@ public:
         if (now - _first_push_time > 3) {
             //    ^^^^^^^^^^^^^^^^ read without lock by intention.
             std::lock_guard<std::mutex> l(_free_blocks_lock);
-            int n = implicit_cast<int>(_free_blocks.size() * (1 - free_ratio));
+            int n = (int)(_free_blocks.size() * (1 - free_ratio));
             tmp.insert(tmp.end(), _free_blocks.begin() + n, _free_blocks.end());
             _free_blocks.resize(n);
         }
@@ -310,12 +313,12 @@ template <typename T>
 std::mutex ColumnPool<T>::_change_thread_mutex{}; // NOLINT
 
 template <typename T, typename... Args>
-inline MutableColumnPtr get_column_pooled(Args&&... args) {
-    return ColumnPool<T>::singleton()->template get_column(std::forward<Args>(args)...);
+inline MutableColumnPtr get_column_pooled(size_t block_size, Args&&... args) {
+    return ColumnPool<T>::singleton()->template get_column(block_size, std::forward<Args>(args)...);
 }
 
 template <typename T>
-inline void return_column(T* col, size_t block_size) {
+inline void return_column_pooled(T* col, size_t block_size) {
     ColumnPool<T>::singleton()->return_column(col, block_size);
 }
 
