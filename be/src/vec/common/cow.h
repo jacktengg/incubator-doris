@@ -102,6 +102,8 @@ protected:
         if (--ref_counter == 0) {
             if (!is_pooled) {
                 delete static_cast<const Derived*>(this);
+            } else {
+
             }
         }
     }

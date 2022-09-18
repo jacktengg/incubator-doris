@@ -125,7 +125,7 @@ public:
         return &p;
     }
 
-    template <bool AllocOnEmpty = true, typename... Args>
+    template <typename... Args>
     MutableColumnPtr get_column(Args&&... args) {
         LocalPool* lp = _get_or_new_local_pool();
         if (UNLIKELY(lp == nullptr)) {
@@ -133,13 +133,9 @@ public:
         }
         T* col = lp->get_object();
         if (col == nullptr) {
-            if (AllocOnEmpty) {
-                return T::create_pooled(std::forward<Args>(args)...);
-            } else {
-                return T::create(std::forward<Args>(args)...);
-            }
+            return T::create_pooled(std::forward<Args>(args)...);
         } else {
-            return T::from_raw_ptr(col, AllocOnEmpty);
+            return T::from_raw_ptr(col, true);
         }
     }
 
@@ -313,9 +309,9 @@ std::atomic<long> ColumnPool<T>::_nlocal = 0; // NOLINT
 template <typename T>
 std::mutex ColumnPool<T>::_change_thread_mutex{}; // NOLINT
 
-template <typename T, bool AllocateOnEmpty = true, typename... Args>
-inline MutableColumnPtr get_column(Args&&... args) {
-    return ColumnPool<T>::singleton()->template get_column<AllocateOnEmpty>(std::forward<Args>(args)...);
+template <typename T, typename... Args>
+inline MutableColumnPtr get_column_pooled(Args&&... args) {
+    return ColumnPool<T>::singleton()->template get_column(std::forward<Args>(args)...);
 }
 
 template <typename T>

@@ -313,7 +313,8 @@ void VOlapScanNode::transfer_thread(RuntimeState* state) {
             block_per_scanner;
 
     for (int i = 0; i < pre_block_count; ++i) {
-        auto block = new Block(_tuple_desc->slots(), _block_size);
+        // auto block = new Block(_tuple_desc->slots(), _block_size);
+        auto block = Block::new_block_pooled(_tuple_desc->slots(), _block_size);
         _free_blocks.emplace_back(block);
         _buffered_bytes += block->allocated_bytes();
     }
