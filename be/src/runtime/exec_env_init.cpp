@@ -59,7 +59,7 @@
 #include "util/priority_work_stealing_thread_pool.hpp"
 #include "vec/exec/scan/scanner_scheduler.h"
 #include "vec/runtime/vdata_stream_mgr.h"
-#include "vec/core/block_column_pool.h"
+#include "vec/core/column_pool.h"
 
 #if !defined(__SANITIZE_ADDRESS__) && !defined(ADDRESS_SANITIZER) && !defined(LEAK_SANITIZER) && \
         !defined(THREAD_SANITIZER) && !defined(USE_JEMALLOC)
@@ -316,10 +316,16 @@ Status ExecEnv::_init_mem_tracker() {
               << PrettyPrinter::print(chunk_reserved_bytes_limit, TUnit::BYTES)
               << ", origin config value: " << config::chunk_reserved_bytes_limit;
 
-    vectorized::BlockPool::init_instance(chunk_reserved_bytes_limit);
-    LOG(INFO) << "BlockPoola memory limit: "
-              << PrettyPrinter::print(chunk_reserved_bytes_limit, TUnit::BYTES)
-              << ", origin config value: " << config::chunk_reserved_bytes_limit;
+    int64_t column_pool_limit =
+            ParseUtil::parse_mem_spec(config::column_pool_limit, global_memory_limit_bytes,
+                                      MemInfo::physical_mem(), &is_percent);
+    while (!is_percent && column_pool_limit > global_memory_limit_bytes / 2) {
+        column_pool_limit = column_pool_limit / 2;
+    }
+    vectorized::ColumnAllocator::init_instance(column_pool_limit);
+    LOG(INFO) << "ColumnAllocator memory limit: "
+              << PrettyPrinter::print(column_pool_limit, TUnit::BYTES)
+              << ", origin config value: " << config::column_pool_limit;
     return Status::OK();
 }
 

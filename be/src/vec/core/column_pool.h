@@ -29,19 +29,27 @@ class SlotDescriptor;
 
 namespace vectorized {
 class Block;
+class ColumnPoolArena;
 
-class BlockPool {
+class ColumnAllocator {
 public:
     static void init_instance(std::size_t reserve_limit);
-    static BlockPool* instance() { return _s_instance; }
+
+    static ColumnAllocator* instance() { return _s_instance; }
+
     Block* allocate_block(const std::vector<SlotDescriptor*>& slots, std::size_t block_size);
 
-private:
-    BlockPool(std::size_t reserve_limit);
+    template <typename T>
+    inline void return_pooled_column(T* col, std::size_t block_size);
 
 private:
-    static BlockPool* _s_instance;
-    std::size_t _reserve_bytes_limit;
+    ColumnAllocator(std::size_t reserve_limit);
+
+private:
+    static ColumnAllocator* _s_instance;
+    size_t _reserve_bytes_limit;
+    std::atomic<int64_t> _reserved_bytes;
+    std::vector<std::unique_ptr<ColumnPoolArena>> _arenas;
 
 };
 

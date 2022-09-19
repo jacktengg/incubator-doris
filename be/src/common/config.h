@@ -875,6 +875,9 @@ CONF_Bool(enable_new_load_scan_node, "false");
 // whether to enable column pool
 CONF_Bool(enable_column_pool, "true");
 
+// maximum column pool memory size
+CONF_String(column_pool_limit, "10%");
+
 #ifdef BE_TEST
 // test s3
 CONF_String(test_s3_resource, "resource");

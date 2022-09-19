@@ -92,6 +92,7 @@ namespace doris::vectorized {
 template <typename Derived>
 class COW {
     std::atomic_uint ref_counter;
+    int core_id = -1;
 
 protected:
     bool is_pooled = false;
@@ -273,6 +274,14 @@ public:
 
     unsigned int use_count() const { return ref_counter.load(); }
 
+    void set_core_id(int core_id_) {
+        core_id = core_id_;
+    }
+
+    int get_core_id() const {
+        return core_id;
+    }
+
 protected:
     template <typename T>
     class immutable_ptr : public intrusive_ptr<const T> {
@@ -424,23 +433,6 @@ public:
   *
   * See example in "cow_columns.cpp".
   */
-
-/*
-template <typename T>
-struct DefaultColumnDeleter {
-    DefaultColumnDeleter() {}
-    void operator()(COW* ptr) const {
-        delete static_cast<const T*>(this);
-    }
-};
-
-template <typename T>
-struct PoolColumnDeleter {
-    PoolColumnDeleter (uint32_t block_size) : _block_size(block_size) {}
-    // void operator()(COW* ptr) const { vectorized::return_column<T>(down_cast<T*>(ptr), chunk_size); }
-    uint32_t _block_size;
-};
-*/
 
 template <typename Base, typename Derived>
 class COWHelper : public Base {

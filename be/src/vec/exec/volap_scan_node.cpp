@@ -35,7 +35,7 @@
 #include "vec/exprs/vexpr.h"
 #include "vec/exprs/vruntimefilter_wrapper.h"
 #include "vec/functions/in.h"
-#include "vec/core/block_column_pool.h"
+#include "vec/core/column_pool.h"
 
 namespace doris::vectorized {
 using doris::operator<<;
@@ -316,7 +316,7 @@ void VOlapScanNode::transfer_thread(RuntimeState* state) {
     for (int i = 0; i < pre_block_count; ++i) {
         // auto block = new Block(_tuple_desc->slots(), _block_size);
         // auto block = Block::new_block_pooled2(_tuple_desc->slots(), _block_size);
-        auto block = BlockPool::instance()->allocate_block(_tuple_desc->slots(), _block_size);
+        auto block = ColumnAllocator::instance()->allocate_block(_tuple_desc->slots(), _block_size);
         _free_blocks.emplace_back(block);
         _buffered_bytes += block->allocated_bytes();
     }
