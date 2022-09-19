@@ -59,6 +59,7 @@
 #include "util/priority_work_stealing_thread_pool.hpp"
 #include "vec/exec/scan/scanner_scheduler.h"
 #include "vec/runtime/vdata_stream_mgr.h"
+#include "vec/core/block_column_pool.h"
 
 #if !defined(__SANITIZE_ADDRESS__) && !defined(ADDRESS_SANITIZER) && !defined(LEAK_SANITIZER) && \
         !defined(THREAD_SANITIZER) && !defined(USE_JEMALLOC)
@@ -312,6 +313,11 @@ Status ExecEnv::_init_mem_tracker() {
             BitUtil::RoundDown(chunk_reserved_bytes_limit, config::min_chunk_reserved_bytes);
     ChunkAllocator::init_instance(chunk_reserved_bytes_limit);
     LOG(INFO) << "Chunk allocator memory limit: "
+              << PrettyPrinter::print(chunk_reserved_bytes_limit, TUnit::BYTES)
+              << ", origin config value: " << config::chunk_reserved_bytes_limit;
+
+    vectorized::BlockPool::init_instance(chunk_reserved_bytes_limit);
+    LOG(INFO) << "BlockPoola memory limit: "
               << PrettyPrinter::print(chunk_reserved_bytes_limit, TUnit::BYTES)
               << ", origin config value: " << config::chunk_reserved_bytes_limit;
     return Status::OK();

@@ -69,6 +69,8 @@ private:
 
     mutable int64_t _compress_time_ns = 0;
 
+    int _core_id = INT_MAX;
+
 public:
     // When we have some breaking change for serialize/deserialize, we should update data_version.
     constexpr static int max_data_version = 0;
@@ -81,7 +83,13 @@ public:
     Block(const PBlock& pblock);
     Block(const std::vector<SlotDescriptor*>& slots, size_t block_size);
 
+    void set_core_id(int core_id) {
+        _core_id = core_id;
+    }
+
     static Block* new_block_pooled(const std::vector<SlotDescriptor*>& slots, size_t block_size);
+
+    static Block* new_block_pooled2(const std::vector<SlotDescriptor*>& slots, size_t block_size);
 
     /// insert the column at the specified position
     void insert(size_t position, const ColumnWithTypeAndName& elem);

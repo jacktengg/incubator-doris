@@ -313,12 +313,12 @@ template <typename T>
 std::mutex ColumnPool<T>::_change_thread_mutex{}; // NOLINT
 
 template <typename T, typename... Args>
-inline MutableColumnPtr get_column_pooled(size_t block_size, Args&&... args) {
+inline MutableColumnPtr get_pooled_column(size_t block_size, Args&&... args) {
     return ColumnPool<T>::singleton()->template get_column(block_size, std::forward<Args>(args)...);
 }
 
 template <typename T>
-inline void return_column_pooled(T* col, size_t block_size) {
+inline void return_pooled_column(T* col, size_t block_size) {
     ColumnPool<T>::singleton()->return_column(col, block_size);
 }
 

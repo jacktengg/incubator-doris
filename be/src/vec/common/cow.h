@@ -84,7 +84,10 @@
 
 namespace doris::vectorized {
     template <typename T>
-    void return_column_pooled(T* col, std::size_t block_size);
+    void return_pooled_column(T* col, std::size_t block_size);
+
+    template <typename T>
+    void return_pooled_column2(T* col, std::size_t block_size);
 }
 template <typename Derived>
 class COW {
@@ -108,7 +111,7 @@ protected:
             if (!is_pooled) {
                 delete static_cast<const Derived*>(this);
             } else {
-                doris::vectorized::return_column_pooled(static_cast<Derived*>(this), pool_block_size);
+                doris::vectorized::return_pooled_column2(static_cast<Derived*>(this), pool_block_size);
             }
         }
     }
