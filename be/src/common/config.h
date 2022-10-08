@@ -873,6 +873,13 @@ CONF_mBool(enable_new_file_scanner, "false");
 // Hide webserver page for safety.
 // Hide the be config page for webserver.
 CONF_Bool(hide_webserver_config_page, "false");
+//
+// From what number of keys, a two-level hash join starts. 0 - the threshold is not set.
+CONF_mInt64(hash_join_two_level_threshold, "100000");
+
+// From what size of the hash table in bytes, a two-level hash table begins to be used.
+// 0 - the threshold is not set. Two-level hash join is used when at least one of the thresholds is triggered.
+CONF_mInt64(hash_join_two_level_threshold_bytes, "50000000");
 
 #ifdef BE_TEST
 // test s3

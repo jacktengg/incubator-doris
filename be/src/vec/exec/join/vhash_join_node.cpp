@@ -35,6 +35,10 @@ namespace doris::vectorized {
 static constexpr int PREFETCH_STEP = 64;
 
 using ProfileCounter = RuntimeProfile::Counter;
+
+bool worth_convert_to_two_level(size_t result_size,
+                                size_t result_size_bytes);
+
 template <class HashTableContext>
 struct ProcessHashTableBuild {
     ProcessHashTableBuild(int rows, Block& acquired_block, ColumnRawPtrs& build_raw_ptrs,
@@ -52,6 +56,7 @@ struct ProcessHashTableBuild {
     void run(HashTableContext& hash_table_ctx, ConstNullMapPtr null_map) {
         using KeyGetter = typename HashTableContext::State;
         using Mapped = typename HashTableContext::Mapped;
+        int64_t old_bucket_size = hash_table_ctx.hash_table.get_buffer_size_in_cells();
         int64_t old_bucket_bytes = hash_table_ctx.hash_table.get_buffer_size_in_bytes();
 
         Defer defer {[&]() {
@@ -66,6 +71,10 @@ struct ProcessHashTableBuild {
         SCOPED_TIMER(_join_node->_build_table_insert_timer);
         // only not build_unique, we need expanse hash table before insert data
         if constexpr (!build_unique) {
+            if (hash_table_ctx.is_convertible_to_two_level()
+               && worth_convert_to_two_level(old_bucket_size, old_bucket_bytes)) {
+                _join_node->_hash_table_convert_to_two_level();
+            }
             // _rows contains null row, which will cause hash table resize to be large.
             hash_table_ctx.hash_table.expanse_for_add_elem(_rows);
         }
@@ -1356,6 +1365,113 @@ Status HashJoinNode::_process_build_block(RuntimeState* state, Block& block, uin
     return st;
 }
 
+bool worth_convert_to_two_level(size_t result_size,
+                                size_t result_size_bytes)
+{
+    return (config::hash_join_two_level_threshold
+           && result_size >= config::hash_join_two_level_threshold)
+        || (config::hash_join_two_level_threshold_bytes
+           && result_size_bytes >= config::hash_join_two_level_threshold_bytes);
+}
+
+void HashJoinNode::_hash_table_convert_to_two_level() {
+    if (_build_expr_ctxs.size() == 1 && !_build_not_ignore_null[0]) {
+        // Single column optimization
+        switch (_build_expr_ctxs[0]->root()->result_type()) {
+        case TYPE_BOOLEAN:
+        case TYPE_TINYINT:
+        case TYPE_SMALLINT:
+            // not necessary
+            break;
+        case TYPE_INT:
+        case TYPE_FLOAT:
+        case TYPE_DATEV2:
+            LOG(INFO) << "_hash_table_convert_to_two_level 1";
+            _hash_table_variants.emplace<I32TwoLevelHashTableContext>(
+                    std::get<I32HashTableContext>(_hash_table_variants));
+            break;
+        case TYPE_BIGINT:
+        case TYPE_DOUBLE:
+        case TYPE_DATETIME:
+        case TYPE_DATE:
+        case TYPE_DATETIMEV2:
+            LOG(INFO) << "_hash_table_convert_to_two_level 2";
+            _hash_table_variants.emplace<I64TwoLevelHashTableContext>(
+                    std::get<I64HashTableContext>(_hash_table_variants));
+            break;
+        case TYPE_LARGEINT:
+        case TYPE_DECIMALV2:
+        case TYPE_DECIMAL32:
+        case TYPE_DECIMAL64:
+        case TYPE_DECIMAL128: {
+            DataTypePtr& type_ptr = _build_expr_ctxs[0]->root()->data_type();
+            TypeIndex idx = _build_expr_ctxs[0]->root()->is_nullable()
+                                    ? assert_cast<const DataTypeNullable&>(*type_ptr)
+                                              .get_nested_type()
+                                              ->get_type_id()
+                                    : type_ptr->get_type_id();
+            WhichDataType which(idx);
+            if (which.is_decimal32()) {
+            LOG(INFO) << "_hash_table_convert_to_two_level 3";
+                _hash_table_variants.emplace<I32TwoLevelHashTableContext>(
+                        std::get<I32HashTableContext>(_hash_table_variants));
+            } else if (which.is_decimal64()) {
+            LOG(INFO) << "_hash_table_convert_to_two_level 4";
+                _hash_table_variants.emplace<I64TwoLevelHashTableContext>(
+                        std::get<I64HashTableContext>(_hash_table_variants));
+            } else {
+            LOG(INFO) << "_hash_table_convert_to_two_level 5";
+                _hash_table_variants.emplace<I128TwoLevelHashTableContext>(
+                        std::get<I128HashTableContext>(_hash_table_variants));
+            }
+            break;
+        }
+        default:
+            LOG(INFO) << "_hash_table_convert_to_two_level 6";
+            _hash_table_variants.emplace<TwoLevelSerializedHashTableContext>(
+                    std::get<SerializedHashTableContext>(_hash_table_variants));
+        }
+        return;
+    }
+
+    if (_use_fixed_key) {
+        if (_has_null) {
+            if (std::tuple_size<KeysNullMap<UInt64>>::value + _key_byte_size <= sizeof(UInt64)) {
+            LOG(INFO) << "_hash_table_convert_to_two_level 7";
+                _hash_table_variants.emplace<I64TwoLevelFixedKeyHashTableContext<true>>(
+                        std::get<I64FixedKeyHashTableContext<true>>(_hash_table_variants));
+            } else if (std::tuple_size<KeysNullMap<UInt128>>::value + _key_byte_size <=
+                       sizeof(UInt128)) {
+            LOG(INFO) << "_hash_table_convert_to_two_level 8";
+                _hash_table_variants.emplace<I128TwoLevelFixedKeyHashTableContext<true>>(
+                        std::get<I128FixedKeyHashTableContext<true>>(_hash_table_variants));
+            } else {
+            LOG(INFO) << "_hash_table_convert_to_two_level 9";
+                _hash_table_variants.emplace<I256TwoLevelFixedKeyHashTableContext<true>>(
+                        std::get<I256FixedKeyHashTableContext<true>>(_hash_table_variants));
+            }
+        } else {
+            if (_key_byte_size <= sizeof(UInt64)) {
+            LOG(INFO) << "_hash_table_convert_to_two_level 10";
+                _hash_table_variants.emplace<I64TwoLevelFixedKeyHashTableContext<false>>(
+                        std::get<I64FixedKeyHashTableContext<false>>(_hash_table_variants));
+            } else if (_key_byte_size <= sizeof(UInt128)) {
+            LOG(INFO) << "_hash_table_convert_to_two_level 11";
+                _hash_table_variants.emplace<I128TwoLevelFixedKeyHashTableContext<false>>(
+                        std::get<I128FixedKeyHashTableContext<false>>(_hash_table_variants));
+            } else {
+            LOG(INFO) << "_hash_table_convert_to_two_level 12";
+                _hash_table_variants.emplace<I256TwoLevelFixedKeyHashTableContext<false>>(
+                        std::get<I256FixedKeyHashTableContext<false>>(_hash_table_variants));
+            }
+        }
+    } else {
+            LOG(INFO) << "_hash_table_convert_to_two_level 13";
+        _hash_table_variants.emplace<TwoLevelSerializedHashTableContext>(
+                std::get<SerializedHashTableContext>(_hash_table_variants));
+    }
+}
+
 void HashJoinNode::_hash_table_init() {
     if (_build_expr_ctxs.size() == 1 && !_build_not_ignore_null[0]) {
         // Single column optimization
@@ -1406,10 +1522,6 @@ void HashJoinNode::_hash_table_init() {
         return;
     }
 
-    bool use_fixed_key = true;
-    bool has_null = false;
-    int key_byte_size = 0;
-
     _probe_key_sz.resize(_probe_expr_ctxs.size());
     _build_key_sz.resize(_build_expr_ctxs.size());
 
@@ -1418,36 +1530,36 @@ void HashJoinNode::_hash_table_init() {
         const auto& data_type = vexpr->data_type();
 
         if (!data_type->have_maximum_size_of_value()) {
-            use_fixed_key = false;
+            _use_fixed_key = false;
             break;
         }
 
         auto is_null = data_type->is_nullable();
-        has_null |= is_null;
+        _has_null |= is_null;
         _build_key_sz[i] = data_type->get_maximum_size_of_value_in_memory() - (is_null ? 1 : 0);
         _probe_key_sz[i] = _build_key_sz[i];
-        key_byte_size += _probe_key_sz[i];
+        _key_byte_size += _probe_key_sz[i];
     }
 
-    if (std::tuple_size<KeysNullMap<UInt256>>::value + key_byte_size > sizeof(UInt256)) {
-        use_fixed_key = false;
+    if (std::tuple_size<KeysNullMap<UInt256>>::value + _key_byte_size > sizeof(UInt256)) {
+        _use_fixed_key = false;
     }
 
-    if (use_fixed_key) {
+    if (_use_fixed_key) {
         // TODO: may we should support uint256 in the future
-        if (has_null) {
-            if (std::tuple_size<KeysNullMap<UInt64>>::value + key_byte_size <= sizeof(UInt64)) {
+        if (_has_null) {
+            if (std::tuple_size<KeysNullMap<UInt64>>::value + _key_byte_size <= sizeof(UInt64)) {
                 _hash_table_variants.emplace<I64FixedKeyHashTableContext<true>>();
-            } else if (std::tuple_size<KeysNullMap<UInt128>>::value + key_byte_size <=
+            } else if (std::tuple_size<KeysNullMap<UInt128>>::value + _key_byte_size <=
                        sizeof(UInt128)) {
                 _hash_table_variants.emplace<I128FixedKeyHashTableContext<true>>();
             } else {
                 _hash_table_variants.emplace<I256FixedKeyHashTableContext<true>>();
             }
         } else {
-            if (key_byte_size <= sizeof(UInt64)) {
+            if (_key_byte_size <= sizeof(UInt64)) {
                 _hash_table_variants.emplace<I64FixedKeyHashTableContext<false>>();
-            } else if (key_byte_size <= sizeof(UInt128)) {
+            } else if (_key_byte_size <= sizeof(UInt128)) {
                 _hash_table_variants.emplace<I128FixedKeyHashTableContext<false>>();
             } else {
                 _hash_table_variants.emplace<I256FixedKeyHashTableContext<false>>();
@@ -1456,6 +1568,7 @@ void HashJoinNode::_hash_table_init() {
     } else {
         _hash_table_variants.emplace<SerializedHashTableContext>();
     }
+    _hash_table_convert_to_two_level();
 }
 
 std::vector<uint16_t> HashJoinNode::_convert_block_to_null(Block& block) {
