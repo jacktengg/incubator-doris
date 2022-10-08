@@ -24,7 +24,7 @@
 #include "exprs/runtime_filter_slots.h"
 #include "vec/common/columns_hashing.h"
 #include "vec/common/hash_table/hash_map.h"
-#include "vec/common/hash_table/hash_table.h"
+#include "vec/common/hash_table/two_level_hash_map.h"
 #include "vec/exec/join/join_op.h"
 #include "vec/exec/join/vacquire_list.hpp"
 #include "vec/functions/function.h"
@@ -47,6 +47,38 @@ struct SerializedHashTableContext {
             inited = true;
             iter = hash_table.begin();
         }
+    }
+
+    bool is_convertible_to_two_level() const {
+        return true;
+    }
+};
+
+struct TwoLevelSerializedHashTableContext {
+    using Mapped = RowRefList;
+    using HashTable = TwoLevelHashMap<StringRef, Mapped>;
+    using State = ColumnsHashing::HashMethodSerialized<typename HashTable::value_type, Mapped>;
+    using Iter = typename HashTable::iterator;
+
+    HashTable hash_table;
+    Iter iter;
+    bool inited = false;
+
+    TwoLevelSerializedHashTableContext() {}
+    
+    template <typename Other>
+    TwoLevelSerializedHashTableContext(const Other& other) : hash_table(other.hash_table) {
+    }
+
+    void init_once() {
+        if (!inited) {
+            inited = true;
+            iter = hash_table.begin();
+        }
+    }
+
+    bool is_convertible_to_two_level() const {
+        return false;
     }
 };
 
@@ -79,6 +111,10 @@ struct PrimaryTypeHashTableContext {
             iter = hash_table.begin();
         }
     }
+
+    bool is_convertible_to_two_level() const {
+        return true;
+    }
 };
 
 // TODO: use FixedHashTable instead of HashTable
@@ -88,6 +124,41 @@ using I32HashTableContext = PrimaryTypeHashTableContext<UInt32>;
 using I64HashTableContext = PrimaryTypeHashTableContext<UInt64>;
 using I128HashTableContext = PrimaryTypeHashTableContext<UInt128>;
 using I256HashTableContext = PrimaryTypeHashTableContext<UInt256>;
+
+// T should be UInt32 UInt64 UInt128
+template <class T>
+struct TwoLevelPrimaryTypeHashTableContext {
+    using Mapped = RowRefList;
+    using HashTable = TwoLevelHashMap<T, Mapped, HashCRC32<T>>;
+    using State =
+            ColumnsHashing::HashMethodOneNumber<typename HashTable::value_type, Mapped, T, false>;
+    using Iter = typename HashTable::iterator;
+
+    HashTable hash_table;
+    Iter iter;
+    bool inited = false;
+
+    TwoLevelPrimaryTypeHashTableContext() {}
+
+    template <typename Other>
+    TwoLevelPrimaryTypeHashTableContext(const Other& other) : hash_table(other.hash_table) {
+    }
+
+    void init_once() {
+        if (!inited) {
+            inited = true;
+            iter = hash_table.begin();
+        }
+    }
+
+    bool is_convertible_to_two_level() const {
+        return false;
+    }
+};
+using I32TwoLevelHashTableContext = TwoLevelPrimaryTypeHashTableContext<UInt32>;
+using I64TwoLevelHashTableContext = TwoLevelPrimaryTypeHashTableContext<UInt64>;
+using I128TwoLevelHashTableContext = TwoLevelPrimaryTypeHashTableContext<UInt128>;
+using I256TwoLevelHashTableContext = TwoLevelPrimaryTypeHashTableContext<UInt256>;
 
 template <class T, bool has_null>
 struct FixedKeyHashTableContext {
@@ -107,6 +178,10 @@ struct FixedKeyHashTableContext {
             iter = hash_table.begin();
         }
     }
+
+    bool is_convertible_to_two_level() const {
+        return true;
+    }
 };
 
 template <bool has_null>
@@ -118,13 +193,57 @@ using I128FixedKeyHashTableContext = FixedKeyHashTableContext<UInt128, has_null>
 template <bool has_null>
 using I256FixedKeyHashTableContext = FixedKeyHashTableContext<UInt256, has_null>;
 
+template <class T, bool has_null>
+struct TwoLevelFixedKeyHashTableContext {
+    using Mapped = RowRefList;
+    using HashTable = TwoLevelHashMap<T, Mapped, HashCRC32<T>>;
+    using State = ColumnsHashing::HashMethodKeysFixed<typename HashTable::value_type, T, Mapped,
+                                                      has_null, false>;
+    using Iter = typename HashTable::iterator;
+
+    HashTable hash_table;
+    Iter iter;
+    bool inited = false;
+    
+    TwoLevelFixedKeyHashTableContext() {}
+
+    template <typename Other>
+    TwoLevelFixedKeyHashTableContext(const Other& other) : hash_table(other.hash_table) {
+    }
+
+    void init_once() {
+        if (!inited) {
+            inited = true;
+            iter = hash_table.begin();
+        }
+    }
+
+    bool is_convertible_to_two_level() const {
+        return false;
+    }
+};
+
+template <bool has_null>
+using I64TwoLevelFixedKeyHashTableContext = TwoLevelFixedKeyHashTableContext<UInt64, has_null>;
+
+template <bool has_null>
+using I128TwoLevelFixedKeyHashTableContext = TwoLevelFixedKeyHashTableContext<UInt128, has_null>;
+
+template <bool has_null>
+using I256TwoLevelFixedKeyHashTableContext = TwoLevelFixedKeyHashTableContext<UInt256, has_null>;
+
 using HashTableVariants =
-        std::variant<std::monostate, SerializedHashTableContext, I8HashTableContext,
-                     I16HashTableContext, I32HashTableContext, I64HashTableContext,
-                     I128HashTableContext, I256HashTableContext, I64FixedKeyHashTableContext<true>,
-                     I64FixedKeyHashTableContext<false>, I128FixedKeyHashTableContext<true>,
-                     I128FixedKeyHashTableContext<false>, I256FixedKeyHashTableContext<true>,
-                     I256FixedKeyHashTableContext<false>>;
+        std::variant<std::monostate, SerializedHashTableContext, TwoLevelSerializedHashTableContext,
+                     I8HashTableContext, I16HashTableContext, I32HashTableContext, I64HashTableContext,
+                     I128HashTableContext, I256HashTableContext,
+                     I32TwoLevelHashTableContext, I64TwoLevelHashTableContext,
+                     I128TwoLevelHashTableContext, I256TwoLevelHashTableContext,
+                     I64FixedKeyHashTableContext<true>, I64FixedKeyHashTableContext<false>,
+                     I128FixedKeyHashTableContext<true>, I128FixedKeyHashTableContext<false>,
+                     I256FixedKeyHashTableContext<true>, I256FixedKeyHashTableContext<false>,
+                     I64TwoLevelFixedKeyHashTableContext<true>, I64TwoLevelFixedKeyHashTableContext<false>,
+                     I128TwoLevelFixedKeyHashTableContext<true>, I128TwoLevelFixedKeyHashTableContext<false>,
+                     I256TwoLevelFixedKeyHashTableContext<true>, I256TwoLevelFixedKeyHashTableContext<false>>;
 
 using JoinOpVariants =
         std::variant<std::integral_constant<TJoinOp::type, TJoinOp::INNER_JOIN>,
@@ -157,6 +276,8 @@ public:
     HashJoinNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
     ~HashJoinNode() override;
 
+    void add_hash_buckets_info(const std::string& info);
+    void add_hash_buckets_filled_info(const std::string& info);
     Status init(const TPlanNode& tnode, RuntimeState* state = nullptr) override;
     Status prepare(RuntimeState* state) override;
     Status open(RuntimeState* state) override;
@@ -197,6 +318,7 @@ private:
     DataTypes _right_table_data_types;
     DataTypes _left_table_data_types;
 
+    RuntimeProfile::Counter* _is_two_level_hash;
     RuntimeProfile::Counter* _build_timer;
     RuntimeProfile::Counter* _build_table_timer;
     RuntimeProfile::Counter* _build_expr_call_timer;
@@ -206,6 +328,7 @@ private:
     RuntimeProfile::Counter* _probe_expr_call_timer;
     RuntimeProfile::Counter* _probe_next_timer;
     RuntimeProfile::Counter* _build_buckets_counter;
+    RuntimeProfile::Counter* _build_buckets_fill_counter;
     RuntimeProfile::Counter* _push_down_timer;
     RuntimeProfile::Counter* _push_compute_timer;
     RuntimeProfile::Counter* _build_rows_counter;
@@ -231,6 +354,10 @@ private:
     bool _probe_ignore_null = false;
     int _probe_index = -1;
     bool _probe_eos = false;
+
+    bool _use_fixed_key = true;
+    bool _has_null = false;
+    int _key_byte_size = 0;
 
     Sizes _probe_key_sz;
     Sizes _build_key_sz;
@@ -274,6 +401,9 @@ private:
                                       bool& ignore_null, RuntimeProfile::Counter& expr_call_timer);
 
     void _hash_table_init();
+
+    void _hash_table_convert_to_two_level(HashTableVariants& new_hash_table_variants,
+                                          const void* hash_table_ctx);
 
     static constexpr auto _MAX_BUILD_BLOCK_COUNT = 128;
 
