@@ -69,12 +69,14 @@ struct ProcessHashTableBuild {
         KeyGetter key_getter(_build_raw_ptrs, _join_node->_build_key_sz, nullptr);
 
         SCOPED_TIMER(_join_node->_build_table_insert_timer);
+
+        if (hash_table_ctx.is_convertible_to_two_level()
+           && worth_convert_to_two_level(old_bucket_size, old_bucket_bytes)) {
+            _join_node->_hash_table_convert_to_two_level();
+        }
+
         // only not build_unique, we need expanse hash table before insert data
         if constexpr (!build_unique) {
-            if (hash_table_ctx.is_convertible_to_two_level()
-               && worth_convert_to_two_level(old_bucket_size, old_bucket_bytes)) {
-                _join_node->_hash_table_convert_to_two_level();
-            }
             // _rows contains null row, which will cause hash table resize to be large.
             hash_table_ctx.hash_table.expanse_for_add_elem(_rows);
         }
@@ -1568,7 +1570,6 @@ void HashJoinNode::_hash_table_init() {
     } else {
         _hash_table_variants.emplace<SerializedHashTableContext>();
     }
-    _hash_table_convert_to_two_level();
 }
 
 std::vector<uint16_t> HashJoinNode::_convert_block_to_null(Block& block) {
