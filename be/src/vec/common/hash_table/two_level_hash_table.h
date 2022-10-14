@@ -309,6 +309,20 @@ public:
         impls[bucket].prefetch(key_holder);
     }
 
+    template <bool READ>
+    void ALWAYS_INLINE prefetch_by_hash(size_t hash_value) {
+        const auto bucket = getBucketFromHash(hash_value);
+        impls[bucket].template prefetch_by_hash<READ>(hash_value);
+    }
+
+    template <bool READ, typename KeyHolder>
+    void ALWAYS_INLINE prefetch(KeyHolder& key_holder) {
+        const auto & key = key_holder_get_key(key_holder);
+        const auto key_hash = hash(key);
+        const auto bucket = getBucketFromHash(key_hash);
+        impls[bucket].template prefetch<READ>(key_holder);
+    }
+
     /** Insert the key,
       * return an iterator to a position that can be used for `placement new` of value,
       * as well as the flag - whether a new key was inserted.
@@ -339,6 +353,12 @@ public:
     {
         size_t buck = getBucketFromHash(hash_value);
         impls[buck].emplace(key_holder, it, inserted, hash_value);
+    }
+
+    template <typename KeyHolder>
+    void ALWAYS_INLINE emplace(KeyHolder&& key_holder, LookupResult& it, size_t hash_value,
+                               bool& inserted) {
+        emplace(key_holder, it, inserted, hash_value);
     }
 
     LookupResult ALWAYS_INLINE find(Key x, size_t hash_value)
