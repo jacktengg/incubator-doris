@@ -48,7 +48,7 @@ template
     typename Grower,
     typename Allocator,
     typename ImplTable = HashTable<Key, Cell, Hash, Grower, Allocator>,
-    size_t BITS_FOR_BUCKET = 8
+    size_t BITS_FOR_BUCKET = 4
 >
 class TwoLevelHashTable :
     private boost::noncopyable,
@@ -86,7 +86,7 @@ public:
 
     size_t get_buffer_size_in_bytes() const {
         size_t buff_size = 0;
-        for (auto & impl : impls) buff_size += impl.get_buffer_size_in_bytes();
+        for (const auto & impl : impls) buff_size += impl.get_buffer_size_in_bytes();
         return buff_size;
     }
 
@@ -94,6 +94,15 @@ public:
         size_t buff_size = 0;
         for (const auto & impl : impls) buff_size += impl.get_buffer_size_in_cells();
         return buff_size;
+    }
+
+    size_t* get_buffer_sizes_in_cells(size_t& num_buckets) const {
+        num_buckets = NUM_BUCKETS;
+        size_t* sizes = new size_t[NUM_BUCKETS];
+        for (size_t i = 0; i < NUM_BUCKETS; ++i) {
+            sizes[i] = impls[i].get_buffer_size_in_cells();
+        }
+        return sizes;
     }
 
     void reset_resize_timer() {
@@ -413,7 +422,6 @@ public:
     }
     */
 
-
     size_t size() const
     {
         size_t res = 0;
@@ -421,6 +429,16 @@ public:
             res += impls[i].size();
 
         return res;
+    }
+
+    size_t* sizes(size_t& num_buckets) const
+    {
+        num_buckets = NUM_BUCKETS;
+        size_t* sizes = new size_t[NUM_BUCKETS];
+        for (size_t i = 0; i < NUM_BUCKETS; ++i) {
+            sizes[i] = impls[i].size();
+        }
+        return sizes;
     }
 
     bool empty() const

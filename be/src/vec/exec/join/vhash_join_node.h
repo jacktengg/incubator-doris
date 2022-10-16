@@ -276,6 +276,8 @@ public:
     HashJoinNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs);
     ~HashJoinNode() override;
 
+    void add_hash_buckets_info(const std::string& info);
+    void add_hash_buckets_filled_info(const std::string& info);
     Status init(const TPlanNode& tnode, RuntimeState* state = nullptr) override;
     Status prepare(RuntimeState* state) override;
     Status open(RuntimeState* state) override;
@@ -316,6 +318,7 @@ private:
     DataTypes _right_table_data_types;
     DataTypes _left_table_data_types;
 
+    RuntimeProfile::Counter* _is_two_level_hash;
     RuntimeProfile::Counter* _build_timer;
     RuntimeProfile::Counter* _build_table_timer;
     RuntimeProfile::Counter* _build_expr_call_timer;
@@ -325,6 +328,7 @@ private:
     RuntimeProfile::Counter* _probe_expr_call_timer;
     RuntimeProfile::Counter* _probe_next_timer;
     RuntimeProfile::Counter* _build_buckets_counter;
+    RuntimeProfile::Counter* _build_buckets_fill_counter;
     RuntimeProfile::Counter* _push_down_timer;
     RuntimeProfile::Counter* _push_compute_timer;
     RuntimeProfile::Counter* _build_rows_counter;

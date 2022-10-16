@@ -60,9 +60,28 @@ struct ProcessHashTableBuild {
 
         Defer defer {[&]() {
             int64_t bucket_size = hash_table_ctx.hash_table.get_buffer_size_in_cells();
+            int64_t filled_bucket_size = hash_table_ctx.hash_table.size();
             int64_t bucket_bytes = hash_table_ctx.hash_table.get_buffer_size_in_bytes();
             _join_node->_mem_used += bucket_bytes - old_bucket_bytes;
             COUNTER_SET(_join_node->_build_buckets_counter, bucket_size);
+            COUNTER_SET(_join_node->_build_buckets_fill_counter, filled_bucket_size);
+
+            size_t num_buckets = 0;
+            auto* hash_table_buckets = hash_table_ctx.hash_table.get_buffer_sizes_in_cells(num_buckets);
+            std::string hash_table_buckets_info;
+            for (size_t i = 0; i < num_buckets; ++i) {
+                hash_table_buckets_info += std::to_string(hash_table_buckets[i]) + ", ";
+            }
+            delete[] hash_table_buckets;
+            _join_node->add_hash_buckets_info(hash_table_buckets_info);
+
+            auto* hash_table_sizes = hash_table_ctx.hash_table.sizes(num_buckets);
+            hash_table_buckets_info.clear();
+            for (size_t i = 0; i < num_buckets; ++i) {
+                hash_table_buckets_info += std::to_string(hash_table_sizes[i]) + ", ";
+            }
+            delete[] hash_table_sizes;
+            _join_node->add_hash_buckets_filled_info(hash_table_buckets_info);
         }};
 
         KeyGetter key_getter(_build_raw_ptrs, _join_node->_build_key_sz, nullptr);
@@ -774,6 +793,14 @@ HashJoinNode::HashJoinNode(ObjectPool* pool, const TPlanNode& tnode, const Descr
 
 HashJoinNode::~HashJoinNode() = default;
 
+void HashJoinNode::add_hash_buckets_info(const std::string& info) {
+    runtime_profile()->add_info_string("HashTableBuckets", info);
+}
+
+void HashJoinNode::add_hash_buckets_filled_info(const std::string& info) {
+    runtime_profile()->add_info_string("HashTableFilledBuckets", info);
+}
+
 void HashJoinNode::init_join_op() {
     switch (_join_op) {
 #define M(NAME)                                                                            \
@@ -919,6 +946,9 @@ Status HashJoinNode::prepare(RuntimeState* state) {
     _push_down_timer = ADD_TIMER(runtime_profile(), "PushDownTime");
     _push_compute_timer = ADD_TIMER(runtime_profile(), "PushDownComputeTime");
     _build_buckets_counter = ADD_COUNTER(runtime_profile(), "BuildBuckets", TUnit::UNIT);
+    _build_buckets_fill_counter = ADD_COUNTER(runtime_profile(), "BuildFilledBuckets", TUnit::UNIT);
+
+    _is_two_level_hash = ADD_COUNTER(runtime_profile(), "IsTwoLevelHash", TUnit::UNIT);
 
     RETURN_IF_ERROR(VExpr::prepare(_build_expr_ctxs, state, child(1)->row_desc()));
     RETURN_IF_ERROR(VExpr::prepare(_probe_expr_ctxs, state, child(0)->row_desc()));
@@ -1340,26 +1370,28 @@ Status HashJoinNode::_process_build_block(RuntimeState* state, Block& block, uin
 
     bool has_runtime_filter = !_runtime_filter_descs.empty();
 
-    HashTableVariants new_hash_table_variants;
-    bool converted = false;
-    std::visit(
-            [&](auto&& arg) {
-                using HashTableCtxType = std::decay_t<decltype(arg)>;
-                if constexpr (!std::is_same_v<HashTableCtxType, std::monostate>) {
-                    int64_t old_bucket_size = arg.hash_table.get_buffer_size_in_cells();
-                    int64_t old_bucket_bytes = arg.hash_table.get_buffer_size_in_bytes();
-                    if (arg.is_convertible_to_two_level()
-                       && worth_convert_to_two_level(old_bucket_size, old_bucket_bytes)) {
-                        _hash_table_convert_to_two_level(new_hash_table_variants, &arg);
-                        converted = true;
+    if (config::enalbe_two_level_hash_join) {
+        HashTableVariants new_hash_table_variants;
+        bool converted = false;
+        std::visit(
+                [&](auto&& arg) {
+                    using HashTableCtxType = std::decay_t<decltype(arg)>;
+                    if constexpr (!std::is_same_v<HashTableCtxType, std::monostate>) {
+                        int64_t old_bucket_size = arg.hash_table.get_buffer_size_in_cells();
+                        int64_t old_bucket_bytes = arg.hash_table.get_buffer_size_in_bytes();
+                        if (arg.is_convertible_to_two_level()
+                           && worth_convert_to_two_level(old_bucket_size, old_bucket_bytes)) {
+                            _hash_table_convert_to_two_level(new_hash_table_variants, &arg);
+                            converted = true;
+                        }
+                    } else {
+                        LOG(FATAL) << "FATAL: uninited hash table";
                     }
-                } else {
-                    LOG(FATAL) << "FATAL: uninited hash table";
-                }
-            },
-            _hash_table_variants);
-    if (converted) {
-        _hash_table_variants.swap(new_hash_table_variants);
+                },
+                _hash_table_variants);
+        if (converted) {
+            _hash_table_variants.swap(new_hash_table_variants);
+        }
     }
     
     std::visit(
@@ -1393,6 +1425,7 @@ bool worth_convert_to_two_level(size_t result_size,
 
 void HashJoinNode::_hash_table_convert_to_two_level(HashTableVariants& new_hash_table_variants,
                                                     const void* hash_table_ctx) {
+    COUNTER_SET(_is_two_level_hash, (int64_t)1);
     if (_build_expr_ctxs.size() == 1 && !_build_not_ignore_null[0]) {
         // Single column optimization
         switch (_build_expr_ctxs[0]->root()->result_type()) {
@@ -1573,6 +1606,8 @@ void HashJoinNode::_hash_table_init() {
     } else {
         _hash_table_variants.emplace<SerializedHashTableContext>();
     }
+
+    COUNTER_SET(_is_two_level_hash, (int64_t)0);
 }
 
 std::vector<uint16_t> HashJoinNode::_convert_block_to_null(Block& block) {

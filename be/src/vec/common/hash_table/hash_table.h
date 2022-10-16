@@ -1074,6 +1074,14 @@ public:
 
     size_t size() const { return m_size; }
 
+    size_t* sizes(size_t& num_buckets) const
+    {
+        num_buckets = 1;
+        size_t* sizes = new size_t[1];
+        sizes[0] = size();
+        return sizes;
+    }
+
     bool empty() const { return 0 == m_size; }
 
     float get_factor() const { return MAX_BUCKET_OCCUPANCY_FRACTION; }
@@ -1113,6 +1121,12 @@ public:
     size_t get_buffer_size_in_bytes() const { return grower.buf_size() * sizeof(Cell); }
 
     size_t get_buffer_size_in_cells() const { return grower.buf_size(); }
+    size_t* get_buffer_sizes_in_cells(size_t& num_buckets) const {
+        num_buckets = 1;
+        size_t* sizes = new size_t[1];
+        sizes[0] = get_buffer_size_in_cells();
+        return sizes;
+    }
 
     bool add_elem_size_overflow(size_t add_size) const {
         return grower.overflow(add_size + m_size);
