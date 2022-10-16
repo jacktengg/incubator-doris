@@ -398,9 +398,8 @@ private:
 
     void _hash_table_init();
 
-    template <class HashTableContext>
     void _hash_table_convert_to_two_level(HashTableVariants& new_hash_table_variants,
-                                          const HashTableContext& hash_table_ctx);
+                                          const void* hash_table_ctx);
 
     static constexpr auto _MAX_BUILD_BLOCK_COUNT = 128;
 
