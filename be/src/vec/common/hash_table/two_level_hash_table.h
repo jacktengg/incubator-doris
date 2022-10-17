@@ -37,7 +37,7 @@ template <size_t initial_size_degree = 8>
 struct TwoLevelHashTableGrower : public HashTableGrowerWithPrecalculation<initial_size_degree>
 {
     /// Increase the size of the hash table.
-    void increaseSize() { this->increaseSizeDegree(this->sizeDegree() >= 15 ? 1 : 2); }
+    void increase_size() { this->increase_size_degree(this->size_degree() >= 15 ? 1 : 2); }
 };
 
 template
@@ -451,12 +451,4 @@ public:
         return true;
     }
 
-    size_t getBufferSizeInBytes() const
-    {
-        size_t res = 0;
-        for (size_t i = 0; i < NUM_BUCKETS; ++i)
-            res += impls[i].getBufferSizeInBytes();
-
-        return res;
-    }
 };
