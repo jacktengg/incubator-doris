@@ -291,8 +291,9 @@ public:
     iterator end()                     { return { this, MAX_BUCKET, impls[MAX_BUCKET].end() }; }
 
     void expanse_for_add_elem(size_t num_elem) {
-        // for (size_t i = 0; i < NUM_BUCKETS; ++i)
-        //     impls[i].expanse_for_add_elem(num_elem);
+        size_t num_elem_per_bucket = (num_elem + NUM_BUCKETS - 1) / NUM_BUCKETS;
+        for (size_t i = 0; i < NUM_BUCKETS; ++i)
+            impls[i].expanse_for_add_elem(num_elem_per_bucket);
     }
 
     /// Insert a value. In the case of any more complex values, it is better to use the `emplace` function.

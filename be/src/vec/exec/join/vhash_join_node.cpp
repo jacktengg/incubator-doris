@@ -88,12 +88,13 @@ struct ProcessHashTableBuild {
 
         SCOPED_TIMER(_join_node->_build_table_insert_timer);
 
+        hash_table_ctx.hash_table.reset_resize_timer();
+
         // only not build_unique, we need expanse hash table before insert data
         if constexpr (!build_unique) {
             // _rows contains null row, which will cause hash table resize to be large.
             hash_table_ctx.hash_table.expanse_for_add_elem(_rows);
         }
-        hash_table_ctx.hash_table.reset_resize_timer();
 
         vector<int>& inserted_rows = _join_node->_inserted_rows[&_acquired_block];
         if constexpr (has_runtime_filter) {
