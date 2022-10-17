@@ -875,7 +875,7 @@ CONF_mBool(enable_new_file_scanner, "false");
 CONF_Bool(hide_webserver_config_page, "false");
 
 // whether enable two level hash join
-CONF_Bool(enalbe_two_level_hash_join, "true");
+CONF_Bool(enable_two_level_hash_join, "true");
 
 // From what number of keys, a two-level hash join starts. 0 - the threshold is not set.
 CONF_mInt64(hash_join_two_level_threshold, "100000");

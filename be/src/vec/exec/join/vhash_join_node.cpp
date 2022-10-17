@@ -1197,7 +1197,10 @@ Status HashJoinNode::_hash_table_build(RuntimeState* state) {
     bool eos = false;
 
     // make one block for each 4 gigabytes
-    constexpr static auto BUILD_BLOCK_MAX_SIZE = 64UL * 1024UL * 1024UL;
+    static auto BUILD_BLOCK_MAX_SIZE = 4 * 1024UL * 1024UL * 1024UL;
+    if (config::enable_two_level_hash_join) {
+        BUILD_BLOCK_MAX_SIZE = 64UL * 1024UL * 1024UL;
+    }
 
     Block block;
     while (!eos) {
@@ -1371,7 +1374,7 @@ Status HashJoinNode::_process_build_block(RuntimeState* state, Block& block, uin
 
     bool has_runtime_filter = !_runtime_filter_descs.empty();
 
-    if (config::enalbe_two_level_hash_join) {
+    if (config::enable_two_level_hash_join) {
         HashTableVariants new_hash_table_variants;
         bool converted = false;
         std::visit(
