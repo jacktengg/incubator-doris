@@ -49,9 +49,7 @@ struct SerializedHashTableContext {
         }
     }
 
-    bool is_convertible_to_two_level() const {
-        return true;
-    }
+    bool is_convertible_to_two_level() const { return true; }
 };
 
 struct TwoLevelSerializedHashTableContext {
@@ -65,10 +63,9 @@ struct TwoLevelSerializedHashTableContext {
     bool inited = false;
 
     TwoLevelSerializedHashTableContext() {}
-    
+
     template <typename Other>
-    TwoLevelSerializedHashTableContext(const Other& other) : hash_table(other.hash_table) {
-    }
+    TwoLevelSerializedHashTableContext(const Other& other) : hash_table(other.hash_table) {}
 
     void init_once() {
         if (!inited) {
@@ -77,9 +74,7 @@ struct TwoLevelSerializedHashTableContext {
         }
     }
 
-    bool is_convertible_to_two_level() const {
-        return false;
-    }
+    bool is_convertible_to_two_level() const { return false; }
 };
 
 template <typename HashMethod>
@@ -112,9 +107,7 @@ struct PrimaryTypeHashTableContext {
         }
     }
 
-    bool is_convertible_to_two_level() const {
-        return true;
-    }
+    bool is_convertible_to_two_level() const { return true; }
 };
 
 // TODO: use FixedHashTable instead of HashTable
@@ -141,8 +134,7 @@ struct TwoLevelPrimaryTypeHashTableContext {
     TwoLevelPrimaryTypeHashTableContext() {}
 
     template <typename Other>
-    TwoLevelPrimaryTypeHashTableContext(const Other& other) : hash_table(other.hash_table) {
-    }
+    TwoLevelPrimaryTypeHashTableContext(const Other& other) : hash_table(other.hash_table) {}
 
     void init_once() {
         if (!inited) {
@@ -151,9 +143,7 @@ struct TwoLevelPrimaryTypeHashTableContext {
         }
     }
 
-    bool is_convertible_to_two_level() const {
-        return false;
-    }
+    bool is_convertible_to_two_level() const { return false; }
 };
 using I32TwoLevelHashTableContext = TwoLevelPrimaryTypeHashTableContext<UInt32>;
 using I64TwoLevelHashTableContext = TwoLevelPrimaryTypeHashTableContext<UInt64>;
@@ -179,9 +169,7 @@ struct FixedKeyHashTableContext {
         }
     }
 
-    bool is_convertible_to_two_level() const {
-        return true;
-    }
+    bool is_convertible_to_two_level() const { return true; }
 };
 
 template <bool has_null>
@@ -204,12 +192,11 @@ struct TwoLevelFixedKeyHashTableContext {
     HashTable hash_table;
     Iter iter;
     bool inited = false;
-    
+
     TwoLevelFixedKeyHashTableContext() {}
 
     template <typename Other>
-    TwoLevelFixedKeyHashTableContext(const Other& other) : hash_table(other.hash_table) {
-    }
+    TwoLevelFixedKeyHashTableContext(const Other& other) : hash_table(other.hash_table) {}
 
     void init_once() {
         if (!inited) {
@@ -218,9 +205,7 @@ struct TwoLevelFixedKeyHashTableContext {
         }
     }
 
-    bool is_convertible_to_two_level() const {
-        return false;
-    }
+    bool is_convertible_to_two_level() const { return false; }
 };
 
 template <bool has_null>
@@ -232,18 +217,17 @@ using I128TwoLevelFixedKeyHashTableContext = TwoLevelFixedKeyHashTableContext<UI
 template <bool has_null>
 using I256TwoLevelFixedKeyHashTableContext = TwoLevelFixedKeyHashTableContext<UInt256, has_null>;
 
-using HashTableVariants =
-        std::variant<std::monostate, SerializedHashTableContext, TwoLevelSerializedHashTableContext,
-                     I8HashTableContext, I16HashTableContext, I32HashTableContext, I64HashTableContext,
-                     I128HashTableContext, I256HashTableContext,
-                     I32TwoLevelHashTableContext, I64TwoLevelHashTableContext,
-                     I128TwoLevelHashTableContext, I256TwoLevelHashTableContext,
-                     I64FixedKeyHashTableContext<true>, I64FixedKeyHashTableContext<false>,
-                     I128FixedKeyHashTableContext<true>, I128FixedKeyHashTableContext<false>,
-                     I256FixedKeyHashTableContext<true>, I256FixedKeyHashTableContext<false>,
-                     I64TwoLevelFixedKeyHashTableContext<true>, I64TwoLevelFixedKeyHashTableContext<false>,
-                     I128TwoLevelFixedKeyHashTableContext<true>, I128TwoLevelFixedKeyHashTableContext<false>,
-                     I256TwoLevelFixedKeyHashTableContext<true>, I256TwoLevelFixedKeyHashTableContext<false>>;
+using HashTableVariants = std::variant<
+        std::monostate, SerializedHashTableContext, TwoLevelSerializedHashTableContext,
+        I8HashTableContext, I16HashTableContext, I32HashTableContext, I64HashTableContext,
+        I128HashTableContext, I256HashTableContext, I32TwoLevelHashTableContext,
+        I64TwoLevelHashTableContext, I128TwoLevelHashTableContext, I256TwoLevelHashTableContext,
+        I64FixedKeyHashTableContext<true>, I64FixedKeyHashTableContext<false>,
+        I128FixedKeyHashTableContext<true>, I128FixedKeyHashTableContext<false>,
+        I256FixedKeyHashTableContext<true>, I256FixedKeyHashTableContext<false>,
+        I64TwoLevelFixedKeyHashTableContext<true>, I64TwoLevelFixedKeyHashTableContext<false>,
+        I128TwoLevelFixedKeyHashTableContext<true>, I128TwoLevelFixedKeyHashTableContext<false>,
+        I256TwoLevelFixedKeyHashTableContext<true>, I256TwoLevelFixedKeyHashTableContext<false>>;
 
 using JoinOpVariants =
         std::variant<std::integral_constant<TJoinOp::type, TJoinOp::INNER_JOIN>,

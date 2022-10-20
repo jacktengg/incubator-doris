@@ -1074,8 +1074,7 @@ public:
 
     size_t size() const { return m_size; }
 
-    size_t* sizes(size_t& num_buckets) const
-    {
+    size_t* sizes(size_t& num_buckets) const {
         num_buckets = 1;
         size_t* sizes = new size_t[1];
         sizes[0] = size();

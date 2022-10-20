@@ -63,7 +63,8 @@ struct ProcessHashTableBuild {
             COUNTER_SET(_join_node->_build_buckets_fill_counter, filled_bucket_size);
 
             size_t num_buckets = 0;
-            auto* hash_table_buckets = hash_table_ctx.hash_table.get_buffer_sizes_in_cells(num_buckets);
+            auto* hash_table_buckets =
+                    hash_table_ctx.hash_table.get_buffer_sizes_in_cells(num_buckets);
             std::string hash_table_buckets_info;
             for (size_t i = 0; i < num_buckets; ++i) {
                 hash_table_buckets_info += std::to_string(hash_table_buckets[i]) + ", ";
@@ -1367,9 +1368,8 @@ Status HashJoinNode::_process_build_block(RuntimeState* state, Block& block, uin
 
     bool has_runtime_filter = !_runtime_filter_descs.empty();
 
-    if (config::enable_two_level_hash_join
-       && config::hash_join_two_level_threshold
-       && rows >= config::hash_join_two_level_threshold) {
+    if (config::enable_two_level_hash_join && config::hash_join_two_level_threshold &&
+        rows >= config::hash_join_two_level_threshold) {
         HashTableVariants new_hash_table_variants;
         bool converted = false;
         std::visit(
@@ -1389,7 +1389,7 @@ Status HashJoinNode::_process_build_block(RuntimeState* state, Block& block, uin
             _hash_table_variants.swap(new_hash_table_variants);
         }
     }
-    
+
     std::visit(
             [&](auto&& arg) {
                 using HashTableCtxType = std::decay_t<decltype(arg)>;
@@ -1426,7 +1426,8 @@ void HashJoinNode::_hash_table_convert_to_two_level(HashTableVariants& new_hash_
         case TYPE_FLOAT:
         case TYPE_DATEV2:
             LOG(INFO) << "_hash_table_convert_to_two_level 1";
-            new_hash_table_variants.emplace<I32TwoLevelHashTableContext>(*((I32HashTableContext*)hash_table_ctx));
+            new_hash_table_variants.emplace<I32TwoLevelHashTableContext>(
+                    *((I32HashTableContext*)hash_table_ctx));
             break;
         case TYPE_BIGINT:
         case TYPE_DOUBLE:
@@ -1434,7 +1435,8 @@ void HashJoinNode::_hash_table_convert_to_two_level(HashTableVariants& new_hash_
         case TYPE_DATE:
         case TYPE_DATETIMEV2:
             LOG(INFO) << "_hash_table_convert_to_two_level 2";
-            new_hash_table_variants.emplace<I64TwoLevelHashTableContext>(*((I64HashTableContext*)hash_table_ctx));
+            new_hash_table_variants.emplace<I64TwoLevelHashTableContext>(
+                    *((I64HashTableContext*)hash_table_ctx));
             break;
         case TYPE_LARGEINT:
         case TYPE_DECIMALV2:
@@ -1449,20 +1451,24 @@ void HashJoinNode::_hash_table_convert_to_two_level(HashTableVariants& new_hash_
                                     : type_ptr->get_type_id();
             WhichDataType which(idx);
             if (which.is_decimal32()) {
-            LOG(INFO) << "_hash_table_convert_to_two_level 3";
-                new_hash_table_variants.emplace<I32TwoLevelHashTableContext>(*((I32HashTableContext*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 3";
+                new_hash_table_variants.emplace<I32TwoLevelHashTableContext>(
+                        *((I32HashTableContext*)hash_table_ctx));
             } else if (which.is_decimal64()) {
-            LOG(INFO) << "_hash_table_convert_to_two_level 4";
-                new_hash_table_variants.emplace<I64TwoLevelHashTableContext>(*((I64HashTableContext*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 4";
+                new_hash_table_variants.emplace<I64TwoLevelHashTableContext>(
+                        *((I64HashTableContext*)hash_table_ctx));
             } else {
-            LOG(INFO) << "_hash_table_convert_to_two_level 5";
-                new_hash_table_variants.emplace<I128TwoLevelHashTableContext>(*((I128HashTableContext*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 5";
+                new_hash_table_variants.emplace<I128TwoLevelHashTableContext>(
+                        *((I128HashTableContext*)hash_table_ctx));
             }
             break;
         }
         default:
             LOG(INFO) << "_hash_table_convert_to_two_level 6";
-            new_hash_table_variants.emplace<TwoLevelSerializedHashTableContext>(*((SerializedHashTableContext*)hash_table_ctx));
+            new_hash_table_variants.emplace<TwoLevelSerializedHashTableContext>(
+                    *((SerializedHashTableContext*)hash_table_ctx));
         }
         return;
     }
@@ -1470,31 +1476,38 @@ void HashJoinNode::_hash_table_convert_to_two_level(HashTableVariants& new_hash_
     if (_use_fixed_key) {
         if (_has_null) {
             if (std::tuple_size<KeysNullMap<UInt64>>::value + _key_byte_size <= sizeof(UInt64)) {
-            LOG(INFO) << "_hash_table_convert_to_two_level 7";
-                new_hash_table_variants.emplace<I64TwoLevelFixedKeyHashTableContext<true>>(*((I64FixedKeyHashTableContext<true>*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 7";
+                new_hash_table_variants.emplace<I64TwoLevelFixedKeyHashTableContext<true>>(
+                        *((I64FixedKeyHashTableContext<true>*)hash_table_ctx));
             } else if (std::tuple_size<KeysNullMap<UInt128>>::value + _key_byte_size <=
                        sizeof(UInt128)) {
-            LOG(INFO) << "_hash_table_convert_to_two_level 8";
-                new_hash_table_variants.emplace<I128TwoLevelFixedKeyHashTableContext<true>>(*((I128FixedKeyHashTableContext<true>*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 8";
+                new_hash_table_variants.emplace<I128TwoLevelFixedKeyHashTableContext<true>>(
+                        *((I128FixedKeyHashTableContext<true>*)hash_table_ctx));
             } else {
-            LOG(INFO) << "_hash_table_convert_to_two_level 9";
-                new_hash_table_variants.emplace<I256TwoLevelFixedKeyHashTableContext<true>>(*((I256FixedKeyHashTableContext<true>*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 9";
+                new_hash_table_variants.emplace<I256TwoLevelFixedKeyHashTableContext<true>>(
+                        *((I256FixedKeyHashTableContext<true>*)hash_table_ctx));
             }
         } else {
             if (_key_byte_size <= sizeof(UInt64)) {
-            LOG(INFO) << "_hash_table_convert_to_two_level 10";
-                new_hash_table_variants.emplace<I64TwoLevelFixedKeyHashTableContext<false>>(*((I64FixedKeyHashTableContext<false>*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 10";
+                new_hash_table_variants.emplace<I64TwoLevelFixedKeyHashTableContext<false>>(
+                        *((I64FixedKeyHashTableContext<false>*)hash_table_ctx));
             } else if (_key_byte_size <= sizeof(UInt128)) {
-            LOG(INFO) << "_hash_table_convert_to_two_level 11";
-                new_hash_table_variants.emplace<I128TwoLevelFixedKeyHashTableContext<false>>(*((I128FixedKeyHashTableContext<false>*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 11";
+                new_hash_table_variants.emplace<I128TwoLevelFixedKeyHashTableContext<false>>(
+                        *((I128FixedKeyHashTableContext<false>*)hash_table_ctx));
             } else {
-            LOG(INFO) << "_hash_table_convert_to_two_level 12";
-                new_hash_table_variants.emplace<I256TwoLevelFixedKeyHashTableContext<false>>(*((I256FixedKeyHashTableContext<false>*)hash_table_ctx));
+                LOG(INFO) << "_hash_table_convert_to_two_level 12";
+                new_hash_table_variants.emplace<I256TwoLevelFixedKeyHashTableContext<false>>(
+                        *((I256FixedKeyHashTableContext<false>*)hash_table_ctx));
             }
         }
     } else {
-            LOG(INFO) << "_hash_table_convert_to_two_level 13";
-        new_hash_table_variants.emplace<TwoLevelSerializedHashTableContext>(*((SerializedHashTableContext*)hash_table_ctx));
+        LOG(INFO) << "_hash_table_convert_to_two_level 13";
+        new_hash_table_variants.emplace<TwoLevelSerializedHashTableContext>(
+                *((SerializedHashTableContext*)hash_table_ctx));
     }
 }
 
