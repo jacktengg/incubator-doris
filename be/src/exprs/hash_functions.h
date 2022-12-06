@@ -17,10 +17,13 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace doris_udf {
 class FunctionContext;
 struct IntVal;
 struct BigIntVal;
+struct LargeIntVal;
 struct StringVal;
 } // namespace doris_udf
 
@@ -31,8 +34,17 @@ public:
     static void init();
     static doris_udf::IntVal murmur_hash3_32(doris_udf::FunctionContext* ctx, int num_children,
                                              const doris_udf::StringVal* inputs);
+    static doris_udf::BigIntVal murmur_hash3_32_unsigned(doris_udf::FunctionContext* ctx, int num_children,
+                                                         const doris_udf::StringVal* inputs);
     static doris_udf::BigIntVal murmur_hash3_64(doris_udf::FunctionContext* ctx, int num_children,
                                                 const doris_udf::StringVal* inputs);
+    static doris_udf::LargeIntVal murmur_hash3_64_unsigned(doris_udf::FunctionContext* ctx, int num_children,
+                                                           const doris_udf::StringVal* inputs);
+private:
+    static uint32_t _murmur_hash3_32(doris_udf::FunctionContext* ctx, int num_children,
+                                     const doris_udf::StringVal* inputs, bool& is_null);
+    static uint64_t _murmur_hash3_64(doris_udf::FunctionContext* ctx, int num_children,
+                                     const doris_udf::StringVal* inputs, bool& is_null);
 };
 
 } // namespace doris

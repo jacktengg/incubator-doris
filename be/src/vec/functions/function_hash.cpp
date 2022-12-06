@@ -154,22 +154,30 @@ struct MurmurHash2Impl64 {
 };
 using FunctionMurmurHash2_64 = FunctionVariadicArgumentsBase<DataTypeUInt64, MurmurHash2Impl64>;
 
-template <typename ReturnType>
+template <bool IS_UNSIGNED, typename ReturnType>
 struct MurmurHash3ImplName {};
 
 template <>
-struct MurmurHash3ImplName<Int32> {
+struct MurmurHash3ImplName<false, Int32> {
     static constexpr auto name = "murmur_hash3_32";
+};
+template <>
+struct MurmurHash3ImplName<true, Int64> {
+    static constexpr auto name = "murmur_hash3_32_unsigned";
 };
 
 template <>
-struct MurmurHash3ImplName<Int64> {
+struct MurmurHash3ImplName<false, Int64> {
     static constexpr auto name = "murmur_hash3_64";
 };
+template <>
+struct MurmurHash3ImplName<true, Int128> {
+    static constexpr auto name = "murmur_hash3_64_unsigned";
+};
 
-template <typename ReturnType>
+template <bool IS_UNSIGNED, typename ReturnType>
 struct MurmurHash3Impl {
-    static constexpr auto name = MurmurHash3ImplName<ReturnType>::name;
+    static constexpr auto name = MurmurHash3ImplName<IS_UNSIGNED, ReturnType>::name;
 
     static Status empty_apply(IColumn& icolumn, size_t input_rows_count) {
         ColumnVector<ReturnType>& vec_to = assert_cast<ColumnVector<ReturnType>&>(icolumn);
@@ -199,28 +207,56 @@ struct MurmurHash3Impl {
             ColumnString::Offset current_offset = 0;
             for (size_t i = 0; i < size; ++i) {
                 if (first) {
-                    if constexpr (std::is_same_v<ReturnType, Int32>) {
-                        UInt32 val = HashUtil::murmur_hash3_32(
-                                reinterpret_cast<const char*>(&data[current_offset]),
-                                offsets[i] - current_offset, HashUtil::MURMUR3_32_SEED);
-                        col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
-                                           0);
+                    if constexpr (!IS_UNSIGNED) {
+                        if constexpr (std::is_same_v<ReturnType, Int32>) {
+                            UInt32 val = HashUtil::murmur_hash3_32(
+                                    reinterpret_cast<const char*>(&data[current_offset]),
+                                    offsets[i] - current_offset, HashUtil::MURMUR3_32_SEED);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        } else {
+                            UInt64 val = 0;
+                            murmur_hash3_x64_64(reinterpret_cast<const char*>(&data[current_offset]),
+                                                offsets[i] - current_offset, 0, &val);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        }
                     } else {
-                        UInt64 val = 0;
-                        murmur_hash3_x64_64(reinterpret_cast<const char*>(&data[current_offset]),
-                                            offsets[i] - current_offset, 0, &val);
-                        col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
-                                           0);
+                        if constexpr (std::is_same_v<ReturnType, Int64>) {
+                            UInt64 val = HashUtil::murmur_hash3_32(
+                                    reinterpret_cast<const char*>(&data[current_offset]),
+                                    offsets[i] - current_offset, HashUtil::MURMUR3_32_SEED);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        } else {
+                            UInt128 val = 0;
+                            murmur_hash3_x64_64(reinterpret_cast<const char*>(&data[current_offset]),
+                                                offsets[i] - current_offset, 0, &val);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        }
                     }
                 } else {
-                    if constexpr (std::is_same_v<ReturnType, Int32>) {
-                        col_to_data[i] = HashUtil::murmur_hash3_32(
-                                reinterpret_cast<const char*>(&data[current_offset]),
-                                offsets[i] - current_offset, ext::bit_cast<UInt32>(col_to[i]));
+                    if constexpr (!IS_UNSIGNED) {
+                        if constexpr (std::is_same_v<ReturnType, Int32>) {
+                            col_to_data[i] = HashUtil::murmur_hash3_32(
+                                    reinterpret_cast<const char*>(&data[current_offset]),
+                                    offsets[i] - current_offset, ext::bit_cast<UInt32>(col_to[i]));
+                        } else {
+                            murmur_hash3_x64_64(reinterpret_cast<const char*>(&data[current_offset]),
+                                                offsets[i] - current_offset,
+                                                ext::bit_cast<UInt64>(col_to[i]), col_to_data + i);
+                        }
                     } else {
-                        murmur_hash3_x64_64(reinterpret_cast<const char*>(&data[current_offset]),
-                                            offsets[i] - current_offset,
-                                            ext::bit_cast<UInt64>(col_to[i]), col_to_data + i);
+                        if constexpr (std::is_same_v<ReturnType, Int64>) {
+                            col_to_data[i] = HashUtil::murmur_hash3_32(
+                                    reinterpret_cast<const char*>(&data[current_offset]),
+                                    offsets[i] - current_offset, ext::bit_cast<UInt32>(col_to[i]));
+                        } else {
+                            murmur_hash3_x64_64(reinterpret_cast<const char*>(&data[current_offset]),
+                                                offsets[i] - current_offset,
+                                                ext::bit_cast<UInt64>(col_to[i]), col_to_data + i);
+                        }
                     }
                 }
                 current_offset = offsets[i];
@@ -230,24 +266,48 @@ struct MurmurHash3Impl {
             String value = col_from_const->get_value<String>().data();
             for (size_t i = 0; i < input_rows_count; ++i) {
                 if (first) {
-                    if constexpr (std::is_same_v<ReturnType, Int32>) {
-                        UInt32 val = HashUtil::murmur_hash3_32(value.data(), value.size(),
-                                                               HashUtil::MURMUR3_32_SEED);
-                        col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
-                                           0);
+                    if constexpr (!IS_UNSIGNED) {
+                        if constexpr (std::is_same_v<ReturnType, Int32>) {
+                            UInt32 val = HashUtil::murmur_hash3_32(value.data(), value.size(),
+                                                                   HashUtil::MURMUR3_32_SEED);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        } else {
+                            UInt64 val = 0;
+                            murmur_hash3_x64_64(value.data(), value.size(), 0, &val);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        }
                     } else {
-                        UInt64 val = 0;
-                        murmur_hash3_x64_64(value.data(), value.size(), 0, &val);
-                        col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
-                                           0);
+                        if constexpr (std::is_same_v<ReturnType, Int64>) {
+                            UInt32 val = HashUtil::murmur_hash3_32(value.data(), value.size(),
+                                                                   HashUtil::MURMUR3_32_SEED);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        } else {
+                            UInt64 val = 0;
+                            murmur_hash3_x64_64(value.data(), value.size(), 0, &val);
+                            col_to.insert_data(const_cast<const char*>(reinterpret_cast<char*>(&val)),
+                                               0);
+                        }
                     }
                 } else {
-                    if constexpr (std::is_same_v<ReturnType, Int32>) {
-                        col_to_data[i] = HashUtil::murmur_hash3_32(
-                                value.data(), value.size(), ext::bit_cast<UInt32>(col_to[i]));
+                    if constexpr (!IS_UNSIGNED) {
+                        if constexpr (std::is_same_v<ReturnType, Int32>) {
+                            col_to_data[i] = HashUtil::murmur_hash3_32(
+                                    value.data(), value.size(), ext::bit_cast<UInt32>(col_to[i]));
+                        } else {
+                            murmur_hash3_x64_64(value.data(), value.size(),
+                                                ext::bit_cast<UInt64>(col_to[i]), col_to_data + i);
+                        }
                     } else {
-                        murmur_hash3_x64_64(value.data(), value.size(),
-                                            ext::bit_cast<UInt64>(col_to[i]), col_to_data + i);
+                        if constexpr (std::is_same_v<ReturnType, Int64>) {
+                            col_to_data[i] = HashUtil::murmur_hash3_32(
+                                    value.data(), value.size(), ext::bit_cast<UInt32>(col_to[i]));
+                        } else {
+                            murmur_hash3_x64_64(value.data(), value.size(),
+                                                ext::bit_cast<UInt64>(col_to[i]), col_to_data + i);
+                        }
                     }
                 }
             }
@@ -259,12 +319,16 @@ struct MurmurHash3Impl {
         return Status::OK();
     }
 };
-using FunctionMurmurHash3_32 = FunctionVariadicArgumentsBase<DataTypeInt32, MurmurHash3Impl<Int32>>;
-using FunctionMurmurHash3_64 = FunctionVariadicArgumentsBase<DataTypeInt64, MurmurHash3Impl<Int64>>;
+using FunctionMurmurHash3_32 = FunctionVariadicArgumentsBase<DataTypeInt32, MurmurHash3Impl<false, Int32>>;
+using FunctionMurmurHash3_32_unsigned = FunctionVariadicArgumentsBase<DataTypeInt64, MurmurHash3Impl<true, Int64>>;
+using FunctionMurmurHash3_64 = FunctionVariadicArgumentsBase<DataTypeInt64, MurmurHash3Impl<false, Int64>>;
+using FunctionMurmurHash3_64_unsigned = FunctionVariadicArgumentsBase<DataTypeInt128, MurmurHash3Impl<true, Int128>>;
 
 void register_function_hash(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionMurmurHash2_64>();
     factory.register_function<FunctionMurmurHash3_32>();
+    factory.register_function<FunctionMurmurHash3_32_unsigned>();
     factory.register_function<FunctionMurmurHash3_64>();
+    factory.register_function<FunctionMurmurHash3_64_unsigned>();
 }
 } // namespace doris::vectorized

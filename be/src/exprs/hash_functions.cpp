@@ -28,28 +28,70 @@ using doris_udf::StringVal;
 
 void HashFunctions::init() {}
 
-IntVal HashFunctions::murmur_hash3_32(FunctionContext* ctx, int num_children,
-                                      const StringVal* inputs) {
+uint32_t HashFunctions::_murmur_hash3_32(doris_udf::FunctionContext* ctx, int num_children,
+                                         const doris_udf::StringVal* inputs, bool& is_null) {
+    is_null = false;
     uint32_t seed = HashUtil::MURMUR3_32_SEED;
     for (int i = 0; i < num_children; ++i) {
         if (inputs[i].is_null) {
-            return IntVal::null();
+            is_null = true;
+            return 0;
         }
         seed = HashUtil::murmur_hash3_32(inputs[i].ptr, inputs[i].len, seed);
     }
     return seed;
 }
+IntVal HashFunctions::murmur_hash3_32(FunctionContext* ctx, int num_children,
+                                      const StringVal* inputs) {
+    bool is_null = false;
+    auto hash = _murmur_hash3_32(ctx, num_children, inputs, is_null);
+    if (is_null) {
+        return IntVal::null();
+    }
+    return hash;
+}
 
-BigIntVal HashFunctions::murmur_hash3_64(FunctionContext* ctx, int num_children,
-                                         const StringVal* inputs) {
+BigIntVal HashFunctions::murmur_hash3_32_unsigned(FunctionContext* ctx, int num_children,
+                                                  const StringVal* inputs) {
+    bool is_null = false;
+    auto hash = _murmur_hash3_32(ctx, num_children, inputs, is_null);
+    if (is_null) {
+        return BigIntVal::null();
+    }
+    return hash;
+}
+
+uint64_t HashFunctions::_murmur_hash3_64(doris_udf::FunctionContext* ctx, int num_children,
+                                         const doris_udf::StringVal* inputs, bool& is_null) {
+    is_null = false;
     uint64_t seed = 0;
     uint64_t hash = 0;
     for (int i = 0; i < num_children; ++i) {
         if (inputs[i].is_null) {
-            return BigIntVal::null();
+            is_null = true;
+            return 0;
         }
         murmur_hash3_x64_64(inputs[i].ptr, inputs[i].len, seed, &hash);
         seed = hash;
+    }
+    return hash;
+}
+BigIntVal HashFunctions::murmur_hash3_64(FunctionContext* ctx, int num_children,
+                                         const StringVal* inputs) {
+    bool is_null = false;
+    auto hash = _murmur_hash3_64(ctx, num_children, inputs, is_null);
+    if (is_null) {
+        return BigIntVal::null();
+    }
+    return hash;
+}
+
+LargeIntVal HashFunctions::murmur_hash3_64_unsigned(FunctionContext* ctx, int num_children,
+                                                    const StringVal* inputs) {
+    bool is_null = false;
+    auto hash = _murmur_hash3_64(ctx, num_children, inputs, is_null);
+    if (is_null) {
+        return LargeIntVal::null();
     }
     return hash;
 }
