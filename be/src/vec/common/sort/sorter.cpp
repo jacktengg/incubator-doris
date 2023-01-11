@@ -35,7 +35,7 @@ namespace doris::vectorized {
 // to the spill file.
 //
 // This number specifies the maximum size of sub blocks
-static constexpr int BLOCK_SPILL_BATCH_BYTES = 8 * 1024 * 1024;
+static constexpr int BLOCK_SPILL_BATCH_BYTES = 1024;
 
 Status MergeSorterState::add_sorted_block(Block& block) {
     auto rows = block.rows();
@@ -48,9 +48,9 @@ Status MergeSorterState::add_sorted_block(Block& block) {
     }
 
     auto bytes_used = data_size();
+    auto total_bytes_used = bytes_used + block.allocated_bytes();
     if (is_spilled_ || (external_sort_bytes_threshold_ > 0 &&
-                        (bytes_used + block.allocated_bytes()) >=
-                                (external_sort_bytes_threshold_ - BLOCK_SPILL_BATCH_BYTES))) {
+                        total_bytes_used > external_sort_bytes_threshold_)) {
         is_spilled_ = true;
         BlockSpillWriterUPtr spill_block_writer;
         RETURN_IF_ERROR(ExecEnv::GetInstance()->block_spill_mgr()->get_writer(

@@ -185,8 +185,8 @@ private:
 
     std::unique_ptr<MergeSorterState> _state;
 
-    static constexpr size_t BUFFERED_BLOCK_SIZE = 1024 * 1024;
-    static constexpr size_t BUFFERED_BLOCK_BYTES = 64 << 20;
+    static constexpr size_t BUFFERED_BLOCK_SIZE = 1;
+    static constexpr size_t BUFFERED_BLOCK_BYTES = 1;
 };
 
 } // namespace doris::vectorized

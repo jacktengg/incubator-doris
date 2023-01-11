@@ -52,7 +52,14 @@ Status BlockSpillWriter::close() {
     // meta: block1 offset, block2 offset, ..., blockn offset, n
     {
         SCOPED_TIMER(write_timer_);
+         
+        const uint8_t* data_buff = (const uint8_t*)meta_.data();
+        if (nullptr == data_buff) {
+            LOG(WARNING) << "block spill writer error, meta size: " << meta_.size();
+        }
         status = file_writer_->write((const uint8_t*)meta_.data(), meta_.size(), &written_bytes);
+        // uint8_t* tmp_buff = nullptr;
+        // status = file_writer_->write((const uint8_t*)tmp_buff, meta_.size(), &written_bytes);
     }
     if (!status.ok()) {
         unlink(file_path_.c_str());
