@@ -351,6 +351,10 @@ Status HashJoinNode::init(const TPlanNode& tnode, RuntimeState* state) {
     init_output_slots_flags(child(0)->row_desc().tuple_descriptors(), _left_output_slot_flags);
     init_output_slots_flags(child(1)->row_desc().tuple_descriptors(), _right_output_slot_flags);
 
+    for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+        hash_partitions_[i] = std::make_shared<HashJoinPartition>();
+    }
+
     return Status::OK();
 }
 
@@ -720,6 +724,10 @@ Status HashJoinNode::_materialize_build_side(RuntimeState* state) {
             RETURN_IF_ERROR(sink(state, &block, eos));
         }
         RETURN_IF_ERROR(child(1)->close(state));
+
+        for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+            partitioned_mutable_blocks_[i].reset();
+        }
     } else {
         RETURN_IF_ERROR(child(1)->close(state));
         RETURN_IF_ERROR(sink(state, nullptr, eos));
@@ -727,6 +735,181 @@ Status HashJoinNode::_materialize_build_side(RuntimeState* state) {
     return Status::OK();
 }
 
+template <class HashTableContext, bool ignore_null, bool short_circuit_for_null>
+Status HashJoinNode::_partition_block(vectorized::Block& block, HashTableContext& hash_table_ctx, bool* has_null_key) {
+    auto rows_count = block.rows();
+
+    ColumnRawPtrs build_raw_ptrs(_build_expr_ctxs.size());
+
+    ColumnUInt8::MutablePtr null_map_val;
+    if (build_col_ids_.empty()) {
+        build_col_ids_.resize(_build_expr_ctxs.size());
+    }
+    RETURN_IF_ERROR(_do_evaluate(block, _build_expr_ctxs, *_build_expr_call_timer, build_col_ids_));
+    if (_join_op == TJoinOp::LEFT_OUTER_JOIN || _join_op == TJoinOp::FULL_OUTER_JOIN) {
+        _convert_block_to_null(block);
+    }
+    // TODO: Now we are not sure whether a column is nullable only by ExecNode's `row_desc`
+    //  so we have to initialize this flag by the first build block.
+    if (!_has_set_need_null_map_for_build) {
+        _has_set_need_null_map_for_build = true;
+        _set_build_ignore_flag(block, build_col_ids_);
+    }
+    if (_short_circuit_for_null_in_build_side || _build_side_ignore_null) {
+        null_map_val = ColumnUInt8::create();
+        null_map_val->get_data().assign(rows_count, (uint8_t)0);
+    }
+    const auto& null_map = null_map_val->get_data();
+
+    using KeyGetter = typename HashTableContext::State;
+    // Get the key column that needs to be built
+    Status st = _extract_join_column<true>(block, null_map_val, build_raw_ptrs, build_col_ids_);
+    KeyGetter key_getter(build_raw_ptrs, _build_key_sz, nullptr);
+    if constexpr (ColumnsHashing::IsPreSerializedKeysHashMethodTraits<KeyGetter>::value) {
+        auto old_keys_memory = hash_table_ctx.keys_memory_usage;
+        hash_table_ctx.serialize_keys(build_raw_ptrs, rows_count);
+        key_getter.set_serialized_keys(hash_table_ctx.keys.data());
+        _build_arena_memory_usage->add(hash_table_ctx.keys_memory_usage -
+                                       old_keys_memory);
+    }
+
+    // TODO: don't spill columns that are not needed
+    if (create_partitioned_mutable_blocks_) {
+        create_partitioned_mutable_blocks_ = false;
+        for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+            partitioned_mutable_blocks_[i].reset(new MutableBlock(block.clone_empty()));
+        }
+    }
+
+    std::vector<int> partition_rows[HASH_JOIN_HASH_PARTITION_COUNT];
+    DCHECK(rows_count < INT32_MAX);
+    for (size_t k = 0; k < rows_count; ++k) {
+        if constexpr (ignore_null) {
+            if (null_map[k]) {
+                continue;
+            }
+        }
+        // If apply short circuit strategy for null value (e.g. join operator is
+        // NULL_AWARE_LEFT_ANTI_JOIN), we build hash table until we meet a null value.
+        if constexpr (short_circuit_for_null) {
+            if (null_map[k]) {
+                DCHECK(has_null_key);
+                *has_null_key = true;
+                return Status::OK();
+            }
+        }
+        
+        size_t hash;
+        if constexpr (ColumnsHashing::IsPreSerializedKeysHashMethodTraits<
+                              KeyGetter>::value) {
+            hash = hash_table_ctx.hash_table.hash(key_getter.get_key_holder(k, *_arena).key);
+        } else {
+            hash = hash_table_ctx.hash_table.hash(key_getter.get_key_holder(k, *_arena));
+        }
+        auto partition_idx = get_partition_from_hash(hash);
+        partition_rows[partition_idx].emplace_back(k);
+    }
+
+    for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+        const auto* begin = &partition_rows[i][0];
+        const auto* end = begin + partition_rows[i].size();
+        partitioned_mutable_blocks_[i]->add_rows(&block, begin, end);
+    }
+    for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+        if (partitioned_mutable_blocks_[i]->bytes() >= SPILL_BUILD_BLOCK_MAX_SIZE) {
+            hash_partitions_[i]->build_blocks_.emplace_back(partitioned_mutable_blocks_[i]->to_block());
+            partitioned_mutable_blocks_[i].reset(new MutableBlock(block.clone_empty()));
+        }
+    }
+    return Status::OK();
+}
+
+Status HashJoinNode::_build_partitioned_hash_tables(RuntimeState* state) {
+    for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+        if (hash_partitions_[i]->build_blocks_.empty()) {
+            continue;
+        }
+        if (hash_partitions_[i]->is_spilled_) {
+            continue;
+        }
+    }
+    return Status::OK();
+}
+
+Status HashJoinNode::_build_partitioned_hash_table(RuntimeState* state, HashJoinPartitionSPtr& partition) {
+    auto st = std::visit(
+            Overload {
+                    [&](std::monostate& arg, auto has_null_value,
+                        auto short_circuit_for_null_in_build_side) -> Status {
+                        LOG(FATAL) << "FATAL: uninited hash table";
+                        __builtin_unreachable();
+                        return Status::OK();
+                    },
+                    [&](auto&& arg, auto has_null_value,
+                        auto short_circuit_for_null_in_build_side) -> Status {
+                        using HashTableCtxType = std::decay_t<decltype(arg)>;
+                        auto block_count = partition->build_blocks_.size();
+                        for (size_t block_idx = 0; block_idx < block_count; ++block_idx) {
+                            auto& block = partition->build_blocks_[block_idx];
+                            size_t rows = block.rows();
+                            ColumnRawPtrs raw_ptrs(_build_expr_ctxs.size());
+                            ColumnUInt8::MutablePtr null_map_val;
+                            // Get the key column that needs to be built
+                            Status st = _extract_join_column<true>(block, null_map_val, raw_ptrs, build_col_ids_);
+                            if (_short_circuit_for_null_in_build_side || _build_side_ignore_null) {
+                                null_map_val = ColumnUInt8::create();
+                                null_map_val->get_data().assign(rows, (uint8_t)0);
+                            }
+
+                            ProcessHashTableBuild<HashTableCtxType> hash_table_build_process(
+                                    rows, block, raw_ptrs, this, state->batch_size(), block_idx);
+                            st = hash_table_build_process
+                                    .template run<has_null_value, short_circuit_for_null_in_build_side>(
+                                            arg,
+                                            has_null_value || short_circuit_for_null_in_build_side
+                                                    ? &null_map_val->get_data()
+                                                    : nullptr,
+                                            &_short_circuit_for_null_in_probe_side);
+                            RETURN_IF_ERROR(st);
+                        }
+                        return Status::OK();
+                    }},
+            *_hash_table_variants, make_bool_variant(_build_side_ignore_null),
+            make_bool_variant(_short_circuit_for_null_in_build_side));
+
+    return Status::OK();
+}
+
+Status HashJoinNode::_sink_partitioned(doris::RuntimeState* state, vectorized::Block& block, bool eos) {
+    SCOPED_TIMER(_build_timer);
+    auto rows = block.rows();
+    if (UNLIKELY(rows == 0)) {
+        return Status::OK();
+    }
+
+    COUNTER_UPDATE(_build_rows_counter, rows);
+
+    auto st = std::visit(
+            Overload {
+                    [&](std::monostate& arg, auto has_null_value,
+                        auto short_circuit_for_null_in_build_side) -> Status {
+                        LOG(FATAL) << "FATAL: uninited hash table";
+                        __builtin_unreachable();
+                        return Status::OK();
+                    },
+                    [&](auto&& arg, auto has_null_value,
+                        auto short_circuit_for_null_in_build_side) -> Status {
+                        using HashTableCtxType = std::decay_t<decltype(arg)>;
+                        return _partition_block<HashTableCtxType, has_null_value, short_circuit_for_null_in_build_side>(
+                                block, arg,
+                                &_short_circuit_for_null_in_probe_side);
+                    }},
+            *_hash_table_variants, make_bool_variant(_build_side_ignore_null),
+            make_bool_variant(_short_circuit_for_null_in_build_side));
+
+    return st;
+
+}
 Status HashJoinNode::sink(doris::RuntimeState* state, vectorized::Block* in_block, bool eos) {
     SCOPED_TIMER(_build_timer);
 

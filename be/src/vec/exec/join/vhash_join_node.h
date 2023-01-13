@@ -187,7 +187,30 @@ using HashTableCtxVariants =
                      ProcessHashTableProbe<TJoinOp::RIGHT_ANTI_JOIN>,
                      ProcessHashTableProbe<TJoinOp::NULL_AWARE_LEFT_ANTI_JOIN>>;
 
+class HashJoinNode;
+class HashJoinPartition {
+    friend class HashJoinNode;
+private:
+    bool is_spilled_ = false;
+    std::vector<Block> probe_blocks_;
+    std::vector<Block> build_blocks_;
+    std::shared_ptr<HashTableVariants> hash_table_;
+};
+using HashJoinPartitionSPtr = std::shared_ptr<HashJoinPartition>;
+
 class HashJoinNode final : public VJoinNodeBase {
+private:
+    // for spill to disk
+    static constexpr size_t BITS_FOR_SUB_TABLE = 4;
+    static constexpr size_t HASH_JOIN_HASH_PARTITION_COUNT = 1ULL << BITS_FOR_SUB_TABLE;
+    static constexpr size_t SPILL_BUILD_BLOCK_MAX_SIZE = 4 * 1024UL * 1024UL * 1024UL;
+    HashJoinPartitionSPtr hash_partitions_[HASH_JOIN_HASH_PARTITION_COUNT];
+    std::vector<HashJoinPartitionSPtr> spilled_hash_partitions_;
+    bool create_partitioned_mutable_blocks_ = true;
+    std::unique_ptr<MutableBlock> partitioned_mutable_blocks_[HASH_JOIN_HASH_PARTITION_COUNT];
+
+    std::vector<int> build_col_ids_;
+
 public:
     // TODO: Best prefetch step is decided by machine. We should also provide a
     //  SQL hint to allow users to tune by hand.
@@ -224,6 +247,18 @@ public:
     bool should_build_hash_table() const { return _should_build_hash_table; }
 
 private:
+    Status _sink_partitioned(doris::RuntimeState* state, vectorized::Block& in_block, bool eos);
+
+    static size_t get_partition_from_hash(size_t hash_value) {
+        return (hash_value >> (32 - BITS_FOR_SUB_TABLE)) & HASH_JOIN_HASH_PARTITION_COUNT;
+    }
+
+    template <class HashTableContext, bool ignore_null, bool short_circuit_for_null>
+    Status _partition_block(vectorized::Block& block, HashTableContext& hash_table_ctx, bool* has_null_key);
+
+    Status _build_partitioned_hash_tables(RuntimeState* state);
+    Status _build_partitioned_hash_table(RuntimeState* state, HashJoinPartitionSPtr& partition);
+
     using VExprContexts = std::vector<VExprContext*>;
     // probe expr
     VExprContexts _probe_expr_ctxs;

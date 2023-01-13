@@ -254,6 +254,8 @@ public class SessionVariable implements Serializable, Writable {
 
     public static final String EXTERNAL_SORT_BYTES_THRESHOLD = "external_sort_bytes_threshold";
 
+    public static final String EXTERNAL_HASH_JOIN_BYTES_THRESHOLD = "external_hash_join_bytes_threshold";
+
     // session origin value
     public Map<Field, String> sessionOriginValue = new HashMap<Field, String>();
     // check stmt is or not [select /*+ SET_VAR(...)*/ ...]
@@ -658,6 +660,9 @@ public class SessionVariable implements Serializable, Writable {
     public static final long MIN_EXTERNAL_SORT_BYTES_THRESHOLD = 134217728;
     @VariableMgr.VarAttr(name = EXTERNAL_SORT_BYTES_THRESHOLD, checker = "checkExternalSortBytesThreshold")
     public long externalSortBytesThreshold = 0;
+
+    @VariableMgr.VarAttr(name = EXTERNAL_HASH_JOIN_BYTES_THRESHOLD)
+    public long externalHashJoinBytesThreshold= 0;
 
     // If this fe is in fuzzy mode, then will use initFuzzyModeVariables to generate some variables,
     // not the default value set in the code.
