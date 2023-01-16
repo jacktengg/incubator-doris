@@ -53,7 +53,7 @@ struct ProcessHashTableProbe {
     // the output block struct is same with mutable block. we can do more opt on it and simplify
     // the logic of probe
     // TODO: opt the visited here to reduce the size of hash table
-    template <bool need_null_map_for_probe, bool ignore_null, typename HashTableType>
+    template <bool partitioned_probe, bool need_null_map_for_probe, bool ignore_null, typename HashTableType>
     Status do_process(HashTableType& hash_table_ctx, ConstNullMapPtr null_map,
                       MutableBlock& mutable_block, Block* output_block, size_t probe_rows,
                       bool is_mark_join);
@@ -61,7 +61,7 @@ struct ProcessHashTableProbe {
     // each matching join column need to be processed by other join conjunct. so the struct of mutable block
     // and output block may be different
     // The output result is determined by the other join conjunct result and same_to_prev struct
-    template <bool need_null_map_for_probe, bool ignore_null, typename HashTableType>
+    template <bool partitioned_probe, bool need_null_map_for_probe, bool ignore_null, typename HashTableType>
     Status do_process_with_other_join_conjuncts(HashTableType& hash_table_ctx,
                                                 ConstNullMapPtr null_map,
                                                 MutableBlock& mutable_block, Block* output_block,

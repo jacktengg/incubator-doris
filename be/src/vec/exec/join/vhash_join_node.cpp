@@ -20,7 +20,10 @@
 #include "exprs/runtime_filter_slots.h"
 #include "gen_cpp/PlanNodes_types.h"
 #include "gutil/strings/substitute.h"
+#include "runtime/block_spill_manager.h"
 #include "util/defer_op.h"
+#include "vec/core/block_spill_reader.h"
+#include "vec/core/block_spill_writer.h"
 #include "vec/data_types/data_type_number.h"
 #include "vec/exprs/vexpr.h"
 #include "vec/exprs/vexpr_context.h"
@@ -351,10 +354,13 @@ Status HashJoinNode::init(const TPlanNode& tnode, RuntimeState* state) {
     init_output_slots_flags(child(0)->row_desc().tuple_descriptors(), _left_output_slot_flags);
     init_output_slots_flags(child(1)->row_desc().tuple_descriptors(), _right_output_slot_flags);
 
-    for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
-        hash_partitions_[i] = std::make_shared<HashJoinPartition>();
-    }
+    return Status::OK();
+}
 
+Status HashJoinNode::_create_hash_partitions(int level) {
+    for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+        hash_partitions_[i] = std::make_shared<HashJoinPartition>(level);
+    }
     return Status::OK();
 }
 
@@ -384,6 +390,8 @@ Status HashJoinNode::prepare(RuntimeState* state) {
             ADD_TIMER(_build_phase_profile, "BuildTableConvertToPartitionedTime");
     _build_rows_counter = ADD_COUNTER(_build_phase_profile, "BuildRows", TUnit::UNIT);
     _build_side_compute_hash_timer = ADD_TIMER(_build_phase_profile, "BuildSideHashComputingTime");
+
+    block_spill_profile_ = _build_phase_profile->create_child("BlockSpill", true, true);
 
     // Probe phase
     auto probe_phase_profile = runtime_profile()->create_child("ProbePhase", true, true);
@@ -489,7 +497,7 @@ Status HashJoinNode::pull(doris::RuntimeState* /*state*/, vectorized::Block* out
                             if (_have_other_join_conjunct) {
                                 st = process_hashtable_ctx
                                              .template do_process_with_other_join_conjuncts<
-                                                     need_null_map_for_probe, ignore_null>(
+                                                     false, need_null_map_for_probe, ignore_null>(
                                                      arg,
                                                      need_null_map_for_probe
                                                              ? &_null_map_column->get_data()
@@ -498,7 +506,7 @@ Status HashJoinNode::pull(doris::RuntimeState* /*state*/, vectorized::Block* out
                                                      _probe_block.rows(), _is_mark_join);
                             } else {
                                 st = process_hashtable_ctx.template do_process<
-                                        need_null_map_for_probe, ignore_null>(
+                                        false, need_null_map_for_probe, ignore_null>(
                                         arg,
                                         need_null_map_for_probe ? &_null_map_column->get_data()
                                                                 : nullptr,
@@ -584,7 +592,175 @@ Status HashJoinNode::push(RuntimeState* /*state*/, vectorized::Block* input_bloc
         if (&_probe_block != input_block) {
             input_block->swap(_probe_block);
         }
+
+        if (create_partitioned_mutable_probe_blocks_) {
+            create_partitioned_mutable_probe_blocks_ = false;
+            for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+                partitioned_mutable_probe_blocks_[i].reset(new MutableBlock(_probe_block.clone_empty()));
+            }
+        }
     }
+    return Status::OK();
+}
+
+Status HashJoinNode::_get_next_partitioned(RuntimeState* state, Block* output_block, bool* eos) {
+    auto batch_size = state->batch_size();
+    do {
+        switch (probe_state_) {
+        case ProbeState::PROBING_END_BATCH: {
+            RETURN_IF_ERROR(_get_next_probe_block(state, eos));
+            if (_probe_index < _probe_block.rows()) {
+                probe_state_ = ProbeState::PROBING_IN_BATCH;
+            } else {
+                // finished processing blocks from child[0] or the current spilled probe partition
+                _finished_probing_partitions(state);
+                probe_state_ = ProbeState::PROBE_COMPLETE;
+            }
+            break;
+        }
+        case ProbeState::PROBING_IN_BATCH: {
+            RETURN_IF_ERROR(_process_probe_block(state, output_block, eos));
+            if (_probe_index == _probe_block.rows()) {
+                probe_state_ = ProbeState::PROBING_END_BATCH;
+            }
+            break;
+        }
+        case ProbeState::PROBE_COMPLETE: {
+            if (!spilled_hash_partitions_.empty()) {
+                _begin_spilled_probe(state);
+                probe_state_ = ProbeState::PROBING_END_BATCH;
+            } else {
+                probe_state_ = ProbeState::EOS;
+            }
+            break;
+        }
+        case ProbeState::EOS: {
+            break;
+        }
+        default:
+            DCHECK(false) << "invalid probe_state_" << static_cast<int>(probe_state_);
+            break;
+        }
+
+        reached_limit(output_block, eos);
+    } while (output_block->rows() < batch_size && !*eos);
+    return Status::OK();
+}
+
+Status HashJoinNode::_get_next_probe_block(RuntimeState* state, bool* eos) {
+    if (HashJoinState::PARTITIONING_PROBE == join_state_) {
+        return _get_next_probe_block_from_child(state, eos);
+    } else {
+        return _get_next_probe_block_spilled(state, eos);
+    }
+}
+
+Status HashJoinNode::_get_next_probe_block_from_child(RuntimeState* state, bool* eos) {
+    while (need_more_input_data()) {
+        prepare_for_next();
+        SCOPED_TIMER(_probe_next_timer);
+        RETURN_IF_ERROR_AND_CHECK_SPAN(
+                child(0)->get_next_after_projects(
+                        state, &_probe_block, &_probe_eos,
+                        std::bind((Status(ExecNode::*)(RuntimeState*, vectorized::Block*, bool*)) &
+                                          ExecNode::get_next,
+                                  _children[0], std::placeholders::_1, std::placeholders::_2,
+                                  std::placeholders::_3)),
+                child(0)->get_next_span(), _probe_eos);
+
+        RETURN_IF_ERROR(push(state, &_probe_block, _probe_eos));
+    }
+    return Status::OK();
+}
+
+Status HashJoinNode::_get_next_probe_block_spilled(RuntimeState* state, bool* eos) {
+    // read spilled probe blocks
+    return Status::OK();
+}
+Status HashJoinNode::_process_probe_block(RuntimeState* state, Block* output_block, bool* eos) {
+    // return pull(state, output_block, eos);
+    Status st;
+    auto probe_rows = _probe_block.rows();
+    std::visit(
+            [&](auto&& arg, auto&& process_hashtable_ctx, auto need_null_map_for_probe,
+                auto ignore_null) {
+                using HashTableProbeType = std::decay_t<decltype(process_hashtable_ctx)>;
+                if constexpr (!std::is_same_v<HashTableProbeType, std::monostate>) {
+                    using HashTableCtxType = std::decay_t<decltype(arg)>;
+                    if constexpr (!std::is_same_v<HashTableCtxType, std::monostate>) {
+                        using KeyGetter = typename HashTableCtxType::State;
+                        KeyGetter key_getter(_probe_columns, _probe_key_sz, nullptr);
+                        if (_have_other_join_conjunct) {
+                        } else {
+                        }
+                    } else {
+                        LOG(FATAL) << "FATAL: uninited hash table";
+                    }
+                } else {
+                    LOG(FATAL) << "FATAL: uninited hash table probe";
+                }
+            },
+            *_hash_table_variants, *_process_hashtable_ctx_variants,
+            make_bool_variant(_need_null_map_for_probe), make_bool_variant(_probe_ignore_null));
+    while (_probe_index < probe_rows) {
+    }
+    return Status::OK();
+}
+
+
+Status HashJoinNode::_finished_probing_partitions(RuntimeState* state) {
+    if (current_spilled_partition_) {
+        current_spilled_partition_->close();
+        current_spilled_partition_.reset();
+    }
+
+    if (join_state_ == HashJoinState::PROBING_SPILLED_PARTITION) {
+        spilled_hash_partitions_.back()->close();
+        spilled_hash_partitions_.pop_back();
+    } else {
+        for (auto& partition : hash_partitions_) {
+            if (partition->is_spilled()) {
+                spilled_hash_partitions_.emplace_back(partition);
+            } else {
+                partition->close();
+            }
+        }
+    }
+    return Status::OK();
+}
+
+Status HashJoinNode::_begin_spilled_probe(RuntimeState* state) {
+    current_spilled_partition_ = spilled_hash_partitions_.back();
+    // empty probe partition
+    if (current_spilled_partition_->probe_row_count() == 0) {
+        UpdateState(HashJoinState::PROBING_SPILLED_PARTITION);
+        return Status::OK();
+    }
+    bool build = false;
+    RETURN_IF_ERROR(_build_partitioned_hash_table(state, current_spilled_partition_, build));
+    if (build) {
+        UpdateState(HashJoinState::PROBING_SPILLED_PARTITION);
+        return Status::OK();
+    }
+
+    // This spilled partition still can't fit in memory, repartition it
+    UpdateState(HashJoinState::REPARTITIONING_BUILD);
+
+    int next_partition_level = current_spilled_partition_->level() + 1;
+    if (UNLIKELY(next_partition_level >= MAX_PARTITION_DEPTH)) {
+        return Status::InternalError("reached max hash join partition depth");
+    }
+    _repartition_build_input(state, current_spilled_partition_);
+
+    return Status::OK();
+}
+
+Status HashJoinNode::_repartition_build_input(RuntimeState* state,
+                                              HashJoinPartitionSPtr& partition) {
+    int next_partition_level = partition->level() + 1;
+    _create_hash_partitions(next_partition_level);
+    // read spilled block data and spilt data into partitions
+    join_state_ = HashJoinState::REPARTITIONING_PROBE;
     return Status::OK();
 }
 
@@ -699,44 +875,9 @@ void HashJoinNode::release_resource(RuntimeState* state) {
     VJoinNodeBase::release_resource(state);
 }
 
-Status HashJoinNode::_materialize_build_side(RuntimeState* state) {
-    RETURN_IF_ERROR(child(1)->open(state));
-    bool eos = false;
-
-    if (_should_build_hash_table) {
-        Block block;
-        // If eos or have already met a null value using short-circuit strategy, we do not need to pull
-        // data from data.
-        while (!eos && !_short_circuit_for_null_in_probe_side) {
-            block.clear_column_data();
-            RETURN_IF_CANCELLED(state);
-
-            RETURN_IF_ERROR_AND_CHECK_SPAN(
-                    child(1)->get_next_after_projects(
-                            state, &block, &eos,
-                            std::bind((Status(ExecNode::*)(RuntimeState*, vectorized::Block*,
-                                                           bool*)) &
-                                              ExecNode::get_next,
-                                      _children[1], std::placeholders::_1, std::placeholders::_2,
-                                      std::placeholders::_3)),
-                    child(1)->get_next_span(), eos);
-
-            RETURN_IF_ERROR(sink(state, &block, eos));
-        }
-        RETURN_IF_ERROR(child(1)->close(state));
-
-        for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
-            partitioned_mutable_blocks_[i].reset();
-        }
-    } else {
-        RETURN_IF_ERROR(child(1)->close(state));
-        RETURN_IF_ERROR(sink(state, nullptr, eos));
-    }
-    return Status::OK();
-}
-
 template <class HashTableContext, bool ignore_null, bool short_circuit_for_null>
-Status HashJoinNode::_partition_block(vectorized::Block& block, HashTableContext& hash_table_ctx, bool* has_null_key) {
+Status HashJoinNode::_partition_build_block(vectorized::Block& block, HashTableContext& hash_table_ctx,
+                                      bool* has_null_key) {
     auto rows_count = block.rows();
 
     ColumnRawPtrs build_raw_ptrs(_build_expr_ctxs.size());
@@ -769,15 +910,14 @@ Status HashJoinNode::_partition_block(vectorized::Block& block, HashTableContext
         auto old_keys_memory = hash_table_ctx.keys_memory_usage;
         hash_table_ctx.serialize_keys(build_raw_ptrs, rows_count);
         key_getter.set_serialized_keys(hash_table_ctx.keys.data());
-        _build_arena_memory_usage->add(hash_table_ctx.keys_memory_usage -
-                                       old_keys_memory);
+        _build_arena_memory_usage->add(hash_table_ctx.keys_memory_usage - old_keys_memory);
     }
 
     // TODO: don't spill columns that are not needed
-    if (create_partitioned_mutable_blocks_) {
-        create_partitioned_mutable_blocks_ = false;
+    if (create_partitioned_mutable_build_blocks_) {
+        create_partitioned_mutable_build_blocks_ = false;
         for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
-            partitioned_mutable_blocks_[i].reset(new MutableBlock(block.clone_empty()));
+            partitioned_mutable_build_blocks_[i].reset(new MutableBlock(block.clone_empty()));
         }
     }
 
@@ -798,10 +938,9 @@ Status HashJoinNode::_partition_block(vectorized::Block& block, HashTableContext
                 return Status::OK();
             }
         }
-        
+
         size_t hash;
-        if constexpr (ColumnsHashing::IsPreSerializedKeysHashMethodTraits<
-                              KeyGetter>::value) {
+        if constexpr (ColumnsHashing::IsPreSerializedKeysHashMethodTraits<KeyGetter>::value) {
             hash = hash_table_ctx.hash_table.hash(key_getter.get_key_holder(k, *_arena).key);
         } else {
             hash = hash_table_ctx.hash_table.hash(key_getter.get_key_holder(k, *_arena));
@@ -813,12 +952,14 @@ Status HashJoinNode::_partition_block(vectorized::Block& block, HashTableContext
     for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
         const auto* begin = &partition_rows[i][0];
         const auto* end = begin + partition_rows[i].size();
-        partitioned_mutable_blocks_[i]->add_rows(&block, begin, end);
+        partitioned_mutable_build_blocks_[i]->add_rows(&block, begin, end);
+        hash_partitions_[i]->update_build_row_count(partition_rows[i].size());
     }
     for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
-        if (partitioned_mutable_blocks_[i]->bytes() >= SPILL_BUILD_BLOCK_MAX_SIZE) {
-            hash_partitions_[i]->build_blocks_.emplace_back(partitioned_mutable_blocks_[i]->to_block());
-            partitioned_mutable_blocks_[i].reset(new MutableBlock(block.clone_empty()));
+        if (partitioned_mutable_build_blocks_[i]->bytes() >= SPILL_BUILD_BLOCK_MAX_SIZE) {
+            hash_partitions_[i]->build_blocks_.emplace_back(
+                    partitioned_mutable_build_blocks_[i]->to_block());
+            partitioned_mutable_build_blocks_[i].reset(new MutableBlock(block.clone_empty()));
         }
     }
     return Status::OK();
@@ -826,61 +967,100 @@ Status HashJoinNode::_partition_block(vectorized::Block& block, HashTableContext
 
 Status HashJoinNode::_build_partitioned_hash_tables(RuntimeState* state) {
     for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
-        if (hash_partitions_[i]->build_blocks_.empty()) {
+        if (hash_partitions_[i]->build_row_count() == 0) {
             continue;
         }
         if (hash_partitions_[i]->is_spilled_) {
+            hash_partitions_[i]->spill();
             continue;
         }
+        bool build = false;
+        RETURN_IF_ERROR(_build_partitioned_hash_table(state, hash_partitions_[i], build));
     }
     return Status::OK();
 }
 
-Status HashJoinNode::_build_partitioned_hash_table(RuntimeState* state, HashJoinPartitionSPtr& partition) {
+Status HashJoinNode::_build_partitioned_hash_table(RuntimeState* state,
+                                                   HashJoinPartitionSPtr& partition,
+                                                   bool& is_build) {
+    is_build = true;
     auto st = std::visit(
-            Overload {
-                    [&](std::monostate& arg, auto has_null_value,
-                        auto short_circuit_for_null_in_build_side) -> Status {
-                        LOG(FATAL) << "FATAL: uninited hash table";
-                        __builtin_unreachable();
-                        return Status::OK();
-                    },
-                    [&](auto&& arg, auto has_null_value,
-                        auto short_circuit_for_null_in_build_side) -> Status {
-                        using HashTableCtxType = std::decay_t<decltype(arg)>;
-                        auto block_count = partition->build_blocks_.size();
-                        for (size_t block_idx = 0; block_idx < block_count; ++block_idx) {
-                            auto& block = partition->build_blocks_[block_idx];
-                            size_t rows = block.rows();
-                            ColumnRawPtrs raw_ptrs(_build_expr_ctxs.size());
-                            ColumnUInt8::MutablePtr null_map_val;
-                            // Get the key column that needs to be built
-                            Status st = _extract_join_column<true>(block, null_map_val, raw_ptrs, build_col_ids_);
-                            if (_short_circuit_for_null_in_build_side || _build_side_ignore_null) {
-                                null_map_val = ColumnUInt8::create();
-                                null_map_val->get_data().assign(rows, (uint8_t)0);
-                            }
+            Overload {[&](std::monostate& arg, auto has_null_value,
+                          auto short_circuit_for_null_in_build_side) -> Status {
+                          LOG(FATAL) << "FATAL: uninited hash table";
+                          __builtin_unreachable();
+                          return Status::OK();
+                      },
+                      [&](auto&& arg, auto has_null_value,
+                          auto short_circuit_for_null_in_build_side) -> Status {
+                          using HashTableCtxType = std::decay_t<decltype(arg)>;
+                          auto block_count = partition->build_blocks_.size();
+                          for (size_t block_idx = 0; block_idx < block_count; ++block_idx) {
+                              auto& block = partition->build_blocks_[block_idx];
+                              size_t rows = block.rows();
+                              ColumnRawPtrs raw_ptrs(_build_expr_ctxs.size());
+                              ColumnUInt8::MutablePtr null_map_val;
+                              // Get the key column that needs to be built
+                              Status st = _extract_join_column<true>(block, null_map_val, raw_ptrs,
+                                                                     build_col_ids_);
+                              if (_short_circuit_for_null_in_build_side ||
+                                  _build_side_ignore_null) {
+                                  null_map_val = ColumnUInt8::create();
+                                  null_map_val->get_data().assign(rows, (uint8_t)0);
+                              }
 
-                            ProcessHashTableBuild<HashTableCtxType> hash_table_build_process(
-                                    rows, block, raw_ptrs, this, state->batch_size(), block_idx);
-                            st = hash_table_build_process
-                                    .template run<has_null_value, short_circuit_for_null_in_build_side>(
-                                            arg,
-                                            has_null_value || short_circuit_for_null_in_build_side
-                                                    ? &null_map_val->get_data()
-                                                    : nullptr,
-                                            &_short_circuit_for_null_in_probe_side);
-                            RETURN_IF_ERROR(st);
-                        }
-                        return Status::OK();
-                    }},
-            *_hash_table_variants, make_bool_variant(_build_side_ignore_null),
+                              ProcessHashTableBuild<HashTableCtxType> hash_table_build_process(
+                                      rows, block, raw_ptrs, this, state->batch_size(), block_idx);
+                              st = hash_table_build_process.template run<
+                                      has_null_value, short_circuit_for_null_in_build_side>(
+                                      arg,
+                                      has_null_value || short_circuit_for_null_in_build_side
+                                              ? &null_map_val->get_data()
+                                              : nullptr,
+                                      &_short_circuit_for_null_in_probe_side);
+                              RETURN_IF_ERROR(st);
+                          }
+                          return Status::OK();
+                      }},
+            *(partition->hash_table_), make_bool_variant(_build_side_ignore_null),
             make_bool_variant(_short_circuit_for_null_in_build_side));
 
     return Status::OK();
 }
 
-Status HashJoinNode::_sink_partitioned(doris::RuntimeState* state, vectorized::Block& block, bool eos) {
+Status HashJoinNode::_spill_build_partition() {
+    size_t max_partition_size = 0;
+    HashJoinPartitionSPtr spill_candidate;
+    for (const auto& partition : hash_partitions_) {
+        auto data_size = partition->build_data_size();
+        if (data_size > max_partition_size) {
+            max_partition_size = data_size;
+            spill_candidate = partition;
+        }
+    }
+
+    return spill_candidate->spill();
+}
+
+Status HashJoinPartition::spill() {
+    for (const auto& block : build_blocks_) {
+        BlockSpillWriterUPtr spill_block_writer;
+        RETURN_IF_ERROR(ExecEnv::GetInstance()->block_spill_mgr()->get_writer(
+                block.bytes(), spill_block_writer, parent_->block_spill_profile_));
+        RETURN_IF_ERROR(spill_block_writer->write(block));
+        RETURN_IF_ERROR(spill_block_writer->close());
+        spilled_build_block_streams_.emplace_back(spill_block_writer->get_id());
+    }
+    is_spilled_ = true;
+    build_blocks_.clear();
+    return Status::OK();
+}
+
+Status HashJoinNode::_spill_probe_row(HashJoinPartitionSPtr& partition, Block& block, size_t row) {
+    return Status::OK();
+}
+
+Status HashJoinNode::_sink_partitioned(RuntimeState* state, vectorized::Block& block, bool eos) {
     SCOPED_TIMER(_build_timer);
     auto rows = block.rows();
     if (UNLIKELY(rows == 0)) {
@@ -889,27 +1069,109 @@ Status HashJoinNode::_sink_partitioned(doris::RuntimeState* state, vectorized::B
 
     COUNTER_UPDATE(_build_rows_counter, rows);
 
-    auto st = std::visit(
-            Overload {
-                    [&](std::monostate& arg, auto has_null_value,
-                        auto short_circuit_for_null_in_build_side) -> Status {
-                        LOG(FATAL) << "FATAL: uninited hash table";
-                        __builtin_unreachable();
-                        return Status::OK();
-                    },
-                    [&](auto&& arg, auto has_null_value,
-                        auto short_circuit_for_null_in_build_side) -> Status {
-                        using HashTableCtxType = std::decay_t<decltype(arg)>;
-                        return _partition_block<HashTableCtxType, has_null_value, short_circuit_for_null_in_build_side>(
-                                block, arg,
-                                &_short_circuit_for_null_in_probe_side);
-                    }},
-            *_hash_table_variants, make_bool_variant(_build_side_ignore_null),
-            make_bool_variant(_short_circuit_for_null_in_build_side));
+    auto st =
+            std::visit(Overload {[&](std::monostate& arg, auto has_null_value,
+                                     auto short_circuit_for_null_in_build_side) -> Status {
+                                     LOG(FATAL) << "FATAL: uninited hash table";
+                                     __builtin_unreachable();
+                                     return Status::OK();
+                                 },
+                                 [&](auto&& arg, auto has_null_value,
+                                     auto short_circuit_for_null_in_build_side) -> Status {
+                                     using HashTableCtxType = std::decay_t<decltype(arg)>;
+                                     return _partition_build_block<HashTableCtxType, has_null_value,
+                                                             short_circuit_for_null_in_build_side>(
+                                             block, arg, &_short_circuit_for_null_in_probe_side);
+                                 }},
+                       *_hash_table_variants, make_bool_variant(_build_side_ignore_null),
+                       make_bool_variant(_short_circuit_for_null_in_build_side));
 
-    return st;
+    RETURN_IF_ERROR(st);
 
+    _build_side_mem_used += block.bytes();
+    if (state->external_hash_join_bytes_threshold() > 0 &&
+        _build_side_mem_used >= state->external_hash_join_bytes_threshold()) {
+        RETURN_IF_ERROR(_spill_build_partition());
+    }
+
+    return Status::OK();
 }
+
+Status HashJoinNode::_process_build_data_partitioned(RuntimeState* state) {
+    RETURN_IF_ERROR(child(1)->open(state));
+    bool eos = false;
+
+    if (_should_build_hash_table) {
+        Block block;
+        // If eos or have already met a null value using short-circuit strategy, we do not need to pull
+        // data from data.
+        while (!eos && !_short_circuit_for_null_in_probe_side) {
+            block.clear_column_data();
+            RETURN_IF_CANCELLED(state);
+
+            RETURN_IF_ERROR_AND_CHECK_SPAN(
+                    child(1)->get_next_after_projects(
+                            state, &block, &eos,
+                            std::bind((Status(ExecNode::*)(RuntimeState*, vectorized::Block*,
+                                                           bool*)) &
+                                              ExecNode::get_next,
+                                      _children[1], std::placeholders::_1, std::placeholders::_2,
+                                      std::placeholders::_3)),
+                    child(1)->get_next_span(), eos);
+
+            RETURN_IF_ERROR(_sink_partitioned(state, block, eos));
+        }
+        RETURN_IF_ERROR(child(1)->close(state));
+
+        for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+            partitioned_mutable_build_blocks_[i].reset();
+        }
+        _build_partitioned_hash_tables(state);
+    } else {
+        RETURN_IF_ERROR(child(1)->close(state));
+    }
+    join_state_ = HashJoinState::PARTITIONING_PROBE;
+    probe_state_ = ProbeState::PROBING_END_BATCH;
+
+    return Status::OK();
+}
+
+Status HashJoinNode::_materialize_build_side(RuntimeState* state) {
+    RETURN_IF_ERROR(child(1)->open(state));
+    bool eos = false;
+
+    if (_should_build_hash_table) {
+        Block block;
+        // If eos or have already met a null value using short-circuit strategy, we do not need to pull
+        // data from data.
+        while (!eos && !_short_circuit_for_null_in_probe_side) {
+            block.clear_column_data();
+            RETURN_IF_CANCELLED(state);
+
+            RETURN_IF_ERROR_AND_CHECK_SPAN(
+                    child(1)->get_next_after_projects(
+                            state, &block, &eos,
+                            std::bind((Status(ExecNode::*)(RuntimeState*, vectorized::Block*,
+                                                           bool*)) &
+                                              ExecNode::get_next,
+                                      _children[1], std::placeholders::_1, std::placeholders::_2,
+                                      std::placeholders::_3)),
+                    child(1)->get_next_span(), eos);
+
+            RETURN_IF_ERROR(sink(state, &block, eos));
+        }
+        RETURN_IF_ERROR(child(1)->close(state));
+
+        for (size_t i = 0; i < HASH_JOIN_HASH_PARTITION_COUNT; ++i) {
+            partitioned_mutable_build_blocks_[i].reset();
+        }
+    } else {
+        RETURN_IF_ERROR(child(1)->close(state));
+        RETURN_IF_ERROR(sink(state, nullptr, eos));
+    }
+    return Status::OK();
+}
+
 Status HashJoinNode::sink(doris::RuntimeState* state, vectorized::Block* in_block, bool eos) {
     SCOPED_TIMER(_build_timer);
 
@@ -924,7 +1186,7 @@ Status HashJoinNode::sink(doris::RuntimeState* state, vectorized::Block* in_bloc
     if (_should_build_hash_table) {
         // If eos or have already met a null value using short-circuit strategy, we do not need to pull
         // data from probe side.
-        _build_side_mem_used += in_block->allocated_bytes();
+        _build_side_mem_used += in_block->bytes();
 
         if (in_block->rows() != 0) {
             SCOPED_TIMER(_build_side_merge_block_timer);

@@ -188,26 +188,124 @@ using HashTableCtxVariants =
                      ProcessHashTableProbe<TJoinOp::NULL_AWARE_LEFT_ANTI_JOIN>>;
 
 class HashJoinNode;
+
+static constexpr int MAX_PARTITION_DEPTH = 16;
 class HashJoinPartition {
     friend class HashJoinNode;
+
+public:
+    HashJoinPartition(int level) : level_(level) {}
+
+    size_t build_data_size() const {
+        size_t data_size = 0;
+        for (const auto& block : build_blocks_) {
+            data_size += block.bytes();
+        }
+        return data_size;
+    }
+
+    int level() const { return level_; }
+    Status spill();
+
+    bool is_spilled() const { return is_spilled_; }
+
+    size_t build_row_count() const { return build_row_count_; }
+
+    size_t probe_row_count() const { return probe_row_count_; }
+
+    void update_build_row_count(size_t rows) { build_row_count_ += rows; }
+
+    void update_probe_row_count(size_t rows) { probe_row_count_ += rows; }
+
+    void close() {
+        hash_table_.reset();
+        build_blocks_.clear();
+        probe_blocks_.clear();
+    }
+
 private:
+    int level_ = 0;
+    HashJoinNode* parent_;
     bool is_spilled_ = false;
+    size_t build_row_count_ = 0;
+    size_t probe_row_count_ = 0;
     std::vector<Block> probe_blocks_;
     std::vector<Block> build_blocks_;
     std::shared_ptr<HashTableVariants> hash_table_;
+
+    std::deque<int64_t> spilled_build_block_streams_;
+    std::deque<int64_t> spilled_probe_block_streams_;
 };
+
 using HashJoinPartitionSPtr = std::shared_ptr<HashJoinPartition>;
 
+enum class HashJoinState {
+    /// Partitioning the build (right) child's input into the builder's hash partitions.
+    PARTITIONING_BUILD,
+
+    /// Processing the probe (left) child's input, probing hash tables and
+    /// spilling probe rows into 'probe_hash_partitions_' if necessary.
+    PARTITIONING_PROBE,
+
+    /// Processing the spilled probe rows of a single spilled partition
+    /// ('input_partition_') that fits in memory.
+    PROBING_SPILLED_PARTITION,
+
+    /// Repartitioning the build rows of a single spilled partition ('input_partition_')
+    /// into the builder's hash partitions.
+    /// Corresponds to PARTITIONING_BUILD but reading from a spilled partition.
+    REPARTITIONING_BUILD,
+
+    /// Probing the repartitioned hash partitions of a single spilled partition
+    /// ('input_partition_') with the probe rows of that partition.
+    /// Corresponds to PARTITIONING_PROBE but reading from a spilled partition.
+    REPARTITIONING_PROBE,
+};
+
+enum class ProbeState {
+    // Processing probe batches and more rows in the current probe batch must be
+    // processed.
+    PROBING_IN_BATCH,
+    // Processing probe batches and no more rows in the current probe batch to process.
+    PROBING_END_BATCH,
+    // All probe batches have been processed, unmatched build rows need to be outputted
+    // from 'output_build_partitions_'.
+    // This state is only used if NeedToProcessUnmatchedBuildRows(join_op_) is true.
+    OUTPUTTING_UNMATCHED,
+    // All input probe rows from the child ExecNode or the current spilled partition have
+    // been processed, and all unmatched rows from the build have been output.
+    PROBE_COMPLETE,
+    // All input has been processed. We need to process builder->null_aware_partition()
+    // and output any rows from it.
+    // This state is only used if join_op_ is NULL_AWARE_ANTI_JOIN.
+    OUTPUTTING_NULL_AWARE,
+    // All input has been processed. We need to process null_probe_rows_ and output any
+    // rows from it.
+    // This state is only used if join_op_ is NULL_AWARE_ANTI_JOIN.
+    OUTPUTTING_NULL_PROBE,
+    // All output rows have been produced - GetNext() should return eos.
+    EOS,
+};
+
 class HashJoinNode final : public VJoinNodeBase {
+    friend class HashJoinPartition;
+
 private:
     // for spill to disk
     static constexpr size_t BITS_FOR_SUB_TABLE = 4;
     static constexpr size_t HASH_JOIN_HASH_PARTITION_COUNT = 1ULL << BITS_FOR_SUB_TABLE;
-    static constexpr size_t SPILL_BUILD_BLOCK_MAX_SIZE = 4 * 1024UL * 1024UL * 1024UL;
-    HashJoinPartitionSPtr hash_partitions_[HASH_JOIN_HASH_PARTITION_COUNT];
+    static constexpr size_t SPILL_BUILD_BLOCK_MAX_SIZE = 256UL * 1024UL * 1024UL;
+    std::vector<HashJoinPartitionSPtr> hash_partitions_;
+
+    std::vector<HashJoinPartitionSPtr> current_hash_partitions_;
     std::vector<HashJoinPartitionSPtr> spilled_hash_partitions_;
-    bool create_partitioned_mutable_blocks_ = true;
-    std::unique_ptr<MutableBlock> partitioned_mutable_blocks_[HASH_JOIN_HASH_PARTITION_COUNT];
+    HashJoinPartitionSPtr current_spilled_partition_;
+
+    bool create_partitioned_mutable_build_blocks_ = true;
+    std::unique_ptr<MutableBlock> partitioned_mutable_build_blocks_[HASH_JOIN_HASH_PARTITION_COUNT];
+
+    bool create_partitioned_mutable_probe_blocks_ = true;
+    std::unique_ptr<MutableBlock> partitioned_mutable_probe_blocks_[HASH_JOIN_HASH_PARTITION_COUNT];
 
     std::vector<int> build_col_ids_;
 
@@ -247,6 +345,29 @@ public:
     bool should_build_hash_table() const { return _should_build_hash_table; }
 
 private:
+    void UpdateState(HashJoinState next_state) {
+        // Validate the state transition.
+        switch (join_state_) {
+        case HashJoinState::PARTITIONING_BUILD:
+            DCHECK(next_state == HashJoinState::PARTITIONING_PROBE);
+            break;
+        case HashJoinState::PARTITIONING_PROBE:
+        case HashJoinState::REPARTITIONING_PROBE:
+        case HashJoinState::PROBING_SPILLED_PARTITION:
+            DCHECK(next_state == HashJoinState::REPARTITIONING_BUILD ||
+                   next_state == HashJoinState::PROBING_SPILLED_PARTITION);
+            break;
+        case HashJoinState::REPARTITIONING_BUILD:
+            DCHECK(next_state == HashJoinState::REPARTITIONING_PROBE);
+            break;
+        default:
+            DCHECK(false) << "Invalid state " << static_cast<int>(join_state_);
+        }
+        join_state_ = next_state;
+    }
+
+    Status _create_hash_partitions(int level);
+    Status _process_build_data_partitioned(RuntimeState* state);
     Status _sink_partitioned(doris::RuntimeState* state, vectorized::Block& in_block, bool eos);
 
     static size_t get_partition_from_hash(size_t hash_value) {
@@ -254,10 +375,31 @@ private:
     }
 
     template <class HashTableContext, bool ignore_null, bool short_circuit_for_null>
-    Status _partition_block(vectorized::Block& block, HashTableContext& hash_table_ctx, bool* has_null_key);
+    Status _partition_build_block(vectorized::Block& block, HashTableContext& hash_table_ctx,
+                            bool* has_null_key);
 
     Status _build_partitioned_hash_tables(RuntimeState* state);
-    Status _build_partitioned_hash_table(RuntimeState* state, HashJoinPartitionSPtr& partition);
+    Status _build_partitioned_hash_table(RuntimeState* state, HashJoinPartitionSPtr& partition,
+                                         bool& is_build);
+    Status _spill_build_partition();
+    Status _spill_probe_row(HashJoinPartitionSPtr& partition, Block& block, size_t row);
+
+    Status _prepare_for_partitioned_probe();
+
+    Status _get_next_partitioned(RuntimeState* state, Block* output_block, bool* eos);
+
+    Status _get_next_probe_block(RuntimeState* state, bool* eos);
+    Status _get_next_probe_block_from_child(RuntimeState* state, bool* eos);
+    Status _get_next_probe_block_spilled(RuntimeState* state, bool* eos);
+
+    Status _process_probe_block(RuntimeState* state, Block* output_block, bool* eos);
+    Status _finished_probing_partitions(RuntimeState* state);
+
+    Status _begin_spilled_probe(RuntimeState* state);
+    Status _repartition_build_input(RuntimeState* state, HashJoinPartitionSPtr& partition);
+
+    HashJoinState join_state_ = HashJoinState::PARTITIONING_BUILD;
+    ProbeState probe_state_ = ProbeState::PROBE_COMPLETE;
 
     using VExprContexts = std::vector<VExprContext*>;
     // probe expr
@@ -387,6 +529,8 @@ private:
     std::unordered_map<const Block*, std::vector<int>> _inserted_rows;
 
     std::vector<IRuntimeFilter*> _runtime_filters;
+
+    RuntimeProfile* block_spill_profile_;
 };
 } // namespace vectorized
 } // namespace doris

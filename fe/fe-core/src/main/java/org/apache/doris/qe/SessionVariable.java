@@ -680,15 +680,33 @@ public class SessionVariable implements Serializable, Writable {
         switch (randomInt) {
             case 0:
                 this.externalSortBytesThreshold = 0;
+                this.externalHashJoinBytesThreshold = 0;
                 break;
             case 1:
                 this.externalSortBytesThreshold = 1;
+                this.externalHashJoinBytesThreshold = 1;
                 break;
             case 2:
                 this.externalSortBytesThreshold = 1024 * 1024;
+                this.externalHashJoinBytesThreshold = 1;
                 break;
             default:
                 this.externalSortBytesThreshold = 100 * 1024 * 1024 * 1024;
+                break;
+        }
+        randomInt = random.nextInt(4);
+        switch (randomInt) {
+            case 0:
+                this.externalHashJoinBytesThreshold = 0;
+                break;
+            case 1:
+                this.externalHashJoinBytesThreshold = 1;
+                break;
+            case 2:
+                this.externalHashJoinBytesThreshold = 1024 * 1024;
+                break;
+            default:
+                this.externalHashJoinBytesThreshold = 100 * 1024 * 1024 * 1024;
                 break;
         }
     }
@@ -1414,6 +1432,8 @@ public class SessionVariable implements Serializable, Writable {
         tResult.setRepeatMaxNum(repeatMaxNum);
 
         tResult.setExternalSortBytesThreshold(externalSortBytesThreshold);
+
+        tResult.setExternalHashJoinBytesThreshold(externalHashJoinBytesThreshold);
 
         return tResult;
     }
