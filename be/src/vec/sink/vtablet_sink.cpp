@@ -354,7 +354,8 @@ void VNodeChannel::try_send_block(RuntimeState* state) {
     }
 
     if (_parent->_transfer_large_data_by_brpc && request.has_block() &&
-        request.block().has_column_values() && request.ByteSizeLong() > MIN_HTTP_BRPC_SIZE) {
+        request.block().has_column_values() &&
+        request.ByteSizeLong() > state->min_http_brpc_size()) {
         Status st = request_embed_attachment_contain_block<
                 PTabletWriterAddBlockRequest, ReusableClosure<PTabletWriterAddBlockResult>>(
                 &request, _add_block_closure);

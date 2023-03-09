@@ -188,6 +188,8 @@ struct TQueryOptions {
 
   // For debug purpose, skip delete bitmap when reading data
   56: optional bool skip_delete_bitmap = false
+
+  57: optional i64 min_http_brpc_size = 1073741824
 }
     
 

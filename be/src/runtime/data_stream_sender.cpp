@@ -159,7 +159,7 @@ Status DataStreamSender::Channel::send_batch(PRowBatch* batch, bool eos) {
 
     if (_parent->_transfer_large_data_by_brpc && _brpc_request.has_row_batch() &&
         _brpc_request.row_batch().has_tuple_data() &&
-        _brpc_request.ByteSizeLong() > MIN_HTTP_BRPC_SIZE) {
+        _brpc_request.ByteSizeLong() > _state->min_http_brpc_size()) {
         Status st = request_embed_attachment_contain_tuple<PTransmitDataParams,
                                                            RefCountClosure<PTransmitDataResult>>(
                 &_brpc_request, _closure);

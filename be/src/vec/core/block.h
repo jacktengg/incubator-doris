@@ -281,7 +281,7 @@ public:
     // serialize block to PBlock
     Status serialize(int be_exec_version, PBlock* pblock, size_t* uncompressed_bytes,
                      size_t* compressed_bytes, segment_v2::CompressionTypePB compression_type,
-                     bool allow_transfer_large_data = false) const;
+                     bool allow_transfer_large_data = false, bool compress = true) const;
 
     // serialize block to PRowbatch
     void serialize(RowBatch*, const RowDescriptor&);

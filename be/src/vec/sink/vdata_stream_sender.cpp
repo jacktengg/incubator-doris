@@ -20,7 +20,9 @@
 #include <fmt/format.h>
 #include <fmt/ranges.h>
 
+#include <iomanip>
 #include <random>
+#include <sstream>
 
 #include "runtime/dpp_sink_internal.h"
 #include "runtime/exec_env.h"
@@ -95,7 +97,9 @@ Status VDataStreamSender::Channel::send_current_block(bool eos) {
         return send_local_block(eos);
     }
     auto block = _mutable_block->to_block();
-    RETURN_IF_ERROR(_parent->serialize_block(&block, _ch_cur_pb_block));
+    size_t compressed_bytes;
+    RETURN_IF_ERROR(_parent->serialize_block(&block, _ch_cur_pb_block, compressed_bytes));
+    COUNTER_UPDATE(_parent->_bytes_sent_counter, compressed_bytes);
     block.clear_column_data();
     _mutable_block->set_muatable_columns(block.mutate_columns());
     RETURN_IF_ERROR(send_block(_ch_cur_pb_block, eos));
@@ -166,7 +170,7 @@ Status VDataStreamSender::Channel::send_block(PBlock* block, bool eos) {
 
     if (_parent->_transfer_large_data_by_brpc && _brpc_request.has_block() &&
         _brpc_request.block().has_column_values() &&
-        _brpc_request.ByteSizeLong() > MIN_HTTP_BRPC_SIZE) {
+        _brpc_request.ByteSizeLong() > _state->min_http_brpc_size()) {
         SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(ExecEnv::GetInstance()->orphan_mem_tracker());
         Status st = request_embed_attachment_contain_block<PTransmitDataParams,
                                                            RefCountClosure<PTransmitDataResult>>(
@@ -294,7 +298,8 @@ VDataStreamSender::VDataStreamSender(ObjectPool* pool, int sender_id, const RowD
           _blocks_sent_counter(nullptr),
           _local_bytes_send_counter(nullptr),
           _dest_node_id(sink.dest_node_id),
-          _transfer_large_data_by_brpc(config::transfer_large_data_by_brpc) {
+          _transfer_large_data_by_brpc(config::transfer_large_data_by_brpc),
+          _serialized_block_count(TUnit::UNIT, 0) {
     DCHECK_GT(destinations.size(), 0);
     DCHECK(sink.output_partition.type == TPartitionType::UNPARTITIONED ||
            sink.output_partition.type == TPartitionType::HASH_PARTITIONED ||
@@ -347,7 +352,8 @@ VDataStreamSender::VDataStreamSender(ObjectPool* pool, int sender_id, const RowD
           _split_block_distribute_by_channel_timer(nullptr),
           _blocks_sent_counter(nullptr),
           _local_bytes_send_counter(nullptr),
-          _dest_node_id(dest_node_id) {
+          _dest_node_id(dest_node_id),
+          _serialized_block_count(TUnit::UNIT, 0) {
     _name = "VDataStreamSender";
     std::map<int64_t, int64_t> fragment_id_to_channel_index;
     for (int i = 0; i < destinations.size(); ++i) {
@@ -385,7 +391,8 @@ VDataStreamSender::VDataStreamSender(ObjectPool* pool, const RowDescriptor& row_
           _split_block_distribute_by_channel_timer(nullptr),
           _blocks_sent_counter(nullptr),
           _local_bytes_send_counter(nullptr),
-          _dest_node_id(0) {
+          _dest_node_id(0),
+          _serialized_block_count(TUnit::UNIT, 0) {
     _name = "VDataStreamSender";
 }
 
@@ -461,8 +468,9 @@ Status VDataStreamSender::prepare(RuntimeState* state) {
         }
     }
 
-    _bytes_sent_counter = ADD_COUNTER(profile(), "BytesSent", TUnit::BYTES);
+    _bytes_sent_counter = ADD_COUNTER(profile(), "NetworkBytesSent", TUnit::BYTES);
     _uncompressed_bytes_counter = ADD_COUNTER(profile(), "UncompressedRowBatchSize", TUnit::BYTES);
+    _compressed_bytes_counter = ADD_COUNTER(profile(), "CompressedRowBatchSize", TUnit::BYTES);
     _ignore_rows = ADD_COUNTER(profile(), "IgnoreRows", TUnit::UNIT);
     _local_sent_rows = ADD_COUNTER(profile(), "LocalSentRows", TUnit::UNIT);
     _serialize_batch_timer = ADD_TIMER(profile(), "SerializeBatchTime");
@@ -522,12 +530,14 @@ Status VDataStreamSender::send(RuntimeState* state, Block* block) {
                 RETURN_IF_ERROR(channel->send_local_block(block));
             }
         } else {
-            RETURN_IF_ERROR(serialize_block(block, _cur_pb_block, _channels.size()));
+            size_t compressed_bytes;
+            RETURN_IF_ERROR(serialize_block(block, _cur_pb_block, compressed_bytes));
             for (auto channel : _channels) {
                 if (channel->is_local()) {
                     RETURN_IF_ERROR(channel->send_local_block(block));
                 } else {
                     RETURN_IF_ERROR(channel->send_block(_cur_pb_block));
+                    COUNTER_UPDATE(_bytes_sent_counter, compressed_bytes);
                 }
             }
             // rollover
@@ -540,8 +550,11 @@ Status VDataStreamSender::send(RuntimeState* state, Block* block) {
         if (current_channel->is_local()) {
             RETURN_IF_ERROR(current_channel->send_local_block(block));
         } else {
-            RETURN_IF_ERROR(serialize_block(block, current_channel->ch_cur_pb_block()));
+            size_t compressed_bytes;
+            RETURN_IF_ERROR(
+                    serialize_block(block, current_channel->ch_cur_pb_block(), compressed_bytes));
             RETURN_IF_ERROR(current_channel->send_block(current_channel->ch_cur_pb_block()));
+            COUNTER_UPDATE(_bytes_sent_counter, compressed_bytes);
             current_channel->ch_roll_pb_block();
         }
         _current_channel_idx = (_current_channel_idx + 1) % _channels.size();
@@ -638,17 +651,33 @@ Status VDataStreamSender::close(RuntimeState* state, Status exec_status) {
     return final_st;
 }
 
-Status VDataStreamSender::serialize_block(Block* src, PBlock* dest, int num_receivers) {
+Status VDataStreamSender::serialize_block(Block* src, PBlock* dest, size_t& compressed_bytes) {
     {
         SCOPED_TIMER(_serialize_batch_timer);
         dest->Clear();
-        size_t uncompressed_bytes = 0, compressed_bytes = 0;
+
+        size_t uncompressed_bytes = 0;
+        compressed_bytes = 0;
         RETURN_IF_ERROR(src->serialize(_state->be_exec_version(), dest, &uncompressed_bytes,
                                        &compressed_bytes, _compression_type,
-                                       _transfer_large_data_by_brpc));
-        COUNTER_UPDATE(_bytes_sent_counter, compressed_bytes * num_receivers);
-        COUNTER_UPDATE(_uncompressed_bytes_counter, uncompressed_bytes * num_receivers);
+                                       _transfer_large_data_by_brpc, _compress_necessary));
+        COUNTER_UPDATE(_uncompressed_bytes_counter, uncompressed_bytes);
+        if (_compress_necessary) {
+            COUNTER_UPDATE(_compressed_bytes_counter, compressed_bytes);
+        }
         COUNTER_UPDATE(_compress_timer, src->get_compress_time());
+        COUNTER_UPDATE(&_serialized_block_count, 1);
+        if (_compress_necessary && _uncompressed_bytes_counter->value() > 0) {
+            _block_compress_ratio = static_cast<double>(_compressed_bytes_counter->value()) /
+                                    static_cast<double>(_uncompressed_bytes_counter->value());
+            std::ostringstream os;
+            os << std::fixed << std::setprecision(2) << _block_compress_ratio;
+            profile()->add_info_string("CompressionRatio", os.str());
+        }
+        if (_serialized_block_count.value() == 10 && _block_compress_ratio > 0.8) {
+            _compress_necessary = false;
+            LOG(INFO) << "compression ratio: " << _block_compress_ratio << ", stop compression";
+        }
     }
 
     return Status::OK();

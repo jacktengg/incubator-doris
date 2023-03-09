@@ -403,6 +403,13 @@ public:
                _query_options.enable_share_hash_table_for_broadcast_join;
     }
 
+    int64_t min_http_brpc_size() const {
+        if (!_query_options.__isset.min_http_brpc_size) {
+            return (1L << 31);
+        }
+        return _query_options.min_http_brpc_size;
+    }
+
 private:
     // Use a custom block manager for the query for testing purposes.
     void set_block_mgr2(const std::shared_ptr<BufferedBlockMgr2>& block_mgr) {

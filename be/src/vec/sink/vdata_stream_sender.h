@@ -72,7 +72,7 @@ public:
 
     RuntimeState* state() { return _state; }
 
-    Status serialize_block(Block* src, PBlock* dest, int num_receivers = 1);
+    Status serialize_block(Block* src, PBlock* dest, size_t& compressed_bytes);
 
 protected:
     void _roll_pb_block();
@@ -134,6 +134,7 @@ protected:
     RuntimeProfile::Counter* _brpc_wait_timer;
     RuntimeProfile::Counter* _bytes_sent_counter;
     RuntimeProfile::Counter* _uncompressed_bytes_counter;
+    RuntimeProfile::Counter* _compressed_bytes_counter;
     RuntimeProfile::Counter* _ignore_rows;
     RuntimeProfile::Counter* _local_sent_rows;
     RuntimeProfile::Counter* _local_send_timer;
@@ -156,6 +157,10 @@ protected:
     segment_v2::CompressionTypePB _compression_type;
 
     bool _new_shuffle_hash_method = false;
+
+    RuntimeProfile::Counter _serialized_block_count;
+    double _block_compress_ratio = 0.0;
+    bool _compress_necessary = true;
 };
 
 // TODO: support local exechange

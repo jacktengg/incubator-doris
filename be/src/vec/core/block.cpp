@@ -741,7 +741,7 @@ Status Block::filter_block(Block* block, int filter_column_id, int column_to_kee
 Status Block::serialize(int be_exec_version, PBlock* pblock,
                         /*std::string* compressed_buffer,*/ size_t* uncompressed_bytes,
                         size_t* compressed_bytes, segment_v2::CompressionTypePB compression_type,
-                        bool allow_transfer_large_data) const {
+                        bool allow_transfer_large_data, bool compress) const {
     pblock->set_be_exec_version(be_exec_version);
 
     // calc uncompressed size for allocation
@@ -775,7 +775,7 @@ Status Block::serialize(int be_exec_version, PBlock* pblock,
     *uncompressed_bytes = content_uncompressed_size;
 
     // compress
-    if (config::compress_rowbatches && content_uncompressed_size > 0) {
+    if (config::compress_rowbatches && compress && content_uncompressed_size > 0) {
         SCOPED_RAW_TIMER(&_compress_time_ns);
         pblock->set_compression_type(compression_type);
         pblock->set_uncompressed_size(content_uncompressed_size);

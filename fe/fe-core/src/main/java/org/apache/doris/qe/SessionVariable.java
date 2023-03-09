@@ -258,6 +258,8 @@ public class SessionVariable implements Serializable, Writable {
     // fix replica to query. If num = 1, query the smallest replica, if 2 is the second smallest replica.
     public static final String USE_FIX_REPLICA = "use_fix_replica";
 
+    public static final String MIN_HTTP_BRPC_SIZE = "min_http_brpc_size";
+
     // session origin value
     public Map<Field, String> sessionOriginValue = new HashMap<Field, String>();
     // check stmt is or not [select /*+ SET_VAR(...)*/ ...]
@@ -675,6 +677,14 @@ public class SessionVariable implements Serializable, Writable {
     // Default value is -1, which means not fix replica
     @VariableMgr.VarAttr(name = USE_FIX_REPLICA)
     public int useFixReplica = -1;
+
+    // When the tuple/block data is greater than 2G, embed the tuple/block data
+    // and the request serialization string in the attachment, and use "http" brpc.
+    // "http"brpc requires that only one of request and attachment be non-null.
+    //
+    // 2G: In the default "baidu_std" brpcd, upper limit of the request and attachment length is 2G.
+    @VariableMgr.VarAttr(name = MIN_HTTP_BRPC_SIZE)
+    public long minHttpBrpcSize = (1L << 31);
 
     // If this fe is in fuzzy mode, then will use initFuzzyModeVariables to generate some variables,
     // not the default value set in the code.
@@ -1406,6 +1416,8 @@ public class SessionVariable implements Serializable, Writable {
         tResult.setSkipDeleteBitmap(skipDeleteBitmap);
 
         tResult.setPartitionedHashJoinRowsThreshold(partitionedHashJoinRowsThreshold);
+
+        tResult.setMinHttpBrpcSize(minHttpBrpcSize);
 
         return tResult;
     }

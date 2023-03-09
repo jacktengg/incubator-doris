@@ -626,7 +626,8 @@ void NodeChannel::try_send_batch(RuntimeState* state) {
     }
 
     if (_parent->_transfer_large_data_by_brpc && request.has_row_batch() &&
-        request.row_batch().has_tuple_data() && request.ByteSizeLong() > MIN_HTTP_BRPC_SIZE) {
+        request.row_batch().has_tuple_data() &&
+        request.ByteSizeLong() > state->min_http_brpc_size()) {
         Status st = request_embed_attachment_contain_tuple<
                 PTabletWriterAddBatchRequest, ReusableClosure<PTabletWriterAddBatchResult>>(
                 &request, _add_batch_closure);
