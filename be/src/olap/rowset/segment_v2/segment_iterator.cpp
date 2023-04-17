@@ -19,6 +19,7 @@
 
 #include <memory>
 #include <set>
+#include <string>
 #include <utility>
 
 #include "common/status.h"
@@ -209,13 +210,15 @@ Status SegmentIterator::_init(bool is_vec) {
         size_t pre_size = _row_bitmap.cardinality();
         _row_bitmap -= *(_opts.delete_bitmap[segment_id()]);
         _opts.stats->rows_del_by_bitmap += (pre_size - _row_bitmap.cardinality());
-        VLOG_DEBUG << "read on segment: " << segment_id() << ", delete bitmap cardinality: "
+        LOG(WARNING) << "key range, read on segment: " << segment_id() << ", delete bitmap cardinality: "
                    << _opts.delete_bitmap[segment_id()]->cardinality() << ", "
                    << _opts.stats->rows_del_by_bitmap << " rows deleted by bitmap";
     }
     if (_opts.read_orderby_key_reverse) {
+        LOG(WARNING) << "key range, read_orderby_key_reverse";
         _range_iter.reset(new BackwardBitmapRangeIterator(_row_bitmap));
     } else {
+        LOG(WARNING) << "key range, NOT read_orderby_key_reverse";
         _range_iter.reset(new BitmapRangeIterator(_row_bitmap));
     }
     return Status::OK();
@@ -234,6 +237,7 @@ Status SegmentIterator::_get_row_ranges_by_keys() {
         rowid_t lower_rowid = 0;
         rowid_t upper_rowid = num_rows();
         RETURN_IF_ERROR(_prepare_seek(key_range));
+        LOG(WARNING) << "key range test, include lower: " << key_range.include_lower << ", include upper: " << key_range.include_upper << ", key range: [" << (key_range.lower_key ? key_range.lower_key->to_string() : "null") << ", " << (key_range.upper_key ? key_range.upper_key->to_string() : "null]");
         if (key_range.upper_key != nullptr) {
             // If client want to read upper_bound, the include_upper is true. So we
             // should get the first ordinal at which key is larger than upper_bound.
@@ -251,7 +255,9 @@ Status SegmentIterator::_get_row_ranges_by_keys() {
     // pre-condition: _row_ranges == [0, num_rows)
     size_t pre_size = _row_bitmap.cardinality();
     _row_bitmap = RowRanges::ranges_to_roaring(result_ranges);
+    LOG(WARNING) << "key range test, row bitmap pre size: " << pre_size << ", new size: " << _row_bitmap.cardinality();
     _opts.stats->rows_key_range_filtered += (pre_size - _row_bitmap.cardinality());
+    _opts.stats->rows_key_range_read += _row_bitmap.cardinality();
 
     return Status::OK();
 }
@@ -684,6 +690,7 @@ Status SegmentIterator::next_batch(RowBlockV2* block) {
     if (nrows_read == 0) {
         return Status::EndOfFile("no more data in segment");
     }
+    LOG(WARNING) << "key range test1, nrows_read: " << nrows_read;
     _opts.stats->raw_rows_read += nrows_read;
     _opts.stats->blocks_load += 1;
 
@@ -994,6 +1001,7 @@ Status SegmentIterator::_read_columns_by_index(uint32_t nrows_read_limit, uint32
             RETURN_IF_ERROR(_seek_columns(_first_read_column_ids, _cur_rowid));
         }
         size_t rows_to_read = range_to - range_from;
+        LOG(WARNING) << "key range test, range to: " << range_to << ", range from: " << range_from << ", rows_to_read:" << rows_to_read;
         RETURN_IF_ERROR(
                 _read_columns(_first_read_column_ids, _current_return_columns, rows_to_read));
         _cur_rowid += rows_to_read;
@@ -1184,6 +1192,7 @@ Status SegmentIterator::next_batch(vectorized::Block* block) {
                            _lazy_materialization_read || _opts.record_rowids);
 
     _opts.stats->blocks_load += 1;
+    LOG(WARNING) << "key range test, nrows_read: " << _current_batch_rows_read << ", rows read limit: " << nrows_read_limit;
     _opts.stats->raw_rows_read += _current_batch_rows_read;
 
     if (_current_batch_rows_read == 0) {

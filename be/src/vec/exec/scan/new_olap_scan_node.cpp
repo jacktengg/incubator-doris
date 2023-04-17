@@ -102,6 +102,8 @@ Status NewOlapScanNode::_init_profile() {
             ADD_COUNTER(_segment_profile, "RowsConditionsFiltered", TUnit::UNIT);
     _key_range_filtered_counter =
             ADD_COUNTER(_segment_profile, "RowsKeyRangeFiltered", TUnit::UNIT);
+    _key_range_read_counter =
+            ADD_COUNTER(_segment_profile, "RowsKeyRangeToRead", TUnit::UNIT);
 
     _io_timer = ADD_TIMER(_segment_profile, "IOTimer");
     _decompressor_timer = ADD_TIMER(_segment_profile, "DecompressorTimer");

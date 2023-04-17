@@ -379,6 +379,7 @@ void NewOlapScanner::_update_counters_before_close() {
     COUNTER_UPDATE(olap_parent->_raw_rows_counter, stats.raw_rows_read);
     // if raw_rows_read is reset, scanNode will scan all table rows which may cause BE crash
     _raw_rows_read += _tablet_reader->mutable_stats()->raw_rows_read;
+    _tablet_reader->mutable_stats()->raw_rows_read = 0;
     COUNTER_UPDATE(olap_parent->_vec_cond_timer, stats.vec_cond_ns);
     COUNTER_UPDATE(olap_parent->_short_cond_timer, stats.short_cond_ns);
     COUNTER_UPDATE(olap_parent->_block_init_timer, stats.block_init_ns);
@@ -408,6 +409,7 @@ void NewOlapScanner::_update_counters_before_close() {
 
     COUNTER_UPDATE(olap_parent->_conditions_filtered_counter, stats.rows_conditions_filtered);
     COUNTER_UPDATE(olap_parent->_key_range_filtered_counter, stats.rows_key_range_filtered);
+    COUNTER_UPDATE(olap_parent->_key_range_read_counter, stats.rows_key_range_read);
 
     size_t timer_count = sizeof(stats.general_debug_ns) / sizeof(*stats.general_debug_ns);
     for (size_t i = 0; i < timer_count; ++i) {

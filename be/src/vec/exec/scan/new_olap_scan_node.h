@@ -91,6 +91,7 @@ private:
     RuntimeProfile::Counter* _del_filtered_counter = nullptr;
     RuntimeProfile::Counter* _conditions_filtered_counter = nullptr;
     RuntimeProfile::Counter* _key_range_filtered_counter = nullptr;
+    RuntimeProfile::Counter* _key_range_read_counter = nullptr;
 
     RuntimeProfile::Counter* _block_fetch_timer = nullptr;
     RuntimeProfile::Counter* _block_load_timer = nullptr;
