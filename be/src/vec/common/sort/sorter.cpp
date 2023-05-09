@@ -39,6 +39,7 @@
 #include "vec/data_types/data_type.h"
 #include "vec/data_types/data_type_nullable.h"
 #include "vec/exprs/vexpr_context.h"
+#include "vec/spill/BlockSpiller.h"
 
 namespace doris {
 class RowDescriptor;
@@ -313,10 +314,19 @@ FullSorter::FullSorter(VSortExecExprs& vsort_exec_exprs, int limit, int64_t offs
                        std::vector<bool>& nulls_first, const RowDescriptor& row_desc,
                        RuntimeState* state, RuntimeProfile* profile)
         : Sorter(vsort_exec_exprs, limit, offset, pool, is_asc_order, nulls_first),
-          _state(MergeSorterState::create_unique(row_desc, offset, limit, state, profile)) {}
+          _state(MergeSorterState::create_unique(row_desc, offset, limit, state, profile)) {
+    auto spill_opts_ =
+            std::make_shared<SpillOptions>(vsort_exec_exprs, limit, offset, is_asc_order, nulls_first);
+    spiller_ = std::make_shared<BlockSpiller>(spill_opts_);
+    spiller_->prepare(state);
+}
 
 Status FullSorter::append_block(Block* block) {
     DCHECK(block->rows() > 0);
+
+    RuntimeState* state;
+    return spiller_->append_block(state, ExecEnv::GetInstance()->spill_io_pool(), block);
+
     {
         SCOPED_TIMER(_merge_block_timer);
         auto& data = _state->unsorted_block_->get_columns_with_type_and_name();
@@ -339,6 +349,8 @@ Status FullSorter::append_block(Block* block) {
 }
 
 Status FullSorter::prepare_for_read() {
+    return spiller_->prepare_for_restore();
+
     if (_state->unsorted_block_->rows() > 0) {
         RETURN_IF_ERROR(_do_sort());
     }
@@ -346,6 +358,8 @@ Status FullSorter::prepare_for_read() {
 }
 
 Status FullSorter::get_next(RuntimeState* state, Block* block, bool* eos) {
+    return spiller_->get_next(block, eos);
+
     return _state->merge_sort_read(state, block, eos);
 }
 

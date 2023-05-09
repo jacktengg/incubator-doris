@@ -954,6 +954,12 @@ CONF_mInt32(s3_write_buffer_size, "5242880");
 // s3_write_buffer_whole_size / s3_write_buffer_size
 CONF_mInt32(s3_write_buffer_whole_size, "524288000");
 
+CONF_mInt32(hash_join_spill_init_partition_count, "4");
+// 0: use count of cores
+CONF_mInt32(spill_io_thread_pool_thread_num, "0");
+CONF_mInt32(spill_io_thread_pool_queue_size, "10240");
+CONF_mInt32(spill_max_file_bytes, "10737418240"); // 10GB
+
 #ifdef BE_TEST
 // test s3
 CONF_String(test_s3_resource, "resource");
