@@ -180,6 +180,8 @@ protected:
     bool _materialize_sort_exprs;
 };
 
+class BlockSpiller;
+
 class FullSorter final : public Sorter {
     ENABLE_FACTORY_CREATOR(FullSorter);
 
@@ -191,6 +193,8 @@ public:
     ~FullSorter() override = default;
 
     Status append_block(Block* block) override;
+
+    Status append_block_spill(Block* block);
 
     Status prepare_for_read() override;
 
@@ -209,6 +213,8 @@ private:
     Status _do_sort();
 
     std::unique_ptr<MergeSorterState> _state;
+
+    std::shared_ptr<BlockSpiller> spiller_;
 
     static constexpr size_t INITIAL_BUFFERED_BLOCK_SIZE = 1024 * 1024;
     static constexpr size_t INITIAL_BUFFERED_BLOCK_BYTES = 64 << 20;

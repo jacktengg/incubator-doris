@@ -39,6 +39,7 @@
 #include "vec/data_types/data_type.h"
 #include "vec/data_types/data_type_nullable.h"
 #include "vec/exprs/vexpr_context.h"
+#include "vec/spill/BlockSpiller.h"
 
 namespace doris {
 class RowDescriptor;
@@ -313,10 +314,21 @@ FullSorter::FullSorter(VSortExecExprs& vsort_exec_exprs, int limit, int64_t offs
                        std::vector<bool>& nulls_first, const RowDescriptor& row_desc,
                        RuntimeState* state, RuntimeProfile* profile)
         : Sorter(vsort_exec_exprs, limit, offset, pool, is_asc_order, nulls_first),
-          _state(MergeSorterState::create_unique(row_desc, offset, limit, state, profile)) {}
+          _state(MergeSorterState::create_unique(row_desc, offset, limit, state, profile)) {
+    auto spill_opts_ =
+            std::make_shared<SpillOptions>(vsort_exec_exprs, limit, offset, is_asc_order, nulls_first);
+    spiller_ = std::make_shared<BlockSpiller>(spill_opts_);
+    spiller_->prepare(state);
+}
+
+Status FullSorter::append_block_spill(Block* block) {
+    RuntimeState* state;
+    return spiller_->append_block(state, ExecEnv::GetInstance()->spill_io_pool(), block);
+}
 
 Status FullSorter::append_block(Block* block) {
     DCHECK(block->rows() > 0);
+
     {
         SCOPED_TIMER(_merge_block_timer);
         auto& data = _state->unsorted_block_->get_columns_with_type_and_name();

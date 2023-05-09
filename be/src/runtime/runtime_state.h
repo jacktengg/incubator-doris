@@ -286,6 +286,10 @@ public:
                _query_options.enable_pipeline_engine;
     }
 
+    bool enable_spill() const {
+        return _query_options.__isset.enable_spill && _query_options.enable_spill;
+    }
+
     bool trim_tailing_spaces_for_external_table_query() const {
         return _query_options.trim_tailing_spaces_for_external_table_query;
     }

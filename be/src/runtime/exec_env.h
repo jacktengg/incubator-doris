@@ -127,6 +127,8 @@ public:
     ThreadPool* send_report_thread_pool() { return _send_report_thread_pool.get(); }
     ThreadPool* join_node_thread_pool() { return _join_node_thread_pool.get(); }
 
+    ThreadPool* spill_io_pool() { return _spill_io_pool.get(); }
+
     void set_serial_download_cache_thread_token() {
         _serial_download_cache_thread_token =
                 download_cache_thread_pool()->new_token(ThreadPool::ExecutionMode::SERIAL, 1);
@@ -250,6 +252,8 @@ private:
     doris::vectorized::ScannerScheduler* _scanner_scheduler = nullptr;
 
     BlockSpillManager* _block_spill_mgr = nullptr;
+
+    std::unique_ptr<ThreadPool> _spill_io_pool;
 };
 
 template <>

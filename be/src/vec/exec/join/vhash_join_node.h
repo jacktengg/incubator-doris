@@ -63,6 +63,11 @@ struct UInt256;
 template <int JoinOpType>
 struct ProcessHashTableProbe;
 
+// for spill
+struct SpillOptions;
+class BlockSpiller;
+class SpillPartition;
+
 template <typename RowRefListType>
 struct SerializedHashTableContext {
     using Mapped = RowRefListType;
@@ -215,6 +220,17 @@ using HashTableIteratorVariants =
         std::variant<std::monostate, ForwardIterator<RowRefList>,
                      ForwardIterator<RowRefListWithFlag>, ForwardIterator<RowRefListWithFlags>>;
 
+class HashJoinBuildPartition {
+private:
+    const SpillPartition* spill_partition_;
+    std::shared_ptr<HashTableVariants> _hash_table_variants;
+};
+
+class HashJoinProbePartition {
+private:
+    SpillPartition* spill_partition_;
+};
+
 class HashJoinNode final : public VJoinNodeBase {
 public:
     // TODO: Best prefetch step is decided by machine. We should also provide a
@@ -342,6 +358,8 @@ private:
 
     SharedHashTableContextPtr _shared_hash_table_context = nullptr;
 
+    Status _sink_spill(doris::RuntimeState* state, vectorized::Block* input_block, bool eos);
+
     Status _materialize_build_side(RuntimeState* state) override;
 
     Status _process_build_block(RuntimeState* state, Block& block, uint8_t offset);
@@ -371,6 +389,12 @@ private:
     // add tuple is null flag column to Block for filter conjunct and output expr
     void _add_tuple_is_null_column(Block* block) override;
 
+    // for spill
+    void _init_spill_params(RuntimeState* state);
+    void _pick_partions_for_probe();
+    // Restore data of build side partitions is spilled and build hash tables
+    Status _load_build_partitions();
+
     template <class HashTableContext>
     friend struct ProcessHashTableBuild;
 
@@ -385,6 +409,14 @@ private:
 
     std::vector<IRuntimeFilter*> _runtime_filters;
     size_t _build_bf_cardinality = 0;
+
+    // spill
+    std::shared_ptr<SpillOptions> build_spill_opts_;
+    std::shared_ptr<BlockSpiller> build_spiller_;
+    std::shared_ptr<SpillOptions> probe_spill_opts_;
+    std::shared_ptr<BlockSpiller> probe_spiller_;
+    std::vector<const SpillPartition*> _build_partitions;
+    std::vector<const SpillPartition*> _processing_build_partitions;
 };
 } // namespace vectorized
 } // namespace doris

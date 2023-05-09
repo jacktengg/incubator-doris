@@ -66,6 +66,7 @@
 #include "vec/exprs/vexpr.h"
 #include "vec/exprs/vexpr_context.h"
 #include "vec/runtime/shared_hash_table_controller.h"
+#include "vec/spill/BlockSpiller.h"
 #include "vec/utils/template_helpers.hpp"
 #include "vec/utils/util.hpp"
 
@@ -809,6 +810,12 @@ Status HashJoinNode::sink(doris::RuntimeState* state, vectorized::Block* in_bloc
         DCHECK(state->enable_pipeline_exec());
         return Status::OK();
     }
+
+    if (state->enable_spill()) {
+        _sink_spill(state, in_block, eos);
+        return Status::OK();
+    }
+
     if (_should_build_hash_table) {
         // If eos or have already met a null value using short-circuit strategy, we do not need to pull
         // data from probe side.
@@ -935,6 +942,14 @@ Status HashJoinNode::sink(doris::RuntimeState* state, vectorized::Block* in_bloc
     // when the build side is not empty.
     if (!_build_blocks->empty() && _join_op == TJoinOp::NULL_AWARE_LEFT_ANTI_JOIN) {
         _probe_ignore_null = true;
+    }
+    return Status::OK();
+}
+
+Status HashJoinNode::_sink_spill(doris::RuntimeState* state, vectorized::Block* input_block,
+                                 bool eos) {
+    if (_should_build_hash_table) {
+        RETURN_IF_ERROR(build_spiller_->append_block(state, input_block));
     }
     return Status::OK();
 }
@@ -1264,6 +1279,19 @@ void HashJoinNode::_release_mem() {
     _tuple_is_null_right_flag_column = nullptr;
     _shared_hash_table_context = nullptr;
     _probe_block.clear();
+}
+
+void HashJoinNode::_init_spill_params(RuntimeState* state) {
+    // split_if_partition_size_exceed
+    build_spill_opts_ =
+            std::make_shared<SpillOptions>(config::hash_join_spill_init_partition_count, true);
+    build_spiller_ = std::make_shared<BlockSpiller>(*build_spill_opts_);
+    build_spiller_->prepare(state);
+
+    probe_spill_opts_ =
+            std::make_shared<SpillOptions>(config::hash_join_spill_init_partition_count, false);
+    probe_spiller_ = std::make_shared<BlockSpiller>(*probe_spill_opts_);
+    probe_spiller_->prepare(state);
 }
 
 } // namespace doris::vectorized
