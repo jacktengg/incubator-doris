@@ -287,6 +287,12 @@ Status SchemaScanner::fill_dest_column_for_range(vectorized::Block* block, size_
                     reinterpret_cast<const char*>(&num), 0);
             break;
         }
+            // case TYPE_DECIMAL256: {
+            //     const vectorized::Int256 num = (reinterpret_cast<PackedInt256*>(data))->value;
+            //     reinterpret_cast<vectorized::ColumnDecimal256*>(col_ptr)->insert_data(
+            //             reinterpret_cast<const char*>(&num), 0);
+            //     break;
+            // }
 
         case TYPE_DECIMAL32: {
             const int32_t num = *reinterpret_cast<int32_t*>(data);

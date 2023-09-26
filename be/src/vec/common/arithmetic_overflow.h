@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include "vec/core/wide_integer.h"
 namespace common {
 template <typename T>
 inline bool add_overflow(T x, T y, T& res) {
@@ -79,6 +80,12 @@ inline bool sub_overflow(__int128 x, __int128 y, __int128& res) {
     return (y < 0 && x > max_int128 + y) || (y > 0 && x < min_int128 + y);
 }
 
+/// Multiply and ignore overflow.
+template <typename T1, typename T2>
+inline auto mul_ignore_overflow(T1 x, T2 y) {
+    return x * y;
+}
+
 template <typename T>
 inline bool mul_overflow(T x, T y, T& res) {
     return __builtin_mul_overflow(x, y, &res);
@@ -108,5 +115,11 @@ inline bool mul_overflow(__int128 x, __int128 y, __int128& res) {
     unsigned __int128 a = (x > 0) ? x : -x;
     unsigned __int128 b = (y > 0) ? y : -y;
     return (a * b) / b != a;
+}
+
+template <>
+inline bool mul_overflow(wide::Int256 x, wide::Int256 y, wide::Int256& res) {
+    res = mul_ignore_overflow(x, y);
+    return false;
 }
 } // namespace common

@@ -149,6 +149,7 @@ public:
                                                                             select_vector);
             }
             break;
+            // TODO: decimal256
         case TypeIndex::String:
             [[fallthrough]];
         case TypeIndex::FixedString:
@@ -448,6 +449,7 @@ public:
                                                                   select_vector);
             }
             break;
+            // TODO: decimal256
         case TypeIndex::String:
             [[fallthrough]];
         case TypeIndex::FixedString:

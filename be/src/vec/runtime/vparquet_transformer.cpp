@@ -856,6 +856,7 @@ Status VParquetTransformer::write(const Block& block) {
                 }
                 break;
             }
+            // TODO: decimal256
             case TYPE_DECIMAL128I: {
                 parquet::RowGroupWriter* rgWriter = get_rg_writer();
                 parquet::FixedLenByteArrayWriter* col_writer =

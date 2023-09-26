@@ -33,5 +33,6 @@ const std::string DYNAMIC_COLUMN_NAME = "__DORIS_DYNAMIC_COL__";
 constexpr int MAX_DECIMAL32_PRECISION = 9;
 constexpr int MAX_DECIMAL64_PRECISION = 18;
 constexpr int MAX_DECIMAL128_PRECISION = 38;
+constexpr int MAX_DECIMAL256_PRECISION = 76;
 } // namespace BeConsts
 } // namespace doris

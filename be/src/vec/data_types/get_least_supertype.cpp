@@ -358,10 +358,12 @@ void get_least_supertype(const DataTypes& types, DataTypePtr* type, bool compati
         UInt32 have_decimal64 = type_ids.count(TypeIndex::Decimal64);
         UInt32 have_decimal128 = type_ids.count(TypeIndex::Decimal128);
         UInt32 have_decimal128i = type_ids.count(TypeIndex::Decimal128I);
+        UInt32 have_decimal256 = type_ids.count(TypeIndex::Decimal256);
 
-        if (have_decimal32 || have_decimal64 || have_decimal128 || have_decimal128i) {
+        if (have_decimal32 || have_decimal64 || have_decimal128 || have_decimal128i ||
+            have_decimal256) {
             UInt32 num_supported =
-                    have_decimal32 + have_decimal64 + have_decimal128 + have_decimal128i;
+                    have_decimal32 + have_decimal64 + have_decimal128 + have_decimal128i; // TODO
 
             std::vector<TypeIndex> int_ids = {
                     TypeIndex::Int8,  TypeIndex::UInt8,  TypeIndex::Int16, TypeIndex::UInt16,
@@ -412,6 +414,7 @@ void get_least_supertype(const DataTypes& types, DataTypePtr* type, bool compati
                                        doris::ErrorCode::INVALID_ARGUMENT);
             }
 
+            // TODO: decimal256
             if (have_decimal128 || min_precision > DataTypeDecimal<Decimal64>::max_precision()) {
                 *type = std::make_shared<DataTypeDecimal<Decimal128>>(
                         DataTypeDecimal<Decimal128>::max_precision(), max_scale);

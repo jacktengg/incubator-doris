@@ -280,6 +280,7 @@ Status JniConnector::_fill_column(ColumnPtr& doris_column, DataTypePtr& data_typ
                 data_column, reinterpret_cast<CPP_NUMERIC_TYPE*>(_next_meta_as_ptr()), num_rows);
         FOR_LOGICAL_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+    // TODO: decimal256
     case TypeIndex::Decimal128:
         [[fallthrough]];
     case TypeIndex::Decimal128I:
@@ -449,6 +450,7 @@ Status JniConnector::generate_meta_info(Block* block, std::unique_ptr<long[]>& m
     }
             FOR_LOGICAL_NUMERIC_TYPES(DISPATCH)
 #undef DISPATCH
+        // TODO: decimal256
         case TypeIndex::Decimal128:
             [[fallthrough]];
         case TypeIndex::Decimal128I: {

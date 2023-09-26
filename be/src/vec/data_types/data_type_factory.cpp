@@ -302,6 +302,10 @@ DataTypePtr DataTypeFactory::create_data_type(const TypeIndex& type_index, bool 
         nested = std::make_shared<DataTypeDecimal<Decimal128I>>(BeConsts::MAX_DECIMAL128_PRECISION,
                                                                 0);
         break;
+    // case TypeIndex::Decimal256:
+    //     nested = std::make_shared<DataTypeDecimal<Decimal256>>(BeConsts::MAX_DECIMAL256_PRECISION,
+    //                                                            0);
+    //     break;
     case TypeIndex::JSONB:
         nested = std::make_shared<vectorized::DataTypeJsonb>();
         break;
@@ -479,6 +483,10 @@ DataTypePtr DataTypeFactory::create_data_type(const PColumnMeta& pcolumn) {
         nested = std::make_shared<DataTypeDecimal<Decimal128I>>(pcolumn.decimal_param().precision(),
                                                                 pcolumn.decimal_param().scale());
         break;
+    // case PGenericType::DECIMAL256:
+    //     nested = std::make_shared<DataTypeDecimal<Decimal256>>(pcolumn.decimal_param().precision(),
+    //                                                             pcolumn.decimal_param().scale());
+    //     break;
     case PGenericType::BITMAP:
         nested = std::make_shared<DataTypeBitMap>();
         break;

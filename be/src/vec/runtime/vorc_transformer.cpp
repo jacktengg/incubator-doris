@@ -594,6 +594,7 @@ Status VOrcTransformer::_write_one_col(const TypeDescriptor& type_descriptor,
         SET_NUM_ELEMENTS
         break;
     }
+    // TODO: decimal256
     case TYPE_DECIMAL128I: {
         orc::Decimal128VectorBatch* cur_batch =
                 dynamic_cast<orc::Decimal128VectorBatch*>(orc_col_batch);

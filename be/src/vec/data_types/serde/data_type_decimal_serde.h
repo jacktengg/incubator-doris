@@ -28,6 +28,7 @@
 #include "common/status.h"
 #include "data_type_serde.h"
 #include "olap/olap_common.h"
+#include "runtime/define_primitive_type.h"
 #include "util/jsonb_document.h"
 #include "util/jsonb_writer.h"
 #include "vec/columns/column.h"
@@ -59,6 +60,9 @@ public:
         }
         if constexpr (std::is_same_v<TypeId<T>, TypeId<Decimal128>>) {
             return TYPE_DECIMALV2;
+        }
+        if constexpr (std::is_same_v<TypeId<T>, TypeId<Decimal256>>) {
+            return TYPE_DECIMAL256;
         }
         LOG(FATAL) << "__builtin_unreachable";
         __builtin_unreachable();
@@ -123,6 +127,8 @@ Status DataTypeDecimalSerDe<T>::write_column_to_pb(const IColumn& column, PValue
         ptype->set_id(PGenericType::DECIMAL128);
     } else if constexpr (std::is_same_v<T, Decimal128I>) {
         ptype->set_id(PGenericType::DECIMAL128I);
+    } else if constexpr (std::is_same_v<T, Decimal256>) {
+        ptype->set_id(PGenericType::DECIMAL256);
     } else if constexpr (std::is_same_v<T, Decimal<Int32>>) {
         ptype->set_id(PGenericType::INT32);
     } else if constexpr (std::is_same_v<T, Decimal<Int64>>) {
@@ -138,6 +144,7 @@ Status DataTypeDecimalSerDe<T>::write_column_to_pb(const IColumn& column, PValue
     return Status::OK();
 }
 
+// TODO: decimal256
 template <typename T>
 Status DataTypeDecimalSerDe<T>::read_column_from_pb(IColumn& column, const PValues& arg) const {
     if constexpr (std::is_same_v<T, Decimal<Int128>> || std::is_same_v<T, Decimal128I> ||
@@ -159,6 +166,7 @@ void DataTypeDecimalSerDe<T>::write_one_cell_to_jsonb(const IColumn& column, Jso
                                                       int row_num) const {
     StringRef data_ref = column.get_data_at(row_num);
     result.writeKey(col_id);
+    // TODO: decimal256
     if constexpr (std::is_same_v<T, Decimal<Int128>>) {
         Decimal128::NativeType val =
                 *reinterpret_cast<const Decimal128::NativeType*>(data_ref.data);
@@ -183,6 +191,7 @@ template <typename T>
 void DataTypeDecimalSerDe<T>::read_one_cell_from_jsonb(IColumn& column,
                                                        const JsonbValue* arg) const {
     auto& col = reinterpret_cast<ColumnDecimal<T>&>(column);
+    // TODO: decimal256
     if constexpr (std::is_same_v<T, Decimal<Int128>>) {
         col.insert_value(static_cast<const JsonbInt128Val*>(arg)->val());
     } else if constexpr (std::is_same_v<T, Decimal128I>) {

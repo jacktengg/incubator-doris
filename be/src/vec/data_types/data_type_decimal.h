@@ -34,6 +34,7 @@
 
 // IWYU pragma: no_include <opentelemetry/common/threadlocal.h>
 #include "common/compiler_util.h" // IWYU pragma: keep
+#include "common/consts.h"
 #include "common/logging.h"
 #include "common/status.h"
 #include "olap/olap_common.h"
@@ -74,19 +75,23 @@ constexpr size_t max_decimal_precision() {
 }
 template <>
 constexpr size_t max_decimal_precision<Decimal32>() {
-    return 9;
+    return BeConsts::MAX_DECIMAL32_PRECISION;
 }
 template <>
 constexpr size_t max_decimal_precision<Decimal64>() {
-    return 18;
+    return BeConsts::MAX_DECIMAL64_PRECISION;
 }
 template <>
 constexpr size_t max_decimal_precision<Decimal128>() {
-    return 38;
+    return BeConsts::MAX_DECIMAL128_PRECISION;
 }
 template <>
 constexpr size_t max_decimal_precision<Decimal128I>() {
-    return 38;
+    return BeConsts::MAX_DECIMAL128_PRECISION;
+}
+template <>
+constexpr size_t max_decimal_precision<Decimal256>() {
+    return BeConsts::MAX_DECIMAL256_PRECISION;
 }
 
 DataTypePtr create_decimal(UInt64 precision, UInt64 scale, bool use_v2);
@@ -155,6 +160,9 @@ public:
         if constexpr (std::is_same_v<TypeId<T>, TypeId<Decimal128I>>) {
             return TYPE_DECIMAL128I;
         }
+        // if constexpr (std::is_same_v<TypeId<T>, TypeId<Decimal256>>) {
+        //     return TYPE_DECIMAL256;
+        // }
         return TYPE_DECIMALV2;
     }
 
@@ -168,6 +176,9 @@ public:
         if constexpr (std::is_same_v<TypeId<T>, TypeId<Decimal128I>>) {
             return TPrimitiveType::DECIMAL128I;
         }
+        // if constexpr (std::is_same_v<TypeId<T>, TypeId<Decimal256>>) {
+        //     return TPrimitiveType::DECIMAL256;
+        // }
         LOG(FATAL) << "__builtin_unreachable";
         __builtin_unreachable();
     }
@@ -254,7 +265,7 @@ public:
         return x % get_scale_multiplier();
     }
 
-    T max_whole_value() const { return get_scale_multiplier(max_precision() - scale) - 1; }
+    T max_whole_value() const { return get_scale_multiplier(max_precision() - scale) - T(1); }
 
     bool can_store_whole(T x) const {
         T max = max_whole_value();
@@ -309,6 +320,7 @@ private:
     const UInt32 scale;
 };
 
+// TODO
 template <typename T, typename U>
 DataTypePtr decimal_result_type(const DataTypeDecimal<T>& tx, const DataTypeDecimal<U>& ty,
                                 bool is_multiply, bool is_divide, bool is_plus_minus) {
@@ -355,6 +367,9 @@ inline UInt32 get_decimal_scale(const IDataType& data_type, UInt32 default_value
     if (auto* decimal_type = check_decimal<Decimal128I>(data_type)) {
         return decimal_type->get_scale();
     }
+    if (auto* decimal_type = check_decimal<Decimal256>(data_type)) {
+        return decimal_type->get_scale();
+    }
     return default_value;
 }
 
@@ -370,6 +385,8 @@ template <>
 inline constexpr bool IsDataTypeDecimal<DataTypeDecimal<Decimal128>> = true;
 template <>
 inline constexpr bool IsDataTypeDecimal<DataTypeDecimal<Decimal128I>> = true;
+template <>
+inline constexpr bool IsDataTypeDecimal<DataTypeDecimal<Decimal256>> = true;
 
 template <typename DataType>
 constexpr bool IsDataTypeDecimalV2 = false;
@@ -382,6 +399,11 @@ template <>
 inline constexpr bool IsDataTypeDecimal128I<DataTypeDecimal<Decimal128I>> = true;
 
 template <typename DataType>
+constexpr bool IsDataTypeDecimal256 = false;
+template <>
+inline constexpr bool IsDataTypeDecimal256<DataTypeDecimal<Decimal256>> = true;
+
+template <typename DataType>
 constexpr bool IsDataTypeDecimalOrNumber =
         IsDataTypeDecimal<DataType> || IsDataTypeNumber<DataType>;
 
@@ -392,6 +414,7 @@ ToDataType::FieldType convert_decimals(const typename FromDataType::FieldType& v
                                        UInt8* overflow_flag = nullptr) {
     using FromFieldType = typename FromDataType::FieldType;
     using ToFieldType = typename ToDataType::FieldType;
+    // TODO: decimal256
     using MaxFieldType =
             std::conditional_t<(sizeof(FromFieldType) == sizeof(ToFieldType)) &&
                                        (std::is_same_v<ToFieldType, Decimal128I> ||
@@ -443,6 +466,7 @@ void convert_decimal_cols(
         UInt8* overflow_flag = nullptr) {
     using FromFieldType = typename FromDataType::FieldType;
     using ToFieldType = typename ToDataType::FieldType;
+    // TODO: decimal256
     using MaxFieldType =
             std::conditional_t<(sizeof(FromFieldType) == sizeof(ToFieldType)) &&
                                        (std::is_same_v<ToFieldType, Decimal128I> ||

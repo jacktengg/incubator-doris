@@ -53,6 +53,10 @@ template <>
 struct ConstructDecInt<16> {
     using Type = Int128;
 };
+template <>
+struct ConstructDecInt<32> {
+    using Type = Int256;
+};
 
 template <typename T, typename U>
 struct DecCompareInt {
@@ -105,12 +109,16 @@ public:
         }
 
         Shift shift;
-        if (scale_a < scale_b)
+        if (scale_a < scale_b) {
             shift.a = DataTypeDecimal<B>(max_decimal_precision<B>(), scale_b)
-                              .get_scale_multiplier(scale_b - scale_a);
-        if (scale_a > scale_b)
+                              .get_scale_multiplier(scale_b - scale_a)
+                              .value;
+        }
+        if (scale_a > scale_b) {
             shift.b = DataTypeDecimal<A>(max_decimal_precision<A>(), scale_a)
-                              .get_scale_multiplier(scale_a - scale_b);
+                              .get_scale_multiplier(scale_a - scale_b)
+                              .value;
+        }
 
         return apply_with_scale(a, b, shift);
     }

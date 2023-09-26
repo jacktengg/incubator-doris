@@ -329,6 +329,10 @@ Status OlapTableBlockConvertor::_validate_column(RuntimeState* state, const Type
         CHECK_VALIDATION_FOR_DECIMALV3(vectorized::Decimal128I);
         break;
     }
+    // case TYPE_DECIMAL256: {
+    //     CHECK_VALIDATION_FOR_DECIMALV3(vectorized::Decimal256);
+    //     break;
+    // }
 #undef CHECK_VALIDATION_FOR_DECIMALV3
     case TYPE_ARRAY: {
         const auto column_array =

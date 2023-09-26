@@ -1268,6 +1268,7 @@ Status OrcReader::_orc_column_to_doris_column(const std::string& col_name,
     case TypeIndex::Decimal64:
         return _decode_decimal_column<Int64, is_filter>(col_name, data_column, data_type, cvb,
                                                         num_values);
+    // TODO: decimal256
     case TypeIndex::Decimal128:
         return _decode_decimal_column<Int128, is_filter>(col_name, data_column, data_type, cvb,
                                                          num_values);
