@@ -245,6 +245,14 @@ struct integer<Bits, Signed>::_impl {
         for (unsigned i = 1; i < item_count; ++i) self.items[little(i)] = 0;
     }
 
+    template <>
+    constexpr static void wide_integer_from_builtin<__int128>(integer<Bits, Signed>& self,
+                                                    __int128 rhs) noexcept {
+        self.items[little(0)] = rhs;
+        self.items[little(1)] = rhs >> 64;
+        for (unsigned i = 2; i < item_count; ++i) self.items[little(i)] = 0;
+    }
+
     template <typename TupleLike, size_t i = 0>
     constexpr static void wide_integer_from_tuple_like(integer<Bits, Signed>& self,
                                                        const TupleLike& tuple) noexcept {

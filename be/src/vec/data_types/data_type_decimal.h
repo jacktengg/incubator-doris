@@ -536,7 +536,7 @@ ToDataType::FieldType convert_from_decimal(const typename FromDataType::FieldTyp
         if constexpr (IsDecimalV2<FromFieldType>) {
             return binary_cast<int128_t, DecimalV2Value>(value);
         } else {
-            return static_cast<ToFieldType>(value) / FromDataType::get_scale_multiplier(scale);
+            return static_cast<ToFieldType>(value.value) / FromDataType::get_scale_multiplier(scale).value;
         }
     } else {
         FromFieldType converted_value =

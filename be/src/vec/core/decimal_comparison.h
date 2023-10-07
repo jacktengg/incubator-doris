@@ -27,6 +27,7 @@
 #include "vec/core/accurate_comparison.h"
 #include "vec/core/block.h"
 #include "vec/core/call_on_type_index.h"
+#include "vec/core/types.h"
 #include "vec/data_types/data_type_decimal.h"
 #include "vec/functions/function_helpers.h" /// todo core should not depend on function"
 
@@ -153,12 +154,12 @@ private:
             using Type = std::conditional_t<sizeof(T) >= sizeof(U), T, U>;
             auto type_ptr = decimal_result_type(*decimal0, *decimal1, false, false, false);
             const DataTypeDecimal<Type>* result_type = check_decimal<Type>(*type_ptr);
-            shift.a = result_type->scale_factor_for(*decimal0, false);
-            shift.b = result_type->scale_factor_for(*decimal1, false);
+            shift.a = result_type->scale_factor_for(*decimal0, false).value;
+            shift.b = result_type->scale_factor_for(*decimal1, false).value;
         } else if (decimal0) {
-            shift.b = decimal0->get_scale_multiplier();
+            shift.b = decimal0->get_scale_multiplier().value;
         } else if (decimal1) {
-            shift.a = decimal1->get_scale_multiplier();
+            shift.a = decimal1->get_scale_multiplier().value;
         }
 
         return shift;
@@ -169,7 +170,7 @@ private:
     static Shift getScales(const DataTypePtr& left_type, const DataTypePtr&) {
         Shift shift;
         const DataTypeDecimal<T>* decimal0 = check_decimal<T>(*left_type);
-        if (decimal0) shift.b = decimal0->get_scale_multiplier();
+        if (decimal0) shift.b = decimal0->get_scale_multiplier().value;
         return shift;
     }
 
@@ -178,7 +179,7 @@ private:
     static Shift getScales(const DataTypePtr&, const DataTypePtr& right_type) {
         Shift shift;
         const DataTypeDecimal<U>* decimal1 = check_decimal<U>(*right_type);
-        if (decimal1) shift.a = decimal1->get_scale_multiplier();
+        if (decimal1) shift.a = decimal1->get_scale_multiplier().value;
         return shift;
     }
 
@@ -238,8 +239,18 @@ private:
 
     template <bool scale_left, bool scale_right>
     static NO_INLINE UInt8 apply(A a, B b, CompareInt scale [[maybe_unused]]) {
-        CompareInt x = a;
-        CompareInt y = b;
+        CompareInt x;
+        CompareInt y;
+        if constexpr (IsDecimalNumber<A>) {
+            x = a.value;
+        } else {
+            x = a;
+        }
+        if constexpr (IsDecimalNumber<B>) {
+            y = b.value;
+        } else {
+            y = b;
+        }
 
         if constexpr (_check_overflow) {
             bool overflow = false;

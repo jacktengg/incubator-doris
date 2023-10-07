@@ -527,6 +527,22 @@ public enum PrimitiveType {
         builder.put(DECIMAL128, VARCHAR);
         builder.put(DECIMAL128, STRING);
 
+        builder.put(DECIMAL256, BOOLEAN);
+        builder.put(DECIMAL256, TINYINT);
+        builder.put(DECIMAL256, SMALLINT);
+        builder.put(DECIMAL256, INT);
+        builder.put(DECIMAL256, BIGINT);
+        builder.put(DECIMAL256, LARGEINT);
+        builder.put(DECIMAL256, FLOAT);
+        builder.put(DECIMAL256, DOUBLE);
+        builder.put(DECIMAL256, DECIMALV2);
+        builder.put(DECIMAL256, DECIMAL32);
+        builder.put(DECIMAL256, DECIMAL64);
+        builder.put(DECIMAL256, DECIMAL128);
+        builder.put(DECIMAL256, DECIMAL256);
+        builder.put(DECIMAL256, VARCHAR);
+        builder.put(DECIMAL256, STRING);
+
         // JSONB
         builder.put(JSONB, BOOLEAN);
         builder.put(JSONB, TINYINT);
