@@ -28,6 +28,21 @@ suite("test_decimalv3") {
 	qt_decimalv3 "select * from test5_v"
 	qt_decimalv3 "select cast(a as decimalv3(12,10)) * cast(b as decimalv3(18,10)) from test5"
 
+	sql "drop table if exists test_decimal256;"
+	sql """ create table test_decimal256(k1 decimal(76, 6), v1 decimal(76, 6))
+				DUPLICATE KEY(`k1`, `v1`)
+				DISTRIBUTED BY HASH(`k1`) BUCKETS 10
+				properties("replication_num" = "1"); """
+	sql """insert into test_decimal256 values(1, 9999999999999999999999999999999999999999999999999999999999999999999999.999999),
+			(2, 4999999999999999999999999999999999999999999999999999999999999999999999.999999);"""
+	qt_decimalv3_0 "select * from test_decimal256 order by k1, v1; "
+	qt_decimalv3_1 "select * from test_decimal256 where v1 = 9999999999999999999999999999999999999999999999999999999999999999999999.999999 order by k1, v1; "
+	qt_decimalv3_2 "select * from test_decimal256 where v1 != 9999999999999999999999999999999999999999999999999999999999999999999999.999999 order by k1, v1; "
+	qt_decimalv3_3 "select * from test_decimal256 where v1 > 4999999999999999999999999999999999999999999999999999999999999999999999.999999 order by k1, v1; "
+	qt_decimalv3_4 "select * from test_decimal256 where v1 >= 4999999999999999999999999999999999999999999999999999999999999999999999.999999 order by k1, v1; "
+	qt_decimalv3_5 "select * from test_decimal256 where v1 < 9999999999999999999999999999999999999999999999999999999999999999999999.999999 order by k1, v1; "
+	qt_decimalv3_6 "select * from test_decimal256 where v1 <= 9999999999999999999999999999999999999999999999999999999999999999999999.999999 order by k1, v1; "
+
 	sql "set experimental_enable_nereids_planner =false;"
 	qt_aEb_test1 "select 0e0;"
 	qt_aEb_test2 "select 1e-1"
