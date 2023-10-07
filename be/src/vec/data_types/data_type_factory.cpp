@@ -187,6 +187,7 @@ DataTypePtr DataTypeFactory::create_data_type(const TypeDescriptor& col_desc, bo
     case TYPE_DECIMAL32:
     case TYPE_DECIMAL64:
     case TYPE_DECIMAL128I:
+    case TYPE_DECIMAL256:
         nested = vectorized::create_decimal(col_desc.precision, col_desc.scale, false);
         break;
     // Just Mock A NULL Type in Vec Exec Engine
@@ -398,6 +399,7 @@ DataTypePtr DataTypeFactory::_create_primitive_data_type(const FieldType& type, 
     case FieldType::OLAP_FIELD_TYPE_DECIMAL32:
     case FieldType::OLAP_FIELD_TYPE_DECIMAL64:
     case FieldType::OLAP_FIELD_TYPE_DECIMAL128I:
+    case FieldType::OLAP_FIELD_TYPE_DECIMAL256:
         result = vectorized::create_decimal(precision, scale, false);
         break;
     default:
@@ -483,10 +485,10 @@ DataTypePtr DataTypeFactory::create_data_type(const PColumnMeta& pcolumn) {
         nested = std::make_shared<DataTypeDecimal<Decimal128I>>(pcolumn.decimal_param().precision(),
                                                                 pcolumn.decimal_param().scale());
         break;
-    // case PGenericType::DECIMAL256:
-    //     nested = std::make_shared<DataTypeDecimal<Decimal256>>(pcolumn.decimal_param().precision(),
-    //                                                             pcolumn.decimal_param().scale());
-    //     break;
+    case PGenericType::DECIMAL256:
+        nested = std::make_shared<DataTypeDecimal<Decimal256>>(pcolumn.decimal_param().precision(),
+                                                               pcolumn.decimal_param().scale());
+        break;
     case PGenericType::BITMAP:
         nested = std::make_shared<DataTypeBitMap>();
         break;

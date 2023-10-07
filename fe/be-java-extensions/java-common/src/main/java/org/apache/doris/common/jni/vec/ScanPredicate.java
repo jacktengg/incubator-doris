@@ -106,6 +106,7 @@ public class ScanPredicate {
                 case DECIMAL32:
                 case DECIMAL64:
                 case DECIMAL128:
+                case DECIMAL256:
                     return TypeNativeBytes.getDecimal(Arrays.copyOf(valueBytes, valueBytes.length), scale);
                 case CHAR:
                 case VARCHAR:

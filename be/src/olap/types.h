@@ -53,6 +53,7 @@
 #include "util/string_parser.hpp"
 #include "util/types.h"
 #include "vec/common/arena.h"
+#include "vec/core/wide_integer.h"
 #include "vec/runtime/vdatetime_value.h"
 
 namespace doris {
@@ -690,6 +691,11 @@ struct CppTypeTraits<FieldType::OLAP_FIELD_TYPE_DECIMAL128I> {
     using UnsignedCppType = uint128_t;
 };
 template <>
+struct CppTypeTraits<FieldType::OLAP_FIELD_TYPE_DECIMAL256> {
+    using CppType = Int256;
+    using UnsignedCppType = wide::UInt256;
+};
+template <>
 struct CppTypeTraits<FieldType::OLAP_FIELD_TYPE_DATE> {
     using CppType = uint24_t;
     using UnsignedCppType = uint24_t;
@@ -1080,6 +1086,30 @@ struct FieldTypeTraits<FieldType::OLAP_FIELD_TYPE_DECIMAL128I>
         fmt::memory_buffer buffer;
         fmt::format_to(buffer, "{}", value);
         return std::string(buffer.data(), buffer.size());
+    }
+};
+
+template <>
+struct FieldTypeTraits<FieldType::OLAP_FIELD_TYPE_DECIMAL256>
+        : public BaseFieldtypeTraits<FieldType::OLAP_FIELD_TYPE_DECIMAL256> {
+    static Status from_string(void* buf, const std::string& scan_key, const int precision,
+                              const int scale) {
+        StringParser::ParseResult result = StringParser::PARSE_SUCCESS;
+        auto value = StringParser::string_to_decimal<TYPE_DECIMAL256>(
+                scan_key.c_str(), scan_key.size(), 76, scale, &result);
+        if (result == StringParser::PARSE_FAILURE) {
+            return Status::Error<ErrorCode::INVALID_ARGUMENT>(
+                    "FieldTypeTraits<OLAP_FIELD_TYPE_DECIMAL128I>::from_string meet PARSE_FAILURE");
+        }
+        *reinterpret_cast<Int256*>(buf) = value;
+        return Status::OK();
+    }
+    static std::string to_string(const void* src) {
+        return "";
+        // auto value = reinterpret_cast<const wide::Int256*>(src);
+        // fmt::memory_buffer buffer;
+        // fmt::format_to(buffer, "{}", *value);
+        // return std::string(buffer.data(), buffer.size());
     }
 };
 

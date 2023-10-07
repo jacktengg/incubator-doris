@@ -319,7 +319,8 @@ public:
             Bitmap = 27,
             HyperLogLog = 28,
             QuantileState = 29,
-            Decimal256 = 30,
+            Int256 = 30,
+            Decimal256 = 31,
         };
 
         static const int MIN_NON_POD = 16;
@@ -643,6 +644,9 @@ private:
         case Types::Decimal128I:
             f(field.template get<DecimalField<Decimal128I>>());
             return;
+        case Types::Decimal256:
+            f(field.template get<DecimalField<Decimal256>>());
+            return;
         case Types::VariantMap:
             f(field.template get<VariantMap>());
             return;
@@ -778,6 +782,10 @@ struct Field::TypeToEnum<Int64> {
 template <>
 struct Field::TypeToEnum<Int128> {
     static constexpr Types::Which value = Types::Int128;
+};
+template <>
+struct Field::TypeToEnum<Int256> {
+    static constexpr Types::Which value = Types::Int256;
 };
 template <>
 struct Field::TypeToEnum<Float64> {

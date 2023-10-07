@@ -209,7 +209,8 @@ public class FoldConstantRuleOnBE extends AbstractExpressionRewriteRule {
                                     type = DateTimeV2Type.of(pScalarType.getScale());
                                 } else if (primitiveType == PrimitiveType.DECIMAL32
                                         || primitiveType == PrimitiveType.DECIMAL64
-                                        || primitiveType == PrimitiveType.DECIMAL128) {
+                                        || primitiveType == PrimitiveType.DECIMAL128
+                                        || primitiveType == PrimitiveType.DECIMAL256) {
                                     type = DecimalV3Type.createDecimalV3Type(
                                             pScalarType.getPrecision(), pScalarType.getScale());
                                 } else {

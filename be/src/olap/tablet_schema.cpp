@@ -92,6 +92,8 @@ FieldType TabletColumn::get_field_type_by_string(const std::string& type_str) {
         type = FieldType::OLAP_FIELD_TYPE_DECIMAL64;
     } else if (0 == upper_type_str.compare("DECIMAL128I")) {
         type = FieldType::OLAP_FIELD_TYPE_DECIMAL128I;
+    } else if (0 == upper_type_str.compare("DECIMAL256")) {
+        type = FieldType::OLAP_FIELD_TYPE_DECIMAL256;
     } else if (0 == upper_type_str.compare(0, 7, "DECIMAL")) {
         type = FieldType::OLAP_FIELD_TYPE_DECIMAL;
     } else if (0 == upper_type_str.compare(0, 7, "VARCHAR")) {
@@ -225,6 +227,9 @@ std::string TabletColumn::get_string_by_field_type(FieldType type) {
 
     case FieldType::OLAP_FIELD_TYPE_DECIMAL128I:
         return "DECIMAL128I";
+
+    case FieldType::OLAP_FIELD_TYPE_DECIMAL256:
+        return "DECIMAL256";
 
     case FieldType::OLAP_FIELD_TYPE_VARCHAR:
         return "VARCHAR";

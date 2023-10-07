@@ -125,6 +125,9 @@ PrimitiveType thrift_to_type(TPrimitiveType::type ttype) {
     case TPrimitiveType::DECIMAL128I:
         return TYPE_DECIMAL128I;
 
+    case TPrimitiveType::DECIMAL256:
+        return TYPE_DECIMAL256;
+
     case TPrimitiveType::CHAR:
         return TYPE_CHAR;
 

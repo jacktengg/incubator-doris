@@ -292,6 +292,25 @@ public class TypeDef implements ParseNode {
                 }
                 break;
             }
+            case DECIMAL256: {
+                int precision = scalarType.decimalPrecision();
+                int scale = scalarType.decimalScale();
+                if (precision < 1 || precision > ScalarType.MAX_DECIMAL256_PRECISION) {
+                    throw new AnalysisException("Precision of decimal256 must between 1 and 76."
+                            + " Precision was set to: " + precision + ".");
+                }
+                // scale >= 0
+                if (scale < 0) {
+                    throw new AnalysisException("Scale of decimal must not be less than 0." + " Scale was set to: "
+                            + scale + ".");
+                }
+                // scale < precision
+                if (scale > precision) {
+                    throw new AnalysisException("Scale of decimal must be smaller than precision."
+                            + " Scale is " + scale + " and precision is " + precision);
+                }
+                break;
+            }
             case TIMEV2:
             case DATETIMEV2: {
                 int precision = scalarType.decimalPrecision();

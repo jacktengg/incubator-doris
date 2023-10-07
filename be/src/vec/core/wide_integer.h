@@ -129,6 +129,7 @@ private:
 };
 
 using Int256 = integer<256, signed>;
+using UInt256 = integer<256, unsigned>;
 
 template <typename T>
 static constexpr bool ArithmeticConcept() noexcept;

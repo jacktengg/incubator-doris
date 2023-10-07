@@ -282,6 +282,7 @@ public class VectorColumn {
             case DECIMAL32:
             case DECIMAL64:
             case DECIMAL128:
+            case DECIMAL256:
                 return appendDecimal(new BigDecimal(0));
             case DATEV2:
                 return appendDate(LocalDate.MIN);
@@ -619,6 +620,7 @@ public class VectorColumn {
             case DECIMAL32:
             case DECIMAL64:
             case DECIMAL128:
+            case DECIMAL256:
                 appendDecimal(o.getDecimal());
                 break;
             case DATEV2:
@@ -681,6 +683,7 @@ public class VectorColumn {
             case DECIMAL32:
             case DECIMAL64:
             case DECIMAL128:
+            case DECIMAL256:
                 sb.append(getDecimal(i));
                 break;
             case DATEV2:

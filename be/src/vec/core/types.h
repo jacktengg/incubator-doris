@@ -96,7 +96,8 @@ enum class TypeIndex {
     QuantileState = 42,
     Time = 43,
     AggState = 44,
-    Decimal256
+    Decimal256 = 45,
+    Int256
 };
 
 struct Consted {
@@ -281,8 +282,19 @@ struct TypeName<Int128> {
     static const char* get() { return "Int128"; }
 };
 template <>
+inline constexpr bool IsNumber<Int256> = true;
+template <>
+struct TypeName<Int256> {
+    static const char* get() { return "Int256"; }
+};
+template <>
 struct TypeId<Int128> {
     static constexpr const TypeIndex value = TypeIndex::Int128;
+};
+
+template <>
+struct TypeId<Int256> {
+    static constexpr const TypeIndex value = TypeIndex::Int256;
 };
 
 using Date = Int64;
@@ -634,8 +646,11 @@ struct Decimal<Int256> {
         constexpr auto precision =
                 std::is_same_v<T, Int32>
                         ? BeConsts::MAX_DECIMAL32_PRECISION
-                        : (std::is_same_v<T, Int64> ? BeConsts::MAX_DECIMAL64_PRECISION
-                                                    : BeConsts::MAX_DECIMAL128_PRECISION);
+                        : (std::is_same_v<T, Int64>
+                                   ? BeConsts::MAX_DECIMAL64_PRECISION
+                                   : (std::is_same_v<T, Int128>
+                                              ? BeConsts::MAX_DECIMAL128_PRECISION
+                                              : BeConsts::MAX_DECIMAL256_PRECISION));
         return precision + 1 // Add a space for decimal place
                + 1           // Add a space for leading 0
                + 1;          // Add a space for negative sign
@@ -896,6 +911,11 @@ template <>
 inline constexpr bool IsDecimal128I<Decimal128I> = true;
 
 template <typename T>
+constexpr bool IsDecimal256 = false;
+template <>
+inline constexpr bool IsDecimal256<Decimal256> = true;
+
+template <typename T>
 constexpr bool IsDecimalV2 = IsDecimal128<T> && !IsDecimal128I<T>;
 
 // TODO: decimal256?
@@ -959,6 +979,8 @@ inline const char* getTypeName(TypeIndex idx) {
         return TypeName<Int64>::get();
     case TypeIndex::Int128:
         return TypeName<Int128>::get();
+    case TypeIndex::Int256:
+        return TypeName<Int256>::get();
     case TypeIndex::Float32:
         return TypeName<Float32>::get();
     case TypeIndex::Float64:

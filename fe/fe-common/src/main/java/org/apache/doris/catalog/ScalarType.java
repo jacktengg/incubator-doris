@@ -78,6 +78,7 @@ public class ScalarType extends Type {
     public static final int MAX_DECIMAL32_PRECISION = 9;
     public static final int MAX_DECIMAL64_PRECISION = 18;
     public static final int MAX_DECIMAL128_PRECISION = 38;
+    public static final int MAX_DECIMAL256_PRECISION = 76;
     public static final int DEFAULT_MIN_AVG_DECIMAL128_SCALE = 4;
     public static final int MAX_DATETIMEV2_SCALE = 6;
 
@@ -138,6 +139,7 @@ public class ScalarType extends Type {
             case DECIMAL32:
             case DECIMAL64:
             case DECIMAL128:
+            case DECIMAL256:
                 return createDecimalV3Type(precision, scale);
             case DECIMALV2:
                 return createDecimalType(precision, scale);
@@ -210,6 +212,8 @@ public class ScalarType extends Type {
                 return DEFAULT_DECIMAL64;
             case DECIMAL128:
                 return DEFAULT_DECIMAL128;
+            case DECIMAL256:
+                return DEFAULT_DECIMAL256;
             case DECIMALV2:
                 return DEFAULT_DECIMALV2;
             case LARGEINT:
@@ -385,8 +389,10 @@ public class ScalarType extends Type {
             return PrimitiveType.DECIMAL32;
         } else if (precision <= MAX_DECIMAL64_PRECISION) {
             return PrimitiveType.DECIMAL64;
-        } else {
+        } else if (precision <= MAX_DECIMAL128_PRECISION) {
             return PrimitiveType.DECIMAL128;
+        } else {
+            return PrimitiveType.DECIMAL256;
         }
     }
 
@@ -611,6 +617,7 @@ public class ScalarType extends Type {
             case DECIMAL32:
             case DECIMAL64:
             case DECIMAL128:
+            case DECIMAL256:
                 String typeName = "decimalv3";
                 if (Strings.isNullOrEmpty(precisionStr)) {
                     stringBuilder.append(typeName).append("(").append(precision)
@@ -701,6 +708,7 @@ public class ScalarType extends Type {
             case DECIMAL32:
             case DECIMAL64:
             case DECIMAL128:
+            case DECIMAL256:
             case DATETIMEV2: {
                 Preconditions.checkArgument(precision >= scale,
                         String.format("given precision %d is out of scale bound %d", precision, scale));
@@ -724,14 +732,14 @@ public class ScalarType extends Type {
     public int decimalPrecision() {
         Preconditions.checkState(type == PrimitiveType.DECIMALV2 || type == PrimitiveType.DATETIMEV2
                 || type == PrimitiveType.TIMEV2 || type == PrimitiveType.DECIMAL32
-                || type == PrimitiveType.DECIMAL64 || type == PrimitiveType.DECIMAL128);
+                || type == PrimitiveType.DECIMAL64 || type == PrimitiveType.DECIMAL128 || type == PrimitiveType.DECIMAL256);
         return precision;
     }
 
     public int decimalScale() {
         Preconditions.checkState(type == PrimitiveType.DECIMALV2 || type == PrimitiveType.DATETIMEV2
                 || type == PrimitiveType.TIMEV2 || type == PrimitiveType.DECIMAL32
-                || type == PrimitiveType.DECIMAL64 || type == PrimitiveType.DECIMAL128);
+                || type == PrimitiveType.DECIMAL64 || type == PrimitiveType.DECIMAL128 || type == PrimitiveType.DECIMAL256);
         return scale;
     }
 
@@ -939,6 +947,8 @@ public class ScalarType extends Type {
             return createDecimalTypeInternal(MAX_DECIMAL64_PRECISION, scale, false);
         } else if (getPrimitiveType() == PrimitiveType.DECIMAL128) {
             return createDecimalTypeInternal(MAX_DECIMAL128_PRECISION, scale, false);
+        } else if (getPrimitiveType() == PrimitiveType.DECIMAL256) {
+            return createDecimalTypeInternal(MAX_DECIMAL256_PRECISION, scale, false);
         } else if (isLargeIntType()) {
             return ScalarType.LARGEINT;
         } else if (isDatetimeV2()) {

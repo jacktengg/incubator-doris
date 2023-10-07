@@ -54,6 +54,7 @@ public class ColumnType {
         DECIMAL32(4),
         DECIMAL64(8),
         DECIMAL128(16),
+        DECIMAL256(32),
         STRING(-1),
         ARRAY(-1),
         MAP(-1),
@@ -309,13 +310,17 @@ public class ColumnType {
                             type = Type.DECIMAL64;
                         } else if (lowerCaseType.startsWith("decimal128")) {
                             type = Type.DECIMAL128;
+                        } else if (lowerCaseType.startsWith("decimal256")) {
+                            type = Type.DECIMAL256;
                         } else {
                             if (precision <= MAX_DECIMAL32_PRECISION) {
                                 type = Type.DECIMAL32;
                             } else if (precision <= MAX_DECIMAL64_PRECISION) {
                                 type = Type.DECIMAL64;
-                            } else {
+                            } else if (precision <= MAX_DECIMAL128_PRECISION) {
                                 type = Type.DECIMAL128;
+                            } else {
+                                type = Type.DECIMAL256;
                             }
                         }
                     }
