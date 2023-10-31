@@ -163,8 +163,10 @@ public class ArrayType extends Type {
         return Type.canCastTo(type.getItemType(), targetType.getItemType());
     }
 
-    public static Type getAssignmentCompatibleType(ArrayType t1, ArrayType t2, boolean strict) {
-        Type itemCompatibleType = Type.getAssignmentCompatibleType(t1.getItemType(), t2.getItemType(), strict);
+    public static Type getAssignmentCompatibleType(
+            ArrayType t1, ArrayType t2, boolean strict, boolean enableDecimal256) {
+        Type itemCompatibleType = Type.getAssignmentCompatibleType(t1.getItemType(), t2.getItemType(), strict,
+                enableDecimal256);
 
         if (itemCompatibleType.isInvalid()) {
             return ScalarType.INVALID;

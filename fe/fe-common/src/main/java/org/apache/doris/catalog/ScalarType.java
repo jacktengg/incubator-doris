@@ -1019,7 +1019,7 @@ public class ScalarType extends Type {
      * is INVALID_TYPE.
      */
     public static ScalarType getAssignmentCompatibleType(
-            ScalarType t1, ScalarType t2, boolean strict) {
+            ScalarType t1, ScalarType t2, boolean strict, boolean enableDecimal256) {
         if (!t1.isValid() || !t2.isValid()) {
             return INVALID;
         }
@@ -1119,7 +1119,11 @@ public class ScalarType extends Type {
             if (scale + integerPart <= ScalarType.MAX_DECIMAL128_PRECISION) {
                 return ScalarType.createDecimalV3Type(scale + integerPart, scale);
             } else {
-                return Type.DOUBLE;
+                if (enableDecimal256) {
+                    return ScalarType.createDecimalV3Type(scale + integerPart, scale);
+                } else {
+                    return Type.DOUBLE;
+                }
             }
         }
 
@@ -1178,7 +1182,7 @@ public class ScalarType extends Type {
      */
     public static boolean isImplicitlyCastable(
             ScalarType t1, ScalarType t2, boolean strict) {
-        return getAssignmentCompatibleType(t1, t2, strict).matchesType(t2);
+        return getAssignmentCompatibleType(t1, t2, strict, false).matchesType(t2);
     }
 
     public static boolean canCastTo(ScalarType type, ScalarType targetType) {

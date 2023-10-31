@@ -226,6 +226,7 @@ public class StatisticsUtil {
             case DECIMAL32:
             case DECIMAL64:
             case DECIMAL128:
+            case DECIMAL256:
                 DecimalLiteral decimalLiteral = new DecimalLiteral(columnValue);
                 decimalLiteral.checkPrecisionAndScale(scalarType.getScalarPrecision(), scalarType.getScalarScale());
                 return decimalLiteral;
@@ -271,6 +272,7 @@ public class StatisticsUtil {
                 case DECIMAL32:
                 case DECIMAL64:
                 case DECIMAL128:
+                case DECIMAL256:
                     return Double.parseDouble(columnValue);
                 case DATE:
                 case DATEV2:

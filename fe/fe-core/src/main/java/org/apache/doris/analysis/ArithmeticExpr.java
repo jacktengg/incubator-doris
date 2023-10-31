@@ -111,7 +111,7 @@ public class ArithmeticExpr extends Expr {
             for (int j = 0; j < Type.getNumericTypes().size(); j++) {
                 Type t2 = Type.getNumericTypes().get(j);
 
-                Type retType = Type.getNextNumType(Type.getAssignmentCompatibleType(t1, t2, false));
+                Type retType = Type.getNextNumType(Type.getAssignmentCompatibleType(t1, t2, false, false));
                 NullableMode mode = retType.isDecimalV3() ? NullableMode.CUSTOM : NullableMode.DEPEND_ON_ARGUMENT;
                 functionSet.addBuiltin(ScalarFunction.createBuiltinOperator(
                         Operator.MULTIPLY.getName(), Lists.newArrayList(t1, t2), retType, mode));
@@ -199,11 +199,11 @@ public class ArithmeticExpr extends Expr {
 
                 functionSet.addBuiltin(ScalarFunction.createBuiltinOperator(
                         Operator.INT_DIVIDE.getName(), Lists.newArrayList(t1, t2),
-                        Type.getAssignmentCompatibleType(t1, t2, false),
+                        Type.getAssignmentCompatibleType(t1, t2, false, false),
                         Function.NullableMode.ALWAYS_NULLABLE));
                 functionSet.addBuiltin(ScalarFunction.createBuiltinOperator(
                         Operator.MOD.getName(), Lists.newArrayList(t1, t2),
-                        Type.getAssignmentCompatibleType(t1, t2, false),
+                        Type.getAssignmentCompatibleType(t1, t2, false, false),
                         Function.NullableMode.ALWAYS_NULLABLE));
             }
         }
@@ -401,7 +401,7 @@ public class ArithmeticExpr extends Expr {
                     t1 = Type.TINYINT;
                     t2 = Type.TINYINT;
                 }
-                commonType = Type.getAssignmentCompatibleType(t1, t2, false);
+                commonType = Type.getAssignmentCompatibleType(t1, t2, false, false);
                 if (commonType.getPrimitiveType().ordinal() > PrimitiveType.LARGEINT.ordinal()) {
                     commonType = Type.BIGINT;
                 }
