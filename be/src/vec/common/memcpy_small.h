@@ -46,6 +46,7 @@
   * Use with caution.
   */
 
+namespace doris {
 namespace detail {
 inline void memcpy_small_allow_read_write_overflow15_impl(char* __restrict dst,
                                                           const char* __restrict src, ssize_t n) {
@@ -59,14 +60,15 @@ inline void memcpy_small_allow_read_write_overflow15_impl(char* __restrict dst,
     }
 }
 } // namespace detail
+} // namespace doris
 
 /** Works under assumption, that it's possible to read up to 15 excessive bytes after end of 'src' region
   *  and to write any garbage into up to 15 bytes after end of 'dst' region.
   */
 inline void memcpy_small_allow_read_write_overflow15(void* __restrict dst,
                                                      const void* __restrict src, size_t n) {
-    detail::memcpy_small_allow_read_write_overflow15_impl(reinterpret_cast<char*>(dst),
-                                                          reinterpret_cast<const char*>(src), n);
+    doris::detail::memcpy_small_allow_read_write_overflow15_impl(
+            reinterpret_cast<char*>(dst), reinterpret_cast<const char*>(src), n);
 }
 
 /** NOTE There was also a function, that assumes, that you could read any bytes inside same memory page of src.

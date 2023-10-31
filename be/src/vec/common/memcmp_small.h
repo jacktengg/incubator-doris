@@ -23,6 +23,7 @@
 #include <algorithm>
 #include <cstdint>
 
+namespace doris {
 namespace detail {
 
 template <typename T>
@@ -33,6 +34,7 @@ int cmp(T a, T b) {
 }
 
 } // namespace detail
+} // namespace doris
 
 /// We can process uninitialized memory in the functions below.
 /// Results don't depend on the values inside uninitialized memory but Memory Sanitizer cannot see it.
@@ -63,11 +65,11 @@ int memcmp_small_allow_overflow15(const Char* a, size_t a_size, const Char* b, s
 
             if (offset >= min_size) break;
 
-            return detail::cmp(a[offset], b[offset]);
+            return doris::detail::cmp(a[offset], b[offset]);
         }
     }
 
-    return detail::cmp(a_size, b_size);
+    return doris::detail::cmp(a_size, b_size);
 }
 
 /** Variant when memory regions have same size.
@@ -86,7 +88,7 @@ int memcmp_small_allow_overflow15(const Char* a, const Char* b, size_t size) {
 
             if (offset >= size) return 0;
 
-            return detail::cmp(a[offset], b[offset]);
+            return doris::detail::cmp(a[offset], b[offset]);
         }
     }
 
@@ -126,7 +128,7 @@ int memcmp_small_multiple_of16(const Char* a, const Char* b, size_t size) {
 
         if (mask) {
             offset += __builtin_ctz(mask);
-            return detail::cmp(a[offset], b[offset]);
+            return doris::detail::cmp(a[offset], b[offset]);
         }
     }
 
@@ -144,7 +146,7 @@ int memcmp16(const Char* a, const Char* b) {
 
     if (mask) {
         auto offset = __builtin_ctz(mask);
-        return detail::cmp(a[offset], b[offset]);
+        return doris::detail::cmp(a[offset], b[offset]);
     }
 
     return 0;
@@ -186,7 +188,7 @@ int memcmp_small_allow_overflow15(const Char* a, size_t a_size, const Char* b, s
     if (auto res = memcmp(a, b, std::min(a_size, b_size)))
         return res;
     else
-        return detail::cmp(a_size, b_size);
+        return doris::detail::cmp(a_size, b_size);
 }
 
 template <typename Char>
