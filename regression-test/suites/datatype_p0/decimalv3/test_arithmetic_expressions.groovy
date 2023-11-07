@@ -17,7 +17,7 @@
 
 suite("test_arithmetic_expressions") {
 
-    def table1 = "test_arithmetic_expressions"
+    def table1 = "test_arithmetic_expressions0"
     sql "set enable_decimal256 = false;"
 
     sql "drop table if exists ${table1}"
@@ -43,33 +43,71 @@ suite("test_arithmetic_expressions") {
     """
     qt_select_all "select * from ${table1} order by k1"
 
+    // test cases for add/sub
+    // precision overflow, result type is double
+    qt_add_sub_overflow0 "select k1 + k2 from ${table1} order by k1"
+    qt_add_sub_overflow1 "select k1 + k2 + k3 from ${table1} order by k1"
+    qt_add_sub_overflow2 "select k1 - k2 from ${table1} order by k1"
+    qt_add_sub_overflow3 "select k1 + k2 - k3 from ${table1} order by k1"
+    qt_add_sub_overflow4 "select k1 - k2 - k3 from ${table1} order by k1"
+
+    sql "set enable_decimal256 = true;"
+    qt_add_sub_no_overflow0 "select k1 + k2 from ${table1} order by k1"
+    qt_add_sub_no_overflow1 "select k1 + k2 + k3 from ${table1} order by k1"
+    qt_add_sub_no_overflow2 "select k1 - k2 from ${table1} order by k1"
+    qt_add_sub_no_overflow3 "select k1 + k2 - k3 from ${table1} order by k1"
+    qt_add_sub_no_overflow4 "select k1 - k2 - k3 from ${table1} order by k1"
+
+    // test cases for multiply/div
+    sql "set enable_decimal256 = false;"
+
+    // precision overflow, result precision is MAX_DECIMAL128_PRECISION 
     qt_select "select k1 * k2 from ${table1} order by k1"
     qt_select "select * from (select k1 * k2 from ${table1} union all select k3 from ${table1}) a order by 1"
 
-    qt_select "select k1 * k2 * k3 from ${table1} order by k1"
-    qt_select "select k1 * k2 * k3 * k1 * k2 * k3 from ${table1} order by k1"
-    qt_select "select k1 * k2 / k3 * k1 * k2 * k3 from ${table1} order by k1"
-    sql "drop table if exists ${table1}"
+    // scale overflow: scale 54 larger than precision 38 in Multiply return type
+    // return type is double
+    qt_multiply_div_overflow0 "select k1 * k2 * k3 from ${table1} order by k1"
+    qt_multiply_div_overflow1 "select k1 * k2 * k3 * k1 * k2 * k3 from ${table1} order by k1"
+    qt_multiply_div_overflow2 "select k1 * k2 / k3 * k1 * k2 * k3 from ${table1} order by k1"
+
+    sql "set enable_decimal256=true;"
+    qt_multiply_div_decimal256_0 "select k1 * k2 * k3 from ${table1} order by k1"
+    // scale overflow even enable decimal256
+    qt_multiply_div_decimal256_1 "select k1 * k2 * k3 * k1 * k2 * k3 from ${table1} order by k1"
+    qt_multiply_div_decimal256_2 "select k1 * k2 / k3 * k1 * k2 * k3 from ${table1} order by k1"
+
+    sql "drop table if exists test_arithmetic_expressions1"
+
+    sql "set enable_decimal256=false;"
 
     sql """
-        CREATE TABLE IF NOT EXISTS ${table1} (             `a` DECIMALV3(9, 3) NOT NULL, `b` DECIMALV3(9, 3) NOT NULL, `c` DECIMALV3(9, 3) NOT NULL, `d` DECIMALV3(9, 3) NOT NULL, `e` DECIMALV3(9, 3) NOT NULL, `f` DECIMALV3(9, 3) NOT
-        NULL, `g` DECIMALV3(9, 3) NOT NULL , `h` DECIMALV3(9, 3) NOT NULL, `i` DECIMALV3(9, 3) NOT NULL, `j` DECIMALV3(9, 3) NOT NULL, `k` DECIMALV3(9, 3) NOT NULL)            DISTRIBUTED BY HASH(a) PROPERTIES("replication_num" = "1");
+        CREATE TABLE IF NOT EXISTS test_arithmetic_expressions1 (
+            `a` DECIMALV3(9, 3) NOT NULL,
+            `b` DECIMALV3(9, 3) NOT NULL,
+            `c` DECIMALV3(9, 3) NOT NULL,
+            `d` DECIMALV3(9, 3) NOT NULL,
+            `e` DECIMALV3(9, 3) NOT NULL,
+            `f` DECIMALV3(9, 3) NOT NULL,
+            `g` DECIMALV3(9, 3) NOT NULL,
+            `h` DECIMALV3(9, 3) NOT NULL,
+            `i` DECIMALV3(9, 3) NOT NULL,
+            `j` DECIMALV3(9, 3) NOT NULL,
+            `k` DECIMALV3(9, 3) NOT NULL
+            ) DISTRIBUTED BY HASH(a) PROPERTIES("replication_num" = "1");
     """
 
     sql """
-    insert into ${table1} values(999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999);
+    insert into test_arithmetic_expressions1 values(999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999,999999.999);
     """
-    qt_select_all "select * from ${table1} order by a"
+    qt_select_all "select * from test_arithmetic_expressions1 order by a"
 
-    // TODO: test result is wrong, need to fix
-    qt_select_mix_calc_0 "select a + b + c from ${table1};"
-    qt_select_mix_calc_1 "select (a + b + c) * d from ${table1};"
-    qt_select_mix_calc_2 "select (a + b + c) / d from ${table1};"
-    qt_select_mix_calc_3 "select a + b + c + d + e + f + g + h + i + j + k from ${table1};"
+    qt_select_mix_calc_0 "select a + b + c from test_arithmetic_expressions1;"
+    qt_select_mix_calc_1 "select (a + b + c) * d from test_arithmetic_expressions1;"
+    qt_select_mix_calc_2 "select (a + b + c) / d from test_arithmetic_expressions1;"
+    qt_select_mix_calc_3 "select a + b + c + d + e + f + g + h + i + j + k from test_arithmetic_expressions1;"
 
-    sql "drop table if exists ${table1}"
-
-    def table2 = "test_arithmetic_expressions"
+    def table2 = "test_arithmetic_expressions2"
 
     sql "drop table if exists ${table2}"
     sql """ create table ${table2} (
@@ -95,7 +133,6 @@ suite("test_arithmetic_expressions") {
     // select 92594283.129196000 / 147202.0000000000; 
     // 629.0287029333569
     qt_select_div_mix_v2_v3 """ select id, fz/fm as dec,fzv3/fm as decv3 from ${table2} ORDER BY id; """
-    sql "drop table if exists ${table2}"
 
     def table3 = "test_mod_expressions"
 
@@ -270,6 +307,29 @@ mysql [test]>select k3, CAST(k3 AS DECIMALV3(38, 10)) from test_arithmetic_expre
 | -5151654377011498561003149524047726679019988040430007836382.4035124889496445184 |
 +---------------------------------------------------------------------------------+
     */
+    sql "DROP TABLE IF EXISTS `test_arithmetic_expressions_256_0`"
+    sql """
+    CREATE TABLE IF NOT EXISTS `test_arithmetic_expressions_256_0` (
+      `k1` decimalv3(75, 9) NULL COMMENT "",
+      `k2` decimalv3(75, 9) NULL COMMENT ""
+    ) ENGINE=OLAP
+    DUPLICATE KEY(`k1`)
+    DISTRIBUTED BY HASH(`k1`) BUCKETS 8
+    PROPERTIES (
+    "replication_allocation" = "tag.location.default: 1"
+    );
+    """
+
+    sql """insert into test_arithmetic_expressions_256_0 values
+            (1, 999999999999999999999999999999999999999999999999999999999999999999.999999999),
+            (2, 499999999999999999999999999999999999999999999999999999999999999999.999999999),
+            (3, 333333333333333333333333333333333333333333333333333333333333333333.333333333);"""
+    sql "sync"
+    qt_decimal256_0_arith_select_all "select * from test_arithmetic_expressions_256_0 order by k1, k2;"
+    // no overflow
+    qt_decimal256_0_arith_plus "select k1 + k2 from test_arithmetic_expressions_256_0 order by 1;"
+    qt_decimal256_0_arith_minus "select k2 - k1 from test_arithmetic_expressions_256_0 order by 1;"
+
     sql "DROP TABLE IF EXISTS `test_arithmetic_expressions_256_1`"
     sql """
     CREATE TABLE IF NOT EXISTS `test_arithmetic_expressions_256_1` (
@@ -290,6 +350,7 @@ mysql [test]>select k3, CAST(k3 AS DECIMALV3(38, 10)) from test_arithmetic_expre
             (3, 333333333333333333333333333333333333333333333333333333333333333333.3333333333, 33333333333333333333333333333333333333333333333333333333333333333.33333333333);"""
     sql "sync"
     qt_decimal256_arith_select_all "select * from test_arithmetic_expressions_256_1 order by k1, k2, k3;"
+    // precison overflow, return type is double
     qt_decimal256_arith_plus "select k1 + k2 from test_arithmetic_expressions_256_1 order by 1;"
     qt_decimal256_arith_minus "select k2 - k1 from test_arithmetic_expressions_256_1 order by 1;"
     qt_decimal256_arith_multiply "select k1 * k2 from test_arithmetic_expressions_256_1 order by 1;"

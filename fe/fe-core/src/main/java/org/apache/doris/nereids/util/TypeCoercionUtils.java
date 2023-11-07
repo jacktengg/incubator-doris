@@ -1551,7 +1551,14 @@ public class TypeCoercionUtils {
         // add, subtract and mod should cast children to exactly same type as return type
         if (binaryArithmetic instanceof Add || binaryArithmetic instanceof Subtract
                 || binaryArithmetic instanceof Mod) {
-            return castChildren(binaryArithmetic, left, right, retType);
+            // for add, sub and mode, precision of retType is
+            // max(dt1.precision - dt1.scale, dt2.precision - dt2.scale) + max(dt1.scale, dt2.scale) + 1,
+            // so for children, the result precision of cast should be retType.getPrecision() - 1,
+            // or else the precision of the final return type will be bigger than expected, since
+            // e.g. Add.getDataTypeForDecimalV3 will be called multi times when doing plan.
+            DataType destType = (binaryArithmetic instanceof Mod) ? retType :
+                    DecimalV3Type.createDecimalV3Type(retType.getPrecision() - 1, retType.getScale());
+            return castChildren(binaryArithmetic, left, right, destType);
         }
         // multiply do not need to cast children to same type
         return binaryArithmetic.withChildren(castIfNotSameType(left, dt1),
