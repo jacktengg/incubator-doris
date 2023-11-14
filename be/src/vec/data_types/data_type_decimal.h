@@ -241,6 +241,7 @@ public:
 
     [[nodiscard]] UInt32 get_precision() const override { return precision; }
     [[nodiscard]] UInt32 get_scale() const override { return scale; }
+    [[nodiscard]] UInt32 get_integral_digits_count() const { return precision - scale; }
     T get_scale_multiplier() const { return get_scale_multiplier(scale); }
 
     T whole_part(T x) const {
