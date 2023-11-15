@@ -159,4 +159,72 @@ suite("test_distinct_agg") {
         from
             multi_distinct_agg_tab;
     """
+
+    sql "set enable_nereids_planner=true;"
+    sql "set enable_decimal256=true;"
+    sql "drop table if exists multi_distinct_agg_decimal256;"
+
+    sql """
+    CREATE TABLE `multi_distinct_agg_decimal256` (
+        `k1` bigint(20) NULL,
+        `d1` DECIMAL(39, 10) NULL,
+        `d2` DECIMAL(76, 10) NULL
+    ) ENGINE = OLAP DUPLICATE KEY(`k1`) DISTRIBUTED BY HASH(`k1`) BUCKETS 2 PROPERTIES (
+    "replication_allocation" = "tag.location.default: 1"
+    );
+    """
+
+    sql """
+    INSERT INTO
+        `multi_distinct_agg_decimal256` VALUES
+        (1, 99999999999999999999999999999.9999999999, 999999999999999999999999999999999999999999999999999999999999999999.9999999999),
+        (2, 99999999999999999999999999999.9999999999, 999999999999999999999999999999999999999999999999999999999999999999.9999999999),
+        (3, -99999999999999999999999999999.9999999998, -999999999999999999999999999999999999999999999999999999999999999999.9999999998),
+        (4, -99999999999999999999999999999.9999999998, -999999999999999999999999999999999999999999999999999999999999999999.9999999998),
+        (5, 99999999999999999999999999999.9999999997, 999999999999999999999999999999999999999999999999999999999999999999.9999999997),
+        (6, 99999999999999999999999999999.9999999997, 999999999999999999999999999999999999999999999999999999999999999999.9999999997),
+        (7, -1, -1),
+        (8, -1, -1),
+        (9, null, null),
+        (10, null, null),
+        (11, 0, 0),
+        (12, 0, 0)
+    """
+    sql "sync"
+
+    qt_multi_distinct_decimal256_1 """
+        select
+            count(distinct d1),
+            count(distinct d2)
+        from
+            multi_distinct_agg_decimal256;
+    """
+    /*
+set enable_decimal256=false;
+mysql [regression_test_correctness_p0]>  select
+    ->             sum(distinct d1),
+    ->             sum(distinct d2)
+    ->         from
+    ->             multi_distinct_agg_decimal256;
++------------------------------------------+------------------------------------------+
+| __sum_0                                  | __sum_1                                  |
++------------------------------------------+------------------------------------------+
+| -2084710076281539039012382230.5304634370 | 15878899595757734378621471800.1688878078 |
++------------------------------------------+------------------------------------------+
+1 row in set (0.03 sec)
+    */
+    qt_multi_distinct_decimal256_2 """
+        select
+            sum(distinct d1),
+            sum(distinct d2)
+        from
+            multi_distinct_agg_decimal256;
+    """
+    qt_multi_distinct_decimal256_3 """
+        select
+            avg(distinct d1),
+            avg(distinct d2)
+        from
+            multi_distinct_agg_decimal256;
+    """
 }

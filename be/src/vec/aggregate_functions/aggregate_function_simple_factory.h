@@ -75,6 +75,10 @@ public:
         }
         for (const auto& function_name : need_insert) {
             register_function(function_name, creator, nullable);
+            if (function_name == prefix + "sum" || function_name == prefix + "avg") {
+                auto function_name_decimal256 = function_name + "_decimal256";
+                register_function(function_name_decimal256, creator, nullable);
+            }
         }
     }
 
@@ -91,7 +95,8 @@ public:
 
         std::string name_str = name;
         if (enable_decima256) {
-            if (name_str == "sum" || name_str == "avg") {
+            if (name_str == "sum" || name_str == "avg" || name_str == "multi_distinct_sum" ||
+                name_str == "multi_distinct_avg") {
                 name_str += "_decimal256";
             }
         }

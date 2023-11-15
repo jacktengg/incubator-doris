@@ -120,22 +120,6 @@ public:
         detail::OneAdder<T, Data>::add(this->data(place), *columns[0], row_num);
     }
 
-    static ALWAYS_INLINE const KeyType* get_keys(std::vector<KeyType>& keys_container,
-                                                 const IColumn& column, size_t batch_size) {
-        if constexpr (std::is_same_v<T, String>) {
-            keys_container.resize(batch_size);
-            for (size_t i = 0; i != batch_size; ++i) {
-                StringRef value = column.get_data_at(i);
-                keys_container[i] = Data::get_key(value);
-            }
-            return keys_container.data();
-        } else {
-            using ColumnType =
-                    std::conditional_t<IsDecimalNumber<T>, ColumnDecimal<T>, ColumnVector<T>>;
-            return assert_cast<const ColumnType&>(column).get_data().data();
-        }
-    }
-
     void add_batch(size_t batch_size, AggregateDataPtr* places, size_t place_offset,
                    const IColumn** columns, Arena* arena, bool /*agg_many*/) const override {
         std::vector<KeyType> keys_container;
@@ -224,6 +208,23 @@ public:
 
     void insert_result_into(ConstAggregateDataPtr __restrict place, IColumn& to) const override {
         assert_cast<ColumnInt64&>(to).get_data().push_back(this->data(place).set.size());
+    }
+
+private:
+    static ALWAYS_INLINE const KeyType* get_keys(std::vector<KeyType>& keys_container,
+                                                 const IColumn& column, size_t batch_size) {
+        if constexpr (std::is_same_v<T, String>) {
+            keys_container.resize(batch_size);
+            for (size_t i = 0; i != batch_size; ++i) {
+                StringRef value = column.get_data_at(i);
+                keys_container[i] = Data::get_key(value);
+            }
+            return keys_container.data();
+        } else {
+            using ColumnType =
+                    std::conditional_t<IsDecimalNumber<T>, ColumnDecimal<T>, ColumnVector<T>>;
+            return assert_cast<const ColumnType&>(column).get_data().data();
+        }
     }
 };
 
