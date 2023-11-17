@@ -50,6 +50,7 @@
 #include "vec/functions/function_helpers.h"
 #include "vec/functions/simple_function_factory.h"
 
+#include "util/simd/bits.h"
 namespace doris {
 class FunctionContext;
 
@@ -140,6 +141,44 @@ public:
     }
 };
 
+size_t count_true_with_notnull(const ColumnPtr& col) {
+    if (col->only_null()) {
+        return 0;
+    }
+
+    // if (col->is_constant()) {
+    //     bool is_true = ColumnHelper::get_const_value<TYPE_BOOLEAN>(col);
+    //     return is_true ? col->size() : 0;
+    // }
+
+    auto count = col->size();
+    if (col->is_nullable()) {
+        // auto tmp = ColumnHelper::as_raw_column<NullableColumn>(col);
+        const auto* nullable = assert_cast<const ColumnNullable*>(col.get());
+        // const Buffer<uint8_t>& null_data = nullable->null_column_data();
+        // const Buffer<uint8_t>& bool_data = ColumnHelper::cast_to_raw<TYPE_BOOLEAN>(tmp->data_column())->get_data();
+        auto* __restrict null_data = nullable->get_null_map_data().data();
+        auto* __restrict bool_data =
+                ((ColumnVector<UInt8>&)(nullable->get_nested_column())).get_data().data();
+
+        size_t null_count = count - simd::count_zero_num((const int8_t*)null_data, count);
+        size_t true_count = count - simd::count_zero_num((const int8_t*)bool_data, count);
+
+        if (null_count == count) {
+            return 0;
+        } else if (null_count == 0) {
+            return true_count;
+        } else {
+            // In fact, the null_count maybe is different with true_count, but it's no impact
+            return null_count;
+        }
+    } else {
+        // const Buffer<uint8_t>& bool_data = ColumnHelper::cast_to_raw<TYPE_BOOLEAN>(col)->get_data();
+        const ColumnUInt8* bool_col = typeid_cast<const ColumnUInt8*>(col.get());
+        auto* __restrict bool_data = bool_col->get_data().data();
+        return count - simd::count_zero_num((const int8_t*)bool_data, count);
+    }
+}
 // todo(wb) support llvm codegen
 class FunctionIf : public IFunction {
 public:
@@ -513,6 +552,18 @@ public:
 
         if (auto* nullable = check_and_get_column<ColumnNullable>(*arg_cond.column)) {
             DCHECK(remove_nullable(arg_cond.type)->get_type_id() == TypeIndex::UInt8);
+
+             auto true_count = count_true_with_notnull(arg_cond.column);
+            if (true_count == arg_cond.column->size()) {
+                // LOG(WARNING) << "xxxxxxxxx1";
+                block.replace_by_position(result, make_nullable(arg_then.column->clone_resized(arg_then.column->size())));
+                return true;
+            }
+            if (true_count == 0) {
+                // LOG(WARNING) << "xxxxxxxxx2";
+                block.replace_by_position(result, make_nullable(arg_else.column->clone_resized(arg_else.column->size())));
+                return true;
+            }
 
             // update neseted column by nullmap
             auto* __restrict null_map = nullable->get_null_map_data().data();
