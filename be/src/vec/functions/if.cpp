@@ -349,14 +349,6 @@ public:
                 size_t size = input_rows_count;
                 auto& null_map_data = cond_col->get_data();
 
-                auto negated_null_map = ColumnUInt8::create();
-                auto& negated_null_map_data = negated_null_map->get_data();
-                negated_null_map_data.resize(size);
-
-                for (size_t i = 0; i < size; ++i) {
-                    negated_null_map_data[i] = !null_map_data[i];
-                }
-
                 if (is_column_nullable(*arg_then.column)) { // if(cond, nullable, NULL)
                     auto arg_then_column = arg_then.column;
                     auto result_column = (*std::move(arg_then_column)).mutate();
@@ -365,6 +357,36 @@ public:
                                     assert_cast<const ColumnUInt8&>(*arg_cond.column));
                     block.replace_by_position(result, std::move(result_column));
                 } else { // if(cond, not_nullable, NULL)
+                    auto negated_null_map = ColumnUInt8::create();
+                    auto& negated_null_map_data = negated_null_map->get_data();
+                    negated_null_map_data.resize(size);
+
+                    // for (size_t i = 0; i < size; ++i) {
+                    //     negated_null_map_data[i] = !null_map_data[i];
+                    // }
+
+                    {
+                        auto* __restrict negated_null_map_raw_data = negated_null_map_data.data();
+                        constexpr size_t length = sizeof(__m256i);
+                        const size_t avx_count = size / length;
+
+                        const __m256i one_mask = _mm256_set1_epi8(1);
+
+                        for (size_t i = 0; i != avx_count; ++i) {
+                            __m256i value_of_map = _mm256_loadu_si256(
+                                    reinterpret_cast<const __m256i*>(&null_map_data[i * length]));
+                            __m256i value_ = _mm256_xor_si256(value_of_map, one_mask);
+
+                            _mm256_storeu_si256(reinterpret_cast<__m256i*>(
+                                                        &negated_null_map_raw_data[i * length]),
+                                                value_);
+                        }
+
+                        size_t remaining = size % length;
+                        for (size_t i = size - remaining; i != size; ++i) {
+                            negated_null_map_raw_data[i] = !null_map_data[i];
+                        }
+                    }
                     block.replace_by_position(
                             result,
                             ColumnNullable::create(materialize_column_if_const(arg_then.column),
@@ -498,7 +520,8 @@ public:
                     ((ColumnVector<UInt8>&)(nullable->get_nested_column())).get_data().data();
             auto rows = nullable->size();
             for (size_t i = 0; i < rows; i++) {
-                nested_bool_data[i] = null_map[i] ? 0 : nested_bool_data[i];
+                //nested_bool_data[i] = null_map[i] ? 0 : nested_bool_data[i];
+                nested_bool_data[i] &= !null_map[i];
             }
             auto column_size = block.columns();
             block.insert({nullable->get_nested_column_ptr(), remove_nullable(arg_cond.type),
