@@ -42,12 +42,14 @@ namespace doris::vectorized {
 std::tuple<Block, ColumnNumbers> create_block_with_nested_columns(const Block& block,
                                                                   const ColumnNumbers& args,
                                                                   const bool need_check_same) {
-    Block res;
+    // Block res;
+    ColumnsWithTypeAndName new_columns(block.columns());
     ColumnNumbers res_args(args.size());
-    res.reserve(args.size() + 1);
+    // res.reserve(args.size() + 1);
 
     // only build temp block by args column, if args[i] == args[j]
     // just keep one
+    size_t new_column_count = 0;
     for (size_t i = 0; i < args.size(); ++i) {
         bool is_in_res = false;
         size_t pre_loc = 0;
@@ -69,25 +71,31 @@ std::tuple<Block, ColumnNumbers> create_block_with_nested_columns(const Block& b
                         static_cast<const DataTypeNullable&>(*col.type).get_nested_type();
 
                 if (!col.column) {
-                    res.insert({nullptr, nested_type, col.name});
+                    // res.insert({nullptr, nested_type, col.name});
+                    new_columns[i] = {nullptr, nested_type, col.name};
                 } else if (auto* nullable = check_and_get_column<ColumnNullable>(*col.column)) {
                     const auto& nested_col = nullable->get_nested_column_ptr();
-                    res.insert({nested_col, nested_type, col.name});
+                    // res.insert({nested_col, nested_type, col.name});
+                    new_columns[i] = {nested_col, nested_type, col.name};
                 } else if (auto* const_column = check_and_get_column<ColumnConst>(*col.column)) {
                     const auto& nested_col =
                             check_and_get_column<ColumnNullable>(const_column->get_data_column())
                                     ->get_nested_column_ptr();
-                    res.insert({ColumnConst::create(nested_col, col.column->size()), nested_type,
-                                col.name});
+                    // res.insert({ColumnConst::create(nested_col, col.column->size()), nested_type,
+                    //             col.name});
+                    new_columns[i] = {ColumnConst::create(nested_col, col.column->size()), nested_type,
+                                col.name};
                 } else {
                     LOG(FATAL) << "Illegal column= " << col.column->get_name()
                                << " for DataTypeNullable";
                 }
             } else {
-                res.insert(col);
+                // res.insert(col);
+                new_columns[i] = col;
             }
 
-            res_args[i] = res.columns() - 1;
+            // res_args[i] = res.columns() - 1;
+            res_args[i] = new_column_count++;
         } else {
             res_args[i] = pre_loc;
         }
@@ -97,11 +105,13 @@ std::tuple<Block, ColumnNumbers> create_block_with_nested_columns(const Block& b
     for (const auto& ctn : block) {
         if (ctn.name.size() > BeConsts::BLOCK_TEMP_COLUMN_PREFIX.size() &&
             starts_with(ctn.name, BeConsts::BLOCK_TEMP_COLUMN_PREFIX)) {
-            res.insert(ctn);
+            // res.insert(ctn);
+            new_columns[new_column_count++] = ctn;
         }
     }
 
-    return {std::move(res), std::move(res_args)};
+    new_columns.resize(new_column_count);
+    return {std::move(new_columns), std::move(res_args)};
 }
 
 std::tuple<Block, ColumnNumbers, size_t> create_block_with_nested_columns(const Block& block,
