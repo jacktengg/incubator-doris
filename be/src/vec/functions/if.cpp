@@ -400,10 +400,11 @@ public:
                     auto& negated_null_map_data = negated_null_map->get_data();
                     negated_null_map_data.resize(size);
 
-                    // for (size_t i = 0; i < size; ++i) {
-                    //     negated_null_map_data[i] = !null_map_data[i];
-                    // }
+                    for (size_t i = 0; i < size; ++i) {
+                        negated_null_map_data[i] = !null_map_data[i];
+                    }
 
+                    /*
                     {
                         auto* __restrict negated_null_map_raw_data = negated_null_map_data.data();
                         constexpr size_t length = sizeof(__m256i);
@@ -426,6 +427,7 @@ public:
                             negated_null_map_raw_data[i] = !null_map_data[i];
                         }
                     }
+                    */
                     block.replace_by_position(
                             result,
                             ColumnNullable::create(materialize_column_if_const(arg_then.column),
