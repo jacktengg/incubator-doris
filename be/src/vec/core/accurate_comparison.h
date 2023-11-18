@@ -223,13 +223,26 @@ bool greaterOp(A a, B b) {
     return lessOp(b, a);
 }
 
+// template <typename A, typename B>
+// bool greaterOrEqualsOp(A a, B b) {
+//     if (is_nan(a) || is_nan(b)) {
+//         return false;
+//     }
+// 
+//     return !lessOp(a, b);
+// }
+
 template <typename A, typename B>
-bool greaterOrEqualsOp(A a, B b) {
+inline bool_if_not_safe_conversion<A, B> greaterOrEqualsOp(A a, B b) {
     if (is_nan(a) || is_nan(b)) {
         return false;
     }
+    return !greaterOp(b, a);
+}
 
-    return !lessOp(a, b);
+template <typename A, typename B>
+inline bool_if_safe_conversion<A, B> greaterOrEqualsOp(A a, B b) {
+    return a >= b;
 }
 
 // template <typename A, typename B>
