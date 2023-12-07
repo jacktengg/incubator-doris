@@ -85,13 +85,18 @@ template Status HashJoinNode::_extract_join_column<false>(
         std::vector<IColumn const*, std::allocator<IColumn const*>>&,
         std::vector<int, std::allocator<int>> const&);
 
-HashJoinNode::HashJoinNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs)
+HashJoinNode::HashJoinNode(ObjectPool* pool, const TPlanNode& tnode, const DescriptorTbl& descs,
+                           bool enable_rf, bool need_evaluate_exprs)
         : VJoinNodeBase(pool, tnode, descs),
           _is_broadcast_join(tnode.hash_join_node.__isset.is_broadcast_join &&
                              tnode.hash_join_node.is_broadcast_join),
           _hash_output_slot_ids(tnode.hash_join_node.__isset.hash_output_slot_ids
                                         ? tnode.hash_join_node.hash_output_slot_ids
-                                        : std::vector<SlotId> {}) {
+                                        : std::vector<SlotId> {}),
+          _build_side_mem_used(0),
+          _build_side_last_mem_used(0),
+          _enable_runtime_filter(enable_rf),
+          _need_evaluate_exprs(need_evaluate_exprs) {
     _runtime_filter_descs = tnode.runtime_filters;
     _arena = std::make_shared<Arena>();
     _hash_table_variants = std::make_shared<HashTableVariants>();
@@ -488,17 +493,19 @@ Status HashJoinNode::push(RuntimeState* /*state*/, vectorized::Block* input_bloc
         int probe_expr_ctxs_sz = _probe_expr_ctxs.size();
         _probe_columns.resize(probe_expr_ctxs_sz);
 
-        std::vector<int> res_col_ids(probe_expr_ctxs_sz);
         if (_join_op == TJoinOp::RIGHT_OUTER_JOIN || _join_op == TJoinOp::FULL_OUTER_JOIN) {
             _probe_column_convert_to_null = _convert_block_to_null(*input_block);
         }
-        RETURN_IF_ERROR(
-                _do_evaluate(*input_block, _probe_expr_ctxs, *_probe_expr_call_timer, res_col_ids));
+        if (_need_evaluate_exprs) {
+            _probe_column_ids.resize(probe_expr_ctxs_sz);
+            RETURN_IF_ERROR(evaluate_exprs(*input_block, _probe_expr_ctxs, *_probe_expr_call_timer,
+                                           _probe_column_ids));
+        }
         // TODO: Now we are not sure whether a column is nullable only by ExecNode's `row_desc`
         //  so we have to initialize this flag by the first probe block.
         if (!_has_set_need_null_map_for_probe) {
             _has_set_need_null_map_for_probe = true;
-            _need_null_map_for_probe = _need_probe_null_map(*input_block, res_col_ids);
+            _need_null_map_for_probe = _need_probe_null_map(*input_block, _probe_column_ids);
         }
         if (_need_null_map_for_probe) {
             if (_null_map_column == nullptr) {
@@ -508,7 +515,7 @@ Status HashJoinNode::push(RuntimeState* /*state*/, vectorized::Block* input_bloc
         }
 
         RETURN_IF_ERROR(_extract_join_column<false>(*input_block, _null_map_column, _probe_columns,
-                                                    res_col_ids));
+                                                    _probe_column_ids));
         if (&_probe_block != input_block) {
             input_block->swap(_probe_block);
         }
@@ -725,16 +732,23 @@ Status HashJoinNode::sink(doris::RuntimeState* state, vectorized::Block* in_bloc
             auto tmp_build_block =
                     VectorizedUtils::create_empty_columnswithtypename(child(1)->row_desc());
             tmp_build_block = *(tmp_build_block.create_same_struct_block(1, false));
-            _build_col_ids.resize(_build_expr_ctxs.size());
-            RETURN_IF_ERROR(_do_evaluate(tmp_build_block, _build_expr_ctxs, *_build_expr_call_timer,
-                                         _build_col_ids));
+
+            if (_need_evaluate_exprs) {
+                _build_col_ids.resize(_build_expr_ctxs.size());
+
+                RETURN_IF_ERROR(evaluate_exprs(tmp_build_block, _build_expr_ctxs,
+                                               *_build_expr_call_timer, _build_col_ids));
+            }
+
             _build_side_mutable_block = MutableBlock::build_mutable_block(&tmp_build_block);
         }
 
         if (in_block->rows() != 0) {
-            std::vector<int> res_col_ids(_build_expr_ctxs.size());
-            RETURN_IF_ERROR(_do_evaluate(*in_block, _build_expr_ctxs, *_build_expr_call_timer,
-                                         res_col_ids));
+            if (_need_evaluate_exprs) {
+                std::vector<int> res_col_ids(_build_expr_ctxs.size());
+                RETURN_IF_ERROR(evaluate_exprs(*in_block, _build_expr_ctxs, *_build_expr_call_timer,
+                                               res_col_ids));
+            }
 
             SCOPED_TIMER(_build_side_merge_block_timer);
             RETURN_IF_ERROR(_build_side_mutable_block.merge(*in_block));
@@ -886,9 +900,9 @@ Status HashJoinNode::_extract_join_column(Block& block, ColumnUInt8::MutablePtr&
     return Status::OK();
 }
 
-Status HashJoinNode::_do_evaluate(Block& block, VExprContextSPtrs& exprs,
-                                  RuntimeProfile::Counter& expr_call_timer,
-                                  std::vector<int>& res_col_ids) {
+Status HashJoinNode::evaluate_exprs(Block& block, VExprContextSPtrs& exprs,
+                                    RuntimeProfile::Counter& expr_call_timer,
+                                    std::vector<int>& res_col_ids) {
     for (size_t i = 0; i < exprs.size(); ++i) {
         int result_col_id = -1;
         // execute build column

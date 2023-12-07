@@ -98,6 +98,7 @@
 #include "vec/runtime/vdata_stream_mgr.h"
 #include "vec/sink/delta_writer_v2_pool.h"
 #include "vec/sink/load_stream_stub_pool.h"
+#include "vec/spill/spill_stream_manager.h"
 
 #if !defined(__SANITIZE_ADDRESS__) && !defined(ADDRESS_SANITIZER) && !defined(LEAK_SANITIZER) && \
         !defined(THREAD_SANITIZER) && !defined(USE_JEMALLOC)
@@ -200,6 +201,16 @@ Status ExecEnv::_init(const std::vector<StorePath>& store_paths,
     // NOTE: runtime query statistics mgr could be visited by query and daemon thread
     // so it should be created before all query begin and deleted after all query and daemon thread stoppped
     _runtime_query_statistics_mgr = new RuntimeQueryStatiticsMgr();
+    int spill_io_thread_count = config::spill_io_thread_pool_thread_num;
+    if (spill_io_thread_count <= 0) {
+        spill_io_thread_count = CpuInfo::num_cores();
+    }
+    static_cast<void>(ThreadPoolBuilder("SpillIOThreadPool")
+                              .set_min_threads(spill_io_thread_count)
+                              .set_max_threads(spill_io_thread_count)
+                              .set_max_queue_size(config::spill_io_thread_pool_queue_size)
+                              .build(&_spill_io_pool));
+
     init_file_cache_factory();
     RETURN_IF_ERROR(init_pipeline_task_scheduler());
     _task_group_manager = new taskgroup::TaskGroupManager();
@@ -224,6 +235,7 @@ Status ExecEnv::_init(const std::vector<StorePath>& store_paths,
     _load_stream_stub_pool = std::make_unique<LoadStreamStubPool>();
     _delta_writer_v2_pool = std::make_unique<vectorized::DeltaWriterV2Pool>();
     _wal_manager = WalManager::create_shared(this, config::group_commit_wal_path);
+    _spill_stream_mgr = new vectorized::SpillStreamManager(_store_paths);
 
     _backend_client_cache->init_metrics("backend");
     _frontend_client_cache->init_metrics("frontend");
@@ -480,6 +492,8 @@ Status ExecEnv::_init_mem_env() {
               << ", origin config value: " << config::inverted_index_query_cache_limit;
 
     RETURN_IF_ERROR(_block_spill_mgr->init());
+
+    RETURN_IF_ERROR(_spill_stream_mgr->init());
     return Status::OK();
 }
 

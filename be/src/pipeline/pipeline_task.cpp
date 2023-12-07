@@ -33,6 +33,7 @@
 #include "runtime/thread_context.h"
 #include "task_queue.h"
 #include "util/defer_op.h"
+#include "util/mem_info.h"
 #include "util/runtime_profile.h"
 
 namespace doris {
@@ -277,11 +278,44 @@ Status PipelineTask::execute(bool* eos) {
         _block->clear_column_data(_root->row_desc().num_materialized_slots());
         auto* block = _block.get();
 
+        // auto sys_mem_available = doris::MemInfo::sys_mem_available();
+        auto query_mem = query_context()->query_mem_tracker->consumption();
+        // LOG(WARNING) << "query mem limit: " << _state->query_mem_limit()
+        //              << ", query mem: " << query_mem
+        //              << ", min revokable mem: " << _state->min_revokable_mem()
+        //              << ", revokable mem: " << _root->revokable_mem_size();
+        if (/*sys_mem_available < doris::MemInfo::sys_mem_available_warning_water_mark() &&*/
+            query_mem > _state->query_mem_limit()) {
+            auto revokable_mem_size = _root->revokable_mem_size();
+            if (revokable_mem_size >= _state->min_revokable_mem()) {
+                status = _root->revoke_memory();
+                if (status.is<ErrorCode::PIP_WAIT_FOR_IO>()) {
+                    set_state(PipelineTaskState::BLOCKED_FOR_IO);
+                    break;
+                }
+                RETURN_IF_ERROR(status);
+            }
+            auto sink_revokable_mem_size = _sink->revokable_mem_size();
+            if (sink_revokable_mem_size >= _state->min_revokable_mem()) {
+                status = _sink->revoke_memory();
+                if (status.is<ErrorCode::PIP_WAIT_FOR_IO>()) {
+                    set_state(PipelineTaskState::BLOCKED_FOR_IO);
+                    break;
+                }
+                RETURN_IF_ERROR(status);
+            }
+        }
+
         // Pull block from operator chain
         {
             SCOPED_TIMER(_get_block_timer);
             _get_block_counter->update(1);
-            RETURN_IF_ERROR(_root->get_block(_state, block, _data_state));
+            status = _root->get_block(_state, block, _data_state);
+            if (status.is<ErrorCode::PIP_WAIT_FOR_IO>()) {
+                set_state(PipelineTaskState::BLOCKED_FOR_IO);
+                break;
+            }
+            RETURN_IF_ERROR(status);
         }
         *eos = _data_state == SourceState::FINISHED;
 

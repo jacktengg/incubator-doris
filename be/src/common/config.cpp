@@ -1166,6 +1166,8 @@ DEFINE_Int32(ignore_invalid_partition_id_rowset_num, "0");
 DEFINE_mInt32(report_query_statistics_interval_ms, "3000");
 // 30s
 DEFINE_mInt32(query_statistics_reserve_timeout_ms, "30000");
+DEFINE_Int32(spill_io_thread_pool_thread_num, "64");
+DEFINE_Int32(spill_io_thread_pool_queue_size, "1024");
 
 // clang-format off
 #ifdef BE_TEST

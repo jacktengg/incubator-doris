@@ -15,40 +15,14 @@
 // specific language governing permissions and limitations
 // under the License.
 
-#pragma once
+#include "spill_sort_sink_operator.h"
 
-#include <cstddef>
+#include <string>
 
-#include "common/status.h"
-#include "io/fs/file_system.h"
-#include "io/fs/file_writer.h"
-#include "io/fs/path.h"
-#include "util/slice.h"
+#include "pipeline/exec/operator.h"
 
-namespace doris {
-namespace io {
+namespace doris::pipeline {
 
-class LocalFileWriter final : public FileWriter {
-public:
-    LocalFileWriter(Path path, int fd, FileSystemSPtr fs, bool sync_data = true);
-    LocalFileWriter(Path path, int fd);
-    ~LocalFileWriter() override;
+OPERATOR_CODE_GENERATOR(SpillSortSinkOperator, StreamingOperator)
 
-    Status close() override;
-    Status appendv(const Slice* data, size_t data_cnt) override;
-    Status finalize() override;
-
-    int get_fd() const { return _fd; }
-
-private:
-    void _abort();
-    Status _close(bool sync);
-
-private:
-    int _fd; // owned
-    bool _dirty = false;
-    const bool _sync_data;
-};
-
-} // namespace io
-} // namespace doris
+} // namespace doris::pipeline

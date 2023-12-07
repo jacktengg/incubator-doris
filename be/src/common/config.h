@@ -1242,6 +1242,8 @@ DECLARE_Int32(ignore_invalid_partition_id_rowset_num);
 
 DECLARE_mInt32(report_query_statistics_interval_ms);
 DECLARE_mInt32(query_statistics_reserve_timeout_ms);
+DECLARE_Int32(spill_io_thread_pool_thread_num);
+DECLARE_Int32(spill_io_thread_pool_queue_size);
 
 #ifdef BE_TEST
 // test s3

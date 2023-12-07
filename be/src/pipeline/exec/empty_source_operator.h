@@ -48,6 +48,10 @@ public:
 
     const RowDescriptor& row_desc() override { return _row_descriptor; }
 
+    size_t revokable_mem_size() const { return 0; }
+
+    Status revoke_memory() { return Status::OK(); };
+
 private:
     RowDescriptor _row_descriptor;
     ExecNode* _exec_node = nullptr;

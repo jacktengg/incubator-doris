@@ -270,6 +270,14 @@ struct TQueryOptions {
 
   97: optional i64 parallel_scan_min_rows_per_scanner = 0;
 
+  98: optional bool enable_join_spill = false
+
+  99: optional bool enable_sort_spill = false
+
+  100: optional bool enable_agg_spill = false
+
+  101: optional i64 min_revokable_mem = 0
+  
   // For cloud, to control if the content would be written into file cache
   1000: optional bool disable_file_cache = false
 }

@@ -213,6 +213,8 @@ public:
 
     virtual bool runtime_filters_are_ready_or_timeout() { return true; } // for source
 
+    virtual bool io_task_finished() { return true; }
+
     virtual bool can_write() { return false; } // for sink
 
     [[nodiscard]] virtual bool can_terminate_early() { return false; }
@@ -255,6 +257,10 @@ public:
     virtual int32_t id() const { return _operator_builder->id(); }
 
     [[nodiscard]] virtual RuntimeProfile* get_runtime_profile() const = 0;
+
+    virtual size_t revokable_mem_size() const { return 0; }
+
+    virtual Status revoke_memory() { return Status::OK(); };
 
 protected:
     OperatorBuilderBase* _operator_builder = nullptr;
@@ -309,6 +315,10 @@ public:
     }
 
     [[nodiscard]] RuntimeProfile* get_runtime_profile() const override { return _sink->profile(); }
+
+    size_t revokable_mem_size() const override { return _sink->revokable_mem_size(); }
+
+    Status revoke_memory() override { return _sink->revoke_memory(); };
 
 protected:
     DataSinkType* _sink = nullptr;
@@ -373,6 +383,10 @@ public:
     [[nodiscard]] RuntimeProfile* get_runtime_profile() const override {
         return _node->runtime_profile();
     }
+
+    size_t revokable_mem_size() const override { return _node->revokable_mem_size(); }
+
+    Status revoke_memory() override { return _node->revoke_memory(); };
 
 protected:
     StreamingNodeType* _node = nullptr;
