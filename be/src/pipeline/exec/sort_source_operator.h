@@ -19,6 +19,8 @@
 
 #include <stdint.h>
 
+#include <atomic>
+
 #include "common/status.h"
 #include "operator.h"
 #include "pipeline/pipeline_x/operator.h"
@@ -57,11 +59,24 @@ class SortSourceOperatorX;
 class SortLocalState final : public PipelineXLocalState<SortSourceDependency> {
 public:
     ENABLE_FACTORY_CREATOR(SortLocalState);
+    using Base = PipelineXLocalState<SortSourceDependency>;
     SortLocalState(RuntimeState* state, OperatorXBase* parent);
     ~SortLocalState() override = default;
 
+    Status close(RuntimeState* state) override;
+
+    Status initiate_merge_sort_spill_streams(RuntimeState* state);
+
 private:
+    Status _create_intermediate_merger(int num_blocks,
+                                       const vectorized::SortDescription& sort_description);
     friend class SortSourceOperatorX;
+    Status status_;
+    std::vector<vectorized::SpillStreamSPtr> current_merging_streams_;
+    std::unique_ptr<vectorized::VSortedRunMerger> merger_;
+    bool is_merging_ = false;
+    std::mutex merge_spill_lock_;
+    std::condition_variable merge_spill_cv_;
 };
 
 class SortSourceOperatorX final : public OperatorX<SortLocalState> {

@@ -239,11 +239,21 @@ public:
     // Names of counters shared by all exec nodes
     static const std::string ROW_THROUGHPUT_COUNTER;
 
-    ExecNode* child(int i) { return _children[i]; }
+    ExecNode* child(int i) const { return _children[i]; }
 
     size_t children_count() const { return _children.size(); }
 
     std::shared_ptr<QueryStatistics> get_query_statistics() { return _query_statistics; }
+    virtual size_t revocable_mem_size(RuntimeState* state) const { return 0; }
+
+    virtual Status revoke_memory(RuntimeState* state) { return Status::OK(); }
+
+    std::vector<ExecNode*> get_children() { return _children; }
+    void set_children(std::vector<ExecNode*> children) {
+        DCHECK(_children.empty());
+        _children.assign(children.begin(), children.end());
+    }
+    void set_prepare_children(bool b) { _prepare_children = b; }
 
 protected:
     friend class DataSink;
@@ -323,6 +333,8 @@ protected:
 
     std::atomic<bool> _can_read = false;
 
+    std::atomic<bool> _is_resource_released = false;
+
     std::shared_ptr<QueryStatistics> _query_statistics = nullptr;
 
 private:
@@ -333,8 +345,8 @@ private:
 
     friend class pipeline::OperatorBase;
     bool _is_closed = false;
-    bool _is_resource_released = false;
     std::atomic_int _ref = 0; // used by pipeline operator to release resource.
+    bool _prepare_children = true;
 };
 
 } // namespace doris

@@ -38,6 +38,8 @@ public:
     Status appendv(const Slice* data, size_t data_cnt) override;
     Status finalize() override;
 
+    int get_fd() const { return _fd; }
+
 private:
     void _abort();
     Status _close(bool sync);

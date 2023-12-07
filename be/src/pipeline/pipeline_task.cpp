@@ -33,6 +33,7 @@
 #include "runtime/thread_context.h"
 #include "task_queue.h"
 #include "util/defer_op.h"
+#include "util/mem_info.h"
 #include "util/runtime_profile.h"
 
 namespace doris {
@@ -209,6 +210,7 @@ void PipelineTask::set_task_queue(TaskQueue* task_queue) {
 }
 
 Status PipelineTask::execute(bool* eos) {
+    VLOG_ROW << "pipeline task " << _index << " execute";
     SCOPED_TIMER(_task_profile->total_time_counter());
     SCOPED_TIMER(_exec_timer);
     int64_t time_spent = 0;
@@ -216,6 +218,7 @@ Status PipelineTask::execute(bool* eos) {
     ThreadCpuStopWatch cpu_time_stop_watch;
     cpu_time_stop_watch.start();
     Defer defer {[&]() {
+        VLOG_ROW << "pipeline task " << _index << " execute exit";
         if (_task_queue) {
             _task_queue->update_statistics(this, time_spent);
         }
@@ -272,6 +275,7 @@ Status PipelineTask::execute(bool* eos) {
 
     auto status = Status::OK();
 
+    VLOG_ROW << "pipeline task " << _index << " execute loop";
     this->set_begin_execute_time();
     while (!_fragment_context->is_canceled()) {
         if (_data_state != SourceState::MORE_DATA && !source_can_read()) {
@@ -291,11 +295,57 @@ Status PipelineTask::execute(bool* eos) {
         _block->clear_column_data(_root->row_desc().num_materialized_slots());
         auto* block = _block.get();
 
+        auto sys_mem_available = doris::MemInfo::sys_mem_available();
+        auto query_mem = query_context()->query_mem_tracker->consumption();
+        /*
+        LOG(WARNING) << "sys mem available: "
+                     << PrettyPrinter::print(sys_mem_available, TUnit::BYTES)
+                     << ",\nsys_mem_available_warning_water_mark: "
+                     << PrettyPrinter::print(doris::MemInfo::sys_mem_available_warning_water_mark(),
+                                             TUnit::BYTES)
+                     << ",\nquery mem limit: "
+                     << PrettyPrinter::print(_state->query_mem_limit(), TUnit::BYTES)
+                     << ",\nquery mem: " << PrettyPrinter::print(query_mem, TUnit::BYTES)
+                     << ",\nmin revocable mem: "
+                     << PrettyPrinter::print(_state->min_revocable_mem(), TUnit::BYTES)
+                     << ",\nrevocable mem: "
+                     << PrettyPrinter::print(_root->revocable_mem_size(), TUnit::BYTES);
+        */
+        if (sys_mem_available < doris::MemInfo::sys_mem_available_warning_water_mark() &&
+            query_mem > _state->query_mem_limit()) {
+            auto sink_revocable_mem_size = _sink->revocable_mem_size(_state);
+            if (sink_revocable_mem_size >= _state->min_revocable_mem()) {
+                status = _sink->revoke_memory(_state);
+                if (status.is<ErrorCode::PIP_WAIT_FOR_IO>()) {
+                    set_state(PipelineTaskState::BLOCKED_FOR_IO);
+                    break;
+                }
+                RETURN_IF_ERROR(status);
+            }
+            /*
+            auto revocable_mem_size = _root->revocable_mem_size();
+            if (revocable_mem_size >= _state->min_revocable_mem()) {
+                status = _root->revoke_memory();
+                if (status.is<ErrorCode::PIP_WAIT_FOR_IO>()) {
+                    set_state(PipelineTaskState::BLOCKED_FOR_IO);
+                    break;
+                }
+                RETURN_IF_ERROR(status);
+            }
+            */
+        }
+
         // Pull block from operator chain
         {
             SCOPED_TIMER(_get_block_timer);
             _get_block_counter->update(1);
-            RETURN_IF_ERROR(_root->get_block(_state, block, _data_state));
+            status = _root->get_block(_state, block, _data_state);
+            if (status.is<ErrorCode::PIP_WAIT_FOR_IO>()) {
+                VLOG_ROW << "pipeline task get_block BLOCKED_FOR_IO";
+                set_state(PipelineTaskState::BLOCKED_FOR_IO);
+                break;
+            }
+            RETURN_IF_ERROR(status);
         }
         *eos = _data_state == SourceState::FINISHED;
 

@@ -781,6 +781,7 @@ size_t AggregationNode::_memory_usage() const {
     if (_aggregate_data_container) {
         usage += _aggregate_data_container->memory_usage();
     }
+    usage += _mem_usage_record.used_in_state;
 
     return usage;
 }
@@ -1074,6 +1075,44 @@ Status AggregationNode::_serialize_hash_table_to_block(HashTableCtxType& context
 }
 
 template <typename HashTableCtxType, typename HashTableType>
+Status AggregationNode::_convert_hash_table_to_block(HashTableCtxType& agg_method,
+                                                     HashTableType& hash_table, Block& block,
+                                                     bool& has_null_key,
+                                                     std::vector<size_t>& keys_hashes) {
+    std::vector<typename HashTableType::key_type> keys;
+    RETURN_IF_ERROR(_serialize_hash_table_to_block(agg_method, hash_table, block, keys));
+    CHECK_EQ(block.rows(), hash_table.size());
+    CHECK_EQ(keys.size(), block.rows());
+
+    has_null_key = hash_table.has_null_key_data();
+
+    const size_t rows = has_null_key ? block.rows() - 1 : block.rows();
+    for (size_t i = 0; i < rows; ++i) {
+        keys_hashes.emplace_back(hash_table.hash(keys[i]));
+    }
+    return Status::OK();
+}
+
+Status AggregationNode::get_and_release_aggregate_data(Block& block, bool& has_null_key,
+                                                       std::vector<size_t>& keys_hashes) {
+    has_null_key = false;
+    if (_get_hash_table_size() == 0) {
+        return Status::OK();
+    }
+
+    auto st = std::visit(
+            [&](auto&& agg_method) -> Status {
+                auto& hash_table = *agg_method.hash_table;
+
+                return _convert_hash_table_to_block(agg_method, hash_table, block, has_null_key,
+                                                    keys_hashes);
+            },
+            _agg_data->method_variant);
+    RETURN_IF_ERROR(st);
+    return _reset_hash_table();
+}
+
+template <typename HashTableCtxType, typename HashTableType>
 Status AggregationNode::_spill_hash_table(HashTableCtxType& agg_method, HashTableType& hash_table) {
     Block block;
     std::vector<typename HashTableType::key_type> keys;
@@ -1203,6 +1242,16 @@ Status AggregationNode::_merge_spilt_data() {
         }
     }
     _spill_context.read_cursor++;
+    return Status::OK();
+}
+
+Status AggregationNode::prepare_merge_partition_aggregation_data() {
+    _aggregate_data_container->init_once();
+    return _reset_hash_table();
+}
+
+Status AggregationNode::prepare_pull() {
+    _aggregate_data_container->init_once();
     return Status::OK();
 }
 
@@ -1544,6 +1593,9 @@ void AggregationNode::_release_mem() {
 
     std::vector<AggregateDataPtr> tmp_values;
     _values.swap(tmp_values);
+}
+size_t AggregationNode::revocable_mem_size(RuntimeState* state) const {
+    return _memory_usage();
 }
 
 Status AggSpillContext::prepare_for_reading() {

@@ -134,6 +134,14 @@ Status VSortNode::alloc_resource(doris::RuntimeState* state) {
     return Status::OK();
 }
 
+size_t VSortNode::revocable_mem_size(RuntimeState* state) const {
+    size_t size = 0;
+    if (_sorter) {
+        size = _sorter->data_size();
+    }
+    return size;
+}
+
 Status VSortNode::sink(RuntimeState* state, vectorized::Block* input_block, bool eos) {
     SCOPED_TIMER(_exec_timer);
     if (input_block->rows() > 0) {
@@ -161,8 +169,28 @@ Status VSortNode::sink(RuntimeState* state, vectorized::Block* input_block, bool
     }
 
     if (eos) {
+        RETURN_IF_ERROR(prepare_for_read());
+    }
+    return Status::OK();
+}
+
+Status VSortNode::prepare_for_read() {
+    if (!_can_read) {
         RETURN_IF_ERROR(_sorter->prepare_for_read());
         _can_read = true;
+    }
+
+    return Status::OK();
+}
+
+Status VSortNode::release_sorted_blocks(RuntimeState* state, Blocks& blocks, int batch_size) {
+    RETURN_IF_ERROR(prepare_for_read());
+
+    bool eos = false;
+    while (!eos) {
+        Block block;
+        RETURN_IF_ERROR(_sorter->merge_sort_read_for_spill(state, &block, batch_size, &eos));
+        blocks.emplace_back(std::move(block));
     }
     return Status::OK();
 }
@@ -206,9 +234,6 @@ Status VSortNode::pull(doris::RuntimeState* state, vectorized::Block* output_blo
     SCOPED_TIMER(_get_next_timer);
     RETURN_IF_ERROR_OR_CATCH_EXCEPTION(_sorter->get_next(state, output_block, eos));
     reached_limit(output_block, eos);
-    if (*eos) {
-        _runtime_profile->add_info_string("Spilled", _sorter->is_spilled() ? "true" : "false");
-    }
     return Status::OK();
 }
 

@@ -26,6 +26,7 @@ namespace doris {
 namespace pipeline {
 
 OPERATOR_CODE_GENERATOR(HashJoinProbeOperator, StatefulOperator)
+OPERATOR_CODE_GENERATOR(GraceHashJoinProbeOperator, StatefulOperator)
 
 HashJoinProbeLocalState::HashJoinProbeLocalState(RuntimeState* state, OperatorXBase* parent)
         : JoinProbeLocalState<HashJoinProbeDependency, HashJoinProbeLocalState>(state, parent) {}

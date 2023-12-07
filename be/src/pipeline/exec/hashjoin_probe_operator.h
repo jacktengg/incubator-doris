@@ -22,6 +22,7 @@
 #include "operator.h"
 #include "pipeline/exec/join_probe_operator.h"
 #include "pipeline/pipeline_x/operator.h"
+#include "vec/exec/join/grace_hash_join_node.h"
 
 namespace doris {
 class ExecNode;
@@ -43,6 +44,25 @@ public:
     // should skip `alloc_resource()` function call, only sink operator
     // call the function
     Status open(RuntimeState*) override { return Status::OK(); }
+};
+
+class GraceHashJoinProbeOperatorBuilder final
+        : public OperatorBuilder<vectorized::GraceHashJoinNode> {
+public:
+    GraceHashJoinProbeOperatorBuilder(int32_t, ExecNode*);
+
+    OperatorPtr build_operator() override;
+    bool io_task_finished() { return true; }
+};
+
+class GraceHashJoinProbeOperator final : public StatefulOperator<vectorized::GraceHashJoinNode> {
+public:
+    GraceHashJoinProbeOperator(OperatorBuilderBase*, ExecNode*);
+    // if exec node split to: sink, source operator. the source operator
+    // should skip `alloc_resource()` function call, only sink operator
+    // call the function
+    Status open(RuntimeState*) override { return Status::OK(); }
+    bool io_task_finished() override { return _node->io_task_finished(); }
 };
 
 class HashJoinProbeLocalState;

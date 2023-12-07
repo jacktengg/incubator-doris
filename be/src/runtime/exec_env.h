@@ -41,6 +41,7 @@ namespace doris {
 namespace vectorized {
 class VDataStreamMgr;
 class ScannerScheduler;
+class SpillStreamManager;
 class DeltaWriterV2Pool;
 } // namespace vectorized
 namespace pipeline {
@@ -120,6 +121,7 @@ public:
 
     // Initial exec environment. must call this to init all
     [[nodiscard]] static Status init(ExecEnv* env, const std::vector<StorePath>& store_paths,
+                                     const std::vector<StorePath>& spill_store_paths,
                                      const std::set<std::string>& broken_paths);
 
     // Stop all threads and delete resources.
@@ -174,6 +176,7 @@ public:
     ThreadPool* send_report_thread_pool() { return _send_report_thread_pool.get(); }
     ThreadPool* join_node_thread_pool() { return _join_node_thread_pool.get(); }
     ThreadPool* lazy_release_obj_pool() { return _lazy_release_obj_pool.get(); }
+    // ThreadPool* spill_io_pool() { return _spill_io_pool.get(); }
 
     Status init_pipeline_task_scheduler();
     void init_file_cache_factory();
@@ -195,6 +198,7 @@ public:
     std::shared_ptr<NewLoadStreamMgr> new_load_stream_mgr() { return _new_load_stream_mgr; }
     SmallFileMgr* small_file_mgr() { return _small_file_mgr; }
     BlockSpillManager* block_spill_mgr() { return _block_spill_mgr; }
+    doris::vectorized::SpillStreamManager* spill_stream_mgr() { return _spill_stream_mgr; }
     GroupCommitMgr* group_commit_mgr() { return _group_commit_mgr; }
 
     const std::vector<StorePath>& store_paths() const { return _store_paths; }
@@ -271,6 +275,7 @@ private:
     ExecEnv();
 
     [[nodiscard]] Status _init(const std::vector<StorePath>& store_paths,
+                               const std::vector<StorePath>& spill_store_paths,
                                const std::set<std::string>& broken_paths);
     void _destroy();
 
@@ -281,6 +286,7 @@ private:
 
     inline static std::atomic_bool _s_ready {false};
     std::vector<StorePath> _store_paths;
+    std::vector<StorePath> _spill_store_paths;
 
     io::FileCacheFactory* _file_cache_factory = nullptr;
     UserFunctionCache* _user_function_cache = nullptr;
@@ -378,6 +384,8 @@ private:
     WorkloadSchedPolicyMgr* _workload_sched_mgr = nullptr;
 
     RuntimeQueryStatiticsMgr* _runtime_query_statistics_mgr = nullptr;
+    doris::vectorized::SpillStreamManager* _spill_stream_mgr = nullptr;
+    // std::unique_ptr<ThreadPool> _spill_io_pool;
 };
 
 template <>
