@@ -324,6 +324,8 @@ import org.apache.doris.nereids.trees.expressions.functions.scalar.Sha1;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sha2;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sign;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sin;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.SipHash128;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.SipHash128Reference;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sleep;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sm3;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sm3sum;
@@ -748,6 +750,8 @@ public class BuiltinScalarFunctions implements FunctionHelper {
             scalar(Sha2.class, "sha2"),
             scalar(Sign.class, "sign"),
             scalar(Sin.class, "sin"),
+            scalar(SipHash128.class, "siphash128"),
+            scalar(SipHash128Reference.class, "siphash128reference"),
             scalar(Sleep.class, "sleep"),
             scalar(StructElement.class, "struct_element"),
             scalar(Sm3.class, "sm3"),

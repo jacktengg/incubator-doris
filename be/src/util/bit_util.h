@@ -32,6 +32,9 @@
 
 namespace doris {
 
+template <class _Tp>
+concept integral = std::is_integral_v<_Tp>;
+
 // Utility class to do standard bit tricks
 // TODO: is this in boost or something else like that?
 class BitUtil {
@@ -479,6 +482,24 @@ public:
         uint8_t* d = reinterpret_cast<uint8_t*>(dst);
         const uint8_t* s = reinterpret_cast<const uint8_t*>(src);
         for (int i = 0; i < len; ++i) d[i] = s[len - i - 1];
+    }
+
+    template <integral _Tp>
+    static constexpr _Tp byteswap(_Tp __val) noexcept {
+        if constexpr (sizeof(_Tp) == 1) {
+            return __val;
+        } else if constexpr (sizeof(_Tp) == 2) {
+            return __builtin_bswap16(__val);
+        } else if constexpr (sizeof(_Tp) == 4) {
+            return __builtin_bswap32(__val);
+        } else if constexpr (sizeof(_Tp) == 8) {
+            return __builtin_bswap64(__val);
+        } else if constexpr (sizeof(_Tp) == 16) {
+            return __builtin_bswap128(__val);
+        } else {
+            static_assert(sizeof(_Tp) == 0,
+                          "byteswap is unimplemented for integral types of this size");
+        }
     }
 };
 

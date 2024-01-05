@@ -315,6 +315,8 @@ import org.apache.doris.nereids.trees.expressions.functions.scalar.Sha1;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sha2;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sign;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sin;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.SipHash128;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.SipHash128Reference;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sleep;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sm3;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Sm3sum;
@@ -1391,6 +1393,14 @@ public interface ScalarFunctionVisitor<R, C> {
 
     default R visitMurmurHash364(MurmurHash364 murmurHash364, C context) {
         return visitScalarFunction(murmurHash364, context);
+    }
+
+    default R visitSipHash128(SipHash128 sipHash128, C context) {
+        return visitScalarFunction(sipHash128, context);
+    }
+
+    default R visitSipHash128Reference(SipHash128Reference sipHash128Reference, C context) {
+        return visitScalarFunction(sipHash128Reference, context);
     }
 
     default R visitNegative(Negative negative, C context) {

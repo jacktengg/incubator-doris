@@ -71,6 +71,9 @@ private:
     /// How many bytes have been processed.
     doris::vectorized::UInt64 cnt;
 
+    /// Whether it should use the reference algo for 128-bit or CH's version
+    bool is_reference_128;
+
     /// The current 8 bytes of input data.
     union {
         doris::vectorized::UInt64 current_word;
@@ -86,7 +89,11 @@ private:
         SIPROUND;
         v0 ^= current_word;
 
-        v2 ^= 0xff;
+        if (is_reference_128) {
+            v2 ^= 0xee;
+        } else {
+            v2 ^= 0xff;
+        }
         SIPROUND;
         SIPROUND;
         SIPROUND;
@@ -95,12 +102,18 @@ private:
 
 public:
     /// Arguments - seed.
-    SipHash(doris::vectorized::UInt64 k0 = 0, doris::vectorized::UInt64 k1 = 0) {
+    SipHash(doris::vectorized::UInt64 k0 = 0, doris::vectorized::UInt64 k1 = 0,
+            bool is_reference_128_ = false) {
         /// Initialize the state with some random bytes and seed.
         v0 = 0x736f6d6570736575ULL ^ k0;
         v1 = 0x646f72616e646f6dULL ^ k1;
         v2 = 0x6c7967656e657261ULL ^ k0;
         v3 = 0x7465646279746573ULL ^ k1;
+        is_reference_128 = is_reference_128_;
+
+        if (is_reference_128) {
+            v1 ^= 0xee;
+        }
 
         cnt = 0;
         current_word = 0;
@@ -204,6 +217,26 @@ public:
         static_assert(sizeof(T) == 16);
         get128(reinterpret_cast<char*>(&dst));
     }
+
+    void get128_reference(char* out) {
+        DCHECK(is_reference_128);
+        finalize();
+        const auto lo = v0 ^ v1 ^ v2 ^ v3;
+        v1 ^= 0xdd;
+        SIPROUND;
+        SIPROUND;
+        SIPROUND;
+        SIPROUND;
+        const auto hi = v0 ^ v1 ^ v2 ^ v3;
+
+        reinterpret_cast<doris::vectorized::UInt64*>(out)[0] = lo;
+        reinterpret_cast<doris::vectorized::UInt64*>(out)[1] = hi;
+    }
+    template <typename T>
+    void get128_reference(T& dst) {
+        static_assert(sizeof(T) == 16);
+        get128_reference(reinterpret_cast<char*>(&dst));
+    }
 };
 
 #undef ROTL
@@ -215,4 +248,10 @@ inline void sip_hash128(const char* data, const size_t size, char* out) {
     SipHash hash;
     hash.update(data, size);
     hash.get128(out);
+}
+
+inline void sip_hash128_reference(const char* data, const size_t size, char* out) {
+    SipHash hash(0, 0, true);
+    hash.update(data, size);
+    hash.get128_reference(out);
 }

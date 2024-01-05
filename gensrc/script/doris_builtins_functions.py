@@ -1870,7 +1870,15 @@ visible_functions = {
         [['murmur_hash3_32'], 'INT', ['VARCHAR', '...'], ''],
         [['murmur_hash3_32'], 'INT', ['STRING', '...'], ''],
         [['murmur_hash3_64'], 'BIGINT', ['VARCHAR', '...'], ''],
-        [['murmur_hash3_64'], 'BIGINT', ['STRING', '...'], '']
+        [['murmur_hash3_64'], 'BIGINT', ['STRING', '...'], ''],
+        [['siphash128'], 'VARCHAR', ['VARCHAR', '...'], ''],
+        [['siphash128'], 'STRING', ['STRING', '...'], ''],
+        [['siphash128keyed'], 'VARCHAR', ['VARCHAR', '...'], ''],
+        [['siphash128keyed'], 'STRING', ['STRING', '...'], ''],
+        [['siphash128reference'], 'VARCHAR', ['VARCHAR', '...'], ''],
+        [['siphash128reference'], 'STRING', ['STRING', '...'], ''],
+        [['siphash128referencekeyed'], 'VARCHAR', ['VARCHAR', '...'], ''],
+        [['siphash128referencekeyed'], 'STRING', ['STRING', '...'], '']
     ],
 
     # aes and base64 function
