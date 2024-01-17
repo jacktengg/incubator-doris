@@ -98,8 +98,6 @@ public:
     // write blocks_ to disk asynchronously
     // Status flush(const flush_stream_callback& cb);
 
-    void spill();
-
     Status restore();
 
     bool is_spilling();
@@ -116,7 +114,18 @@ public:
 
     bool has_in_memory_blocks();
 
+    Status seek_for_read(size_t block_index);
+
+    Status read(Block* block, bool* eos);
+
 private:
+    friend class SpillStreamManager;
+
+    void prepare_spill();
+
+    void spill();
+
+
     bool _block_reach_limit() const {
         return mutable_block_->rows() > batch_rows_ || mutable_block_->bytes() > batch_bytes_;
     }
@@ -132,9 +141,9 @@ private:
 
     Status _flush_internal();
 
-    Status _read_async();
+    Status _get_next_spilled_async();
 
-    Status _read_sync(Block* block);
+    Status _get_next_spilled_sync(Block* block);
 
     ThreadPool* io_thread_pool_;
     std::unique_ptr<MutableBlock> mutable_block_;

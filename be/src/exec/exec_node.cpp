@@ -357,7 +357,10 @@ Status ExecNode::create_node(RuntimeState* state, ObjectPool* pool, const TPlanN
         if (tnode.agg_node.aggregate_functions.empty() && state->enable_pipeline_exec()) {
             *node = pool->add(new vectorized::DistinctAggregationNode(pool, tnode, descs));
         } else {
-            if (state->enable_pipeline_exec() && state->enable_agg_spill()) {
+            auto is_streaming_preagg = (tnode.agg_node.__isset.use_streaming_preaggregation &&
+                                        tnode.agg_node.use_streaming_preaggregation);
+            if (!is_streaming_preagg && state->enable_pipeline_exec() &&
+                state->enable_agg_spill()) {
                 *node = pool->add(new vectorized::PartitionedAggregationNode(pool, tnode, descs));
             } else {
                 *node = pool->add(new vectorized::AggregationNode(pool, tnode, descs));

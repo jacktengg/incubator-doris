@@ -67,7 +67,7 @@ Status SpillWriter::close() {
     meta_.append((const char*)&written_blocks_, sizeof(written_blocks_));
 
     Status status;
-    // meta: block1 offset, block2 offset, ..., blockn offset, n
+    // meta: block1 offset, block2 offset, ..., blockn offset, max_sub_block_size, n
     {
         SCOPED_TIMER(write_timer_);
         status = file_writer_->append(meta_);

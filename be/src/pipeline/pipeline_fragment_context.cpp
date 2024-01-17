@@ -67,6 +67,8 @@
 #include "pipeline/exec/operator.h"
 #include "pipeline/exec/partition_sort_sink_operator.h"
 #include "pipeline/exec/partition_sort_source_operator.h"
+#include "pipeline/exec/partitioned_aggregation_sink_operator.h"
+#include "pipeline/exec/partitioned_aggregation_source_operator.h"
 #include "pipeline/exec/repeat_operator.h"
 #include "pipeline/exec/result_file_sink_operator.h"
 #include "pipeline/exec/result_sink_operator.h"
@@ -545,33 +547,44 @@ Status PipelineFragmentContext::_build_pipelines(ExecNode* node, PipelinePtr cur
         auto* agg_node = dynamic_cast<vectorized::AggregationNode*>(node);
         auto new_pipe = add_pipeline();
         RETURN_IF_ERROR(_build_pipelines(node->child(0), new_pipe));
-        if (agg_node->is_aggregate_evaluators_empty()) {
-            auto data_queue = std::make_shared<DataQueue>(1);
-            OperatorBuilderPtr pre_agg_sink =
-                    std::make_shared<DistinctStreamingAggSinkOperatorBuilder>(node->id(), agg_node,
-                                                                              data_queue);
-            RETURN_IF_ERROR(new_pipe->set_sink_builder(pre_agg_sink));
+        if (agg_node) {
+            if (agg_node->is_aggregate_evaluators_empty()) {
+                auto data_queue = std::make_shared<DataQueue>(1);
+                OperatorBuilderPtr pre_agg_sink =
+                        std::make_shared<DistinctStreamingAggSinkOperatorBuilder>(
+                                node->id(), agg_node, data_queue);
+                RETURN_IF_ERROR(new_pipe->set_sink_builder(pre_agg_sink));
 
-            OperatorBuilderPtr pre_agg_source =
-                    std::make_shared<DistinctStreamingAggSourceOperatorBuilder>(
-                            node->id(), agg_node, data_queue);
-            RETURN_IF_ERROR(cur_pipe->add_operator(pre_agg_source));
-        } else if (agg_node->is_streaming_preagg()) {
-            auto data_queue = std::make_shared<DataQueue>(1);
-            OperatorBuilderPtr pre_agg_sink = std::make_shared<StreamingAggSinkOperatorBuilder>(
-                    node->id(), agg_node, data_queue);
-            RETURN_IF_ERROR(new_pipe->set_sink_builder(pre_agg_sink));
+                OperatorBuilderPtr pre_agg_source =
+                        std::make_shared<DistinctStreamingAggSourceOperatorBuilder>(
+                                node->id(), agg_node, data_queue);
+                RETURN_IF_ERROR(cur_pipe->add_operator(pre_agg_source));
+            } else if (agg_node->is_streaming_preagg()) {
+                auto data_queue = std::make_shared<DataQueue>(1);
+                OperatorBuilderPtr pre_agg_sink = std::make_shared<StreamingAggSinkOperatorBuilder>(
+                        node->id(), agg_node, data_queue);
+                RETURN_IF_ERROR(new_pipe->set_sink_builder(pre_agg_sink));
 
-            OperatorBuilderPtr pre_agg_source = std::make_shared<StreamingAggSourceOperatorBuilder>(
-                    node->id(), agg_node, data_queue);
-            RETURN_IF_ERROR(cur_pipe->add_operator(pre_agg_source));
+                OperatorBuilderPtr pre_agg_source =
+                        std::make_shared<StreamingAggSourceOperatorBuilder>(node->id(), agg_node,
+                                                                            data_queue);
+                RETURN_IF_ERROR(cur_pipe->add_operator(pre_agg_source));
+            } else {
+                OperatorBuilderPtr agg_sink =
+                        std::make_shared<AggSinkOperatorBuilder>(node->id(), agg_node);
+                RETURN_IF_ERROR(new_pipe->set_sink_builder(agg_sink));
+                OperatorBuilderPtr agg_source =
+                        std::make_shared<AggSourceOperatorBuilder>(node->id(), agg_node);
+                RETURN_IF_ERROR(cur_pipe->add_operator(agg_source));
+            }
         } else {
-            OperatorBuilderPtr agg_sink =
-                    std::make_shared<AggSinkOperatorBuilder>(node->id(), agg_node);
+            auto* partitioned_agg_node =
+                    dynamic_cast<vectorized::PartitionedAggregationNode*>(node);
+            OperatorBuilderPtr agg_sink = std::make_shared<PartitionedAggSinkOperatorBuilder>(
+                    node->id(), partitioned_agg_node);
             RETURN_IF_ERROR(new_pipe->set_sink_builder(agg_sink));
-
-            OperatorBuilderPtr agg_source =
-                    std::make_shared<AggSourceOperatorBuilder>(node->id(), agg_node);
+            OperatorBuilderPtr agg_source = std::make_shared<PartitionedAggSourceOperatorBuilder>(
+                    node->id(), partitioned_agg_node);
             RETURN_IF_ERROR(cur_pipe->add_operator(agg_source));
         }
         break;

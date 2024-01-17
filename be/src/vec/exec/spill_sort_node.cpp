@@ -89,19 +89,19 @@ Status SpillSortNode::sink(RuntimeState* state, Block* input_block, bool eos) {
     }
     if (eos) {
         RETURN_IF_ERROR(_prepare_for_pull(state));
-        if (sorted_streams_.empty()) {
-            _can_read = true;
-        }
     }
     return Status::OK();
 }
 
 Status SpillSortNode::_prepare_for_pull(RuntimeState* state) {
+    /*
     // no spill
     if (sorted_streams_.empty()) {
         LOG(WARNING) << this << " spill sort not spilled";
+        _can_read = true;
         return in_memory_sort_node_->prepare_for_read();
     }
+    */
 
     RETURN_IF_ERROR(_release_in_mem_sorted_blocks());
 
@@ -225,8 +225,7 @@ bool SpillSortNode::io_task_finished() {
                 _can_read = true;
             }
             LOG(WARNING) << this
-                         << "SpillSortNode::io_task_finished, spill finished, revokable mem: "
-                         << in_memory_sort_node_->revokable_mem_size();
+                         << "SpillSortNode::io_task_finished, spill finished";
             return true;
         }
     } else if (sink_eos_) {
@@ -279,6 +278,9 @@ Status SpillSortNode::_create_intermediate_merger(int num_blocks,
 
 Status SpillSortNode::pull(doris::RuntimeState* state, vectorized::Block* output_block, bool* eos) {
     RETURN_IF_ERROR(status_);
+    if (!io_task_finished()) {
+        return Status::WaitForIO("merging spilled blocks");
+    }
     if (merger_) {
         LOG(WARNING) << this << " spill sort pull, merge get next";
         return merger_->get_next(output_block, eos);

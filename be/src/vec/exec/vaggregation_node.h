@@ -421,6 +421,17 @@ public:
     bool is_aggregate_evaluators_empty() const { return _aggregate_evaluators.empty(); }
     void _make_nullable_output_key(Block* block);
 
+    Status get_and_release_aggregate_data(Block& block, bool& has_null_key,
+                                          std::vector<size_t>& keys_hashes);
+    size_t revokable_mem_size() const override;
+
+    Status prepare_merge_partition_aggregation_data();
+    Status prepare_pull();
+
+    Status merge_spilt_partition_aggregation_data(Block* block) {
+        return _merge_with_serialized_key_helper<false, true>(block);
+    }
+
 protected:
     bool _is_streaming_preagg;
     bool _child_eos = false;
@@ -709,6 +720,11 @@ private:
 
     template <typename HashTableCtxType, typename HashTableType>
     Status _spill_hash_table(HashTableCtxType& agg_method, HashTableType& hash_table);
+
+    template <typename HashTableCtxType, typename HashTableType>
+    Status _convert_hash_table_to_block(HashTableCtxType& agg_method, HashTableType& hash_table,
+                                        Block& block, bool& has_null_key,
+                                        std::vector<size_t>& keys_hashes);
 
     void _find_in_hash_table(AggregateDataPtr* places, ColumnRawPtrs& key_columns, size_t num_rows);
 

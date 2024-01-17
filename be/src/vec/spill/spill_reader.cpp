@@ -66,6 +66,7 @@ Status SpillReader::open() {
     // read block count
     size_t bytes_read = 0;
     RETURN_IF_ERROR(file_reader_->read_at(file_size - sizeof(size_t), result, &bytes_read));
+    LOG(WARNING) << "spill reader block count: " << block_count_;
 
     // read max sub block size
     result.data = (char*)&max_sub_block_size_;

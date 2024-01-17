@@ -124,17 +124,16 @@ void SpillStream::unpin() {
     in_mem_blocks_.clear();
 }
 
-void SpillStream::spill() {
+void SpillStream::prepare_spill() {
     DCHECK(!spill_promise_);
-
-    Status status;
-
     spilled_ = true;
     spill_promise_ = std::make_unique<std::promise<Status>>();
     spill_future_ = spill_promise_->get_future();
     LOG(WARNING) << "spill stream start spilling: stream " << stream_id_;
+}
+void SpillStream::spill() {
 
-    status = writer_->open();
+    Status status = writer_->open();
     if (!status.ok()) {
         spill_promise_->set_value(status);
         LOG(WARNING) << "spill stream open failed: " << stream_id_;
@@ -166,23 +165,6 @@ void SpillStream::spill() {
     LOG(WARNING) << "spill stream spill finished: stream " << stream_id_;
 }
 
-bool SpillStream::is_spilling() {
-    if (spill_promise_) {
-        LOG(WARNING) << "check spill stream: " << stream_id_;
-        auto status = spill_future_.wait_for(std::chrono::milliseconds(10));
-        if (status == std::future_status::ready) {
-            auto status = spill_future_.get();
-            LOG(WARNING) << "spill stream spilling ready: " << stream_id_ << ", status: " << status;
-            spill_promise_.reset();
-            return false;
-        } else {
-            LOG(WARNING) << "spill stream spilling NOT ready: " << stream_id_;
-            return true;
-        }
-    }
-    LOG(WARNING) << "spill stream is not spilling: " << stream_id_;
-    return false;
-}
 size_t SpillStream::spillable_data_size() {
     size_t size = 0;
     std::lock_guard l(lock_);
@@ -216,12 +198,12 @@ Status SpillStream::get_next(Block* block, bool* eos, bool async) {
     } else {
         // initiate async read
         if (async) {
-            RETURN_IF_ERROR(_read_async());
+            RETURN_IF_ERROR(_get_next_spilled_async());
             LOG(WARNING) << "SpillStream::get_next, reading spilled block: " << stream_id_;
             return Status::WaitForIO("reading spilled blocks");
         } else {
             LOG(WARNING) << "SpillStream::get_next, read sync: " << stream_id_;
-            return _read_sync(block);
+            return _get_next_spilled_sync(block);
         }
     }
 }
@@ -238,7 +220,7 @@ SpillableBlockSPtr SpillStream::_get_next_spilled_block() {
     return block;
 }
 
-Status SpillStream::_read_sync(Block* block) {
+Status SpillStream::_get_next_spilled_sync(Block* block) {
     RETURN_IF_ERROR(reader_->open());
 
     Status st;
@@ -253,24 +235,7 @@ Status SpillStream::_read_sync(Block* block) {
     return Status::OK();
 }
 
-bool SpillStream::is_reading() {
-    if (read_promise_) {
-        auto status = read_future_.wait_for(std::chrono::milliseconds(10));
-        if (status == std::future_status::ready) {
-            auto status = read_future_.get();
-            LOG(WARNING) << "spill stream read finished, status: " << status;
-            read_promise_.reset();
-            return false;
-        } else {
-            LOG(WARNING) << "spill stream read NOT ready";
-            return true;
-        }
-    }
-    LOG(WARNING) << "spill stream is not reading";
-    return false;
-}
-
-Status SpillStream::_read_async() {
+Status SpillStream::_get_next_spilled_async() {
     DCHECK(!read_promise_);
     RETURN_IF_ERROR(reader_->open());
 
@@ -301,5 +266,51 @@ bool SpillStream::has_in_memory_blocks() {
     return !in_mem_blocks_.empty() || !dirty_blocks_.empty();
 }
 
+Status SpillStream::seek_for_read(size_t block_index) {
+    RETURN_IF_ERROR(reader_->open());
+    reader_->seek(block_index);
+    return Status::OK();
+}
+
+// read at the current offset
+Status SpillStream::read(Block* block, bool* eos) {
+    RETURN_IF_ERROR(reader_->open());
+    return reader_->read(block, eos);
+}
+
+bool SpillStream::is_spilling() {
+    if (spill_promise_) {
+        LOG(WARNING) << "check spill stream: " << stream_id_;
+        auto status = spill_future_.wait_for(std::chrono::milliseconds(10));
+        if (status == std::future_status::ready) {
+            auto status = spill_future_.get();
+            LOG(WARNING) << "spill stream spilling ready: " << stream_id_ << ", status: " << status;
+            spill_promise_.reset();
+            return false;
+        } else {
+            LOG(WARNING) << "spill stream spilling NOT ready: " << stream_id_;
+            return true;
+        }
+    }
+    LOG(WARNING) << "spill stream is not spilling: " << stream_id_;
+    return false;
+}
+
+bool SpillStream::is_reading() {
+    if (read_promise_) {
+        auto status = read_future_.wait_for(std::chrono::milliseconds(10));
+        if (status == std::future_status::ready) {
+            auto status = read_future_.get();
+            LOG(WARNING) << "spill stream read finished, status: " << status;
+            read_promise_.reset();
+            return false;
+        } else {
+            LOG(WARNING) << "spill stream read NOT ready";
+            return true;
+        }
+    }
+    LOG(WARNING) << "spill stream is not reading";
+    return false;
+}
 } // namespace vectorized
 } // namespace doris
