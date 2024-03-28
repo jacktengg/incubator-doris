@@ -35,6 +35,7 @@
 #include "vec/common/hash_table/hash_map_context_creator.h"
 #include "vec/common/sort/partition_sorter.h"
 #include "vec/common/sort/sorter.h"
+#include "vec/core/sort_description.h"
 #include "vec/core/types.h"
 #include "vec/exec/join/process_hash_table_probe.h"
 #include "vec/exec/join/vhash_join_node.h"
@@ -417,30 +418,6 @@ private:
     }
 };
 
-struct AggSpillPartition;
-struct PartitionedAggSharedState : public BasicSharedState {
-public:
-    PartitionedAggSharedState() = default;
-    ~PartitionedAggSharedState() override = default;
-
-    void init_spill_params(size_t spill_partition_count_bits);
-
-    void close();
-
-    AggSharedState* in_mem_shared_state = nullptr;
-    std::shared_ptr<BasicSharedState> in_mem_shared_state_sptr;
-
-    size_t partition_count_bits;
-    size_t partition_count;
-    size_t max_partition_index;
-    Status sink_status;
-    std::deque<std::shared_ptr<AggSpillPartition>> spill_partitions;
-
-    size_t get_partition_index(size_t hash_value) const {
-        return (hash_value >> (32 - partition_count_bits)) & max_partition_index;
-    }
-};
-
 struct AggSpillPartition {
     static constexpr int64_t AGG_SPILL_FILE_SIZE = 1024 * 1024 * 1024; // 1G
 
@@ -509,6 +486,48 @@ struct SpillSortSharedState : public BasicSharedState {
     std::deque<vectorized::SpillStreamSPtr> sorted_streams;
     size_t avg_row_bytes = 0;
     int spill_block_batch_row_count;
+};
+
+struct PartitionedAggSharedState : public BasicSharedState {
+public:
+    PartitionedAggSharedState() = default;
+    ~PartitionedAggSharedState() override = default;
+
+    void init_spill_params(RuntimeState* state, ObjectPool* pool, int groupby_col_count,
+                           size_t spill_partition_count_bits, RuntimeProfile* profile);
+
+    void close();
+
+    AggSharedState* in_mem_shared_state = nullptr;
+    std::shared_ptr<BasicSharedState> in_mem_shared_state_sptr;
+
+    size_t partition_count_bits;
+    size_t partition_count;
+    size_t max_partition_index;
+    Status sink_status;
+    std::deque<std::shared_ptr<AggSpillPartition>> spill_partitions;
+
+    bool enable_sort_agg = false;
+    std::unique_ptr<vectorized::Sorter> sorter;
+    std::deque<vectorized::SpillStreamSPtr> sorted_streams;
+    vectorized::SortDescription sort_description;
+    size_t avg_row_bytes = 0;
+    int spill_block_batch_row_count;
+
+    size_t get_partition_index(size_t hash_value) const {
+        return (hash_value >> (32 - partition_count_bits)) & max_partition_index;
+    }
+
+    // This number specifies the maximum size of sub blocks
+    void update_spill_block_batch_row_count(const vectorized::Block* block) {
+        auto rows = block->rows();
+        if (rows > 0 && 0 == avg_row_bytes) {
+            avg_row_bytes = std::max((std::size_t)1, block->bytes() / rows);
+            spill_block_batch_row_count =
+                    (SpillSortSharedState::SORT_BLOCK_SPILL_BATCH_BYTES + avg_row_bytes - 1) / avg_row_bytes;
+            LOG(INFO) << "sort agg block batch row count: " << spill_block_batch_row_count;
+        }
+    }
 };
 
 struct UnionSharedState : public BasicSharedState {

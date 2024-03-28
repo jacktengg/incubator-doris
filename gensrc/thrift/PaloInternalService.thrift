@@ -285,6 +285,8 @@ struct TQueryOptions {
   104: optional i64 min_revocable_mem = 0
 
   105: optional i64 spill_streaming_agg_mem_limit = 0;
+
+  106: optional bool enable_sort_agg = 0;
   
   // For cloud, to control if the content would be written into file cache
   1000: optional bool disable_file_cache = false

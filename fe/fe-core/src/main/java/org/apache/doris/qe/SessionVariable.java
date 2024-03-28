@@ -491,6 +491,7 @@ public class SessionVariable implements Serializable, Writable {
     public static final String ENABLE_JOIN_SPILL = "enable_join_spill";
     public static final String ENABLE_SORT_SPILL = "enable_sort_spill";
     public static final String ENABLE_AGG_SPILL = "enable_agg_spill";
+    public static final String ENABLE_SORT_AGG = "enable_sort_agg";
 
     public static final String GENERATE_STATS_FACTOR = "generate_stats_factor";
 
@@ -1694,6 +1695,14 @@ public class SessionVariable implements Serializable, Writable {
                             + "The default value is false."},
             needForward = true)
     public boolean enableAggSpill = false;
+
+    @VariableMgr.VarAttr(
+            name = ENABLE_SORT_AGG,
+            description = {"控制当聚合算子落盘后是否使用排序聚合。默认为 false。",
+                    "Controls whether to use sort aggregation when aggragation spills. "
+                            + "The default value is false."},
+            needForward = true)
+    public boolean enableSortAgg = false;
 
     // If the memory consumption of sort node exceed this limit, will trigger spill to disk;
     // Set to 0 to disable; min: 128M
@@ -3086,6 +3095,7 @@ public class SessionVariable implements Serializable, Writable {
         tResult.setEnableJoinSpill(enableJoinSpill);
         tResult.setEnableSortSpill(enableSortSpill);
         tResult.setEnableAggSpill(enableAggSpill);
+        tResult.setEnableSortAgg(enableSortAgg);
         tResult.setMinRevocableMem(minRevocableMem);
 
         return tResult;

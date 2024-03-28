@@ -42,7 +42,9 @@ Status PartitionedAggSinkLocalState::init(doris::RuntimeState* state,
     _init_counters();
 
     auto& parent = Base::_parent->template cast<Parent>();
-    Base::_shared_state->init_spill_params(parent._spill_partition_count_bits);
+    Base::_shared_state->init_spill_params(
+            state, parent._pool, Base::_shared_state->in_mem_shared_state->probe_expr_ctxs.size(),
+            parent._spill_partition_count_bits, Base::profile());
 
     RETURN_IF_ERROR(setup_in_memory_agg_op(state));
 
@@ -130,6 +132,7 @@ PartitionedAggSinkOperatorX::PartitionedAggSinkOperatorX(ObjectPool* pool, int o
                                                          const TPlanNode& tnode,
                                                          const DescriptorTbl& descs)
         : DataSinkOperatorX<PartitionedAggSinkLocalState>(operator_id, tnode.node_id) {
+    _pool = pool;
     _agg_sink_operator = std::make_unique<AggSinkOperatorX>(pool, operator_id, tnode, descs);
 }
 

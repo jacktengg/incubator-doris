@@ -231,13 +231,29 @@ Status AggSharedState::reset_hash_table() {
             agg_data->method_variant);
 }
 
-void PartitionedAggSharedState::init_spill_params(size_t spill_partition_count_bits) {
-    partition_count_bits = spill_partition_count_bits;
-    partition_count = (1 << spill_partition_count_bits);
-    max_partition_index = partition_count - 1;
+void PartitionedAggSharedState::init_spill_params(RuntimeState* state, ObjectPool* pool, int groupby_col_count,
+                                                  size_t spill_partition_count_bits, RuntimeProfile* profile) {
+    enable_sort_agg = state->enable_sort_spill();
+    if (enable_sort_agg) {
+        sort_description.resize(groupby_col_count);
+        for (int i = 0; i < groupby_col_count; ++i) {
+            sort_description[i].column_number = i;
+            sort_description[i].direction = 1;
+            sort_description[i].nulls_direction = -1;
+        }
+        // RowDescriptor row_desc;
+        // vectorized::VExprContextSPtrs ordering_expr_ctxs;
+        // sorter = vectorized::FullSorter::create_unique(
+        //         ordering_expr_ctxs, -1, 0, pool, true, true,
+        //         row_desc, state, profile);
+    } else {
+        partition_count_bits = spill_partition_count_bits;
+        partition_count = (1 << spill_partition_count_bits);
+        max_partition_index = partition_count - 1;
 
-    for (int i = 0; i < partition_count; ++i) {
-        spill_partitions.emplace_back(std::make_shared<AggSpillPartition>());
+        for (int i = 0; i < partition_count; ++i) {
+            spill_partitions.emplace_back(std::make_shared<AggSpillPartition>());
+        }
     }
 }
 

@@ -604,6 +604,10 @@ public:
         return _query_options.__isset.enable_agg_spill && _query_options.enable_agg_spill;
     }
 
+    bool enable_sort_agg() const {
+        return _query_options.__isset.enable_sort_agg && _query_options.enable_sort_agg;
+    }
+
     int64_t min_revocable_mem() const {
         if (_query_options.__isset.min_revocable_mem) {
             return _query_options.min_revocable_mem;

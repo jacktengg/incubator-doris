@@ -52,8 +52,8 @@ public:
         std::vector<vectorized::AggregateDataPtr> values_;
     };
     template <typename HashTableCtxType, typename HashTableType>
-    Status _spill_hash_table(RuntimeState* state, HashTableCtxType& context,
-                             HashTableType& hash_table, bool eos) {
+    Status _spill_hash_table_partitioned(RuntimeState* state, HashTableCtxType& context,
+                                         HashTableType& hash_table, bool eos) {
         Status status;
         Defer defer {[&]() {
             if (!status.ok()) {
@@ -170,7 +170,53 @@ public:
         _reset_tmp_data();
         return status;
     }
+    template <typename HashTableCtxType, typename HashTableType>
+    Status _spill_hash_table_sorted(RuntimeState* state, HashTableCtxType& context,
+                                    HashTableType& hash_table, bool eos) {
+        using KeyType = typename HashTableType::key_type;
+        Status status;
 
+        context.init_iterator();
+        auto has_null_key_data = hash_table.has_null_key_data();
+        vectorized::AggregateDataPtr null_key_data;
+        if (has_null_key_data) {
+            null_key_data = hash_table.template get_null_key_data<vectorized::AggregateDataPtr>();
+        }
+
+        Base::_shared_state->in_mem_shared_state->aggregate_data_container->init_once();
+        int num_rows = 0;
+        int sample_row_count = 100;
+        std::vector<KeyType> keys;
+        std::vector<vectorized::AggregateDataPtr> values;
+        auto& iter = Base::_shared_state->in_mem_shared_state->aggregate_data_container->iterator;
+        while (iter != Base::_shared_state->in_mem_shared_state->aggregate_data_container->end()) {
+            keys[num_rows] = iter.get_key<KeyType>();
+            values[num_rows] = iter.get_aggregate_data();
+            ++iter;
+            ++num_rows;
+            if (num_rows == sample_row_count) {
+                break;
+            }
+        }
+        vectorized::AggregateDataPtr tmp_null_key_data = nullptr;
+        if (iter == Base::_shared_state->in_mem_shared_state->aggregate_data_container->end()) {
+            tmp_null_key_data = null_key_data;
+        }
+        RETURN_IF_ERROR(to_block(context, keys, values, tmp_null_key_data));
+        Base::_shared_state->update_spill_block_batch_row_count(&block_);
+        return status;
+    }
+
+    template <typename HashTableCtxType, typename HashTableType>
+    Status _spill_hash_table(RuntimeState* state, HashTableCtxType& context,
+                             HashTableType& hash_table, bool eos) {
+        Status status;
+        if (state->enable_sort_agg()) {
+            return _spill_hash_table_sorted(state, context, hash_table, eos);
+        } else {
+            return _spill_hash_table_partitioned(state, context, hash_table, eos);
+        }
+    }
     template <typename HashTableCtxType, typename KeyType>
     Status to_block(HashTableCtxType& context, std::vector<KeyType>& keys,
                     std::vector<vectorized::AggregateDataPtr>& values,
@@ -335,6 +381,7 @@ public:
 
 private:
     friend class PartitionedAggSinkLocalState;
+    ObjectPool* _pool = nullptr;
     std::unique_ptr<AggSinkOperatorX> _agg_sink_operator;
 
     size_t _spill_partition_count_bits = 4;
