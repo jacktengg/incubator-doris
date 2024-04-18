@@ -103,12 +103,16 @@ public:
         return &s_instance;
     }
     ~Lz4BlockCompression() {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         for (auto ctx : _ctx_pool) {
             _delete_compression_ctx(ctx);
         }
     }
 
     Status compress(const Slice& input, faststring* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         if (input.size > INT_MAX) {
             return Status::InvalidArgument(
                     "LZ4 not support those case(input.size>INT_MAX), maybe you should change "
@@ -156,6 +160,8 @@ public:
     }
 
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         auto decompressed_len =
                 LZ4_decompress_safe(input.data, output->data, input.size, output->size);
         if (decompressed_len < 0) {
@@ -213,6 +219,8 @@ public:
         return &s_instance;
     }
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         RETURN_IF_ERROR(Decompressor::create_decompressor(CompressType::LZ4BLOCK, &_decompressor));
         size_t input_bytes_read = 0;
         size_t decompressed_len = 0;
@@ -250,6 +258,8 @@ public:
         return &s_instance;
     }
     ~Lz4fBlockCompression() {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         for (auto ctx : _ctx_c_pool) {
             _delete_compression_ctx(ctx);
         }
@@ -280,6 +290,8 @@ public:
 private:
     Status _compress(const std::vector<Slice>& inputs, size_t uncompressed_size,
                      faststring* output) {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         CContext* context = nullptr;
         RETURN_IF_ERROR(_acquire_compression_ctx(&context));
         bool compress_failed = false;
@@ -340,6 +352,8 @@ private:
     }
 
     Status _decompress(const Slice& input, Slice* output) {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         bool decompress_failed = false;
         DContext* context = nullptr;
         RETURN_IF_ERROR(_acquire_decompression_ctx(&context));
@@ -469,12 +483,16 @@ public:
         return &s_instance;
     }
     ~Lz4HCBlockCompression() {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         for (auto ctx : _ctx_pool) {
             _delete_compression_ctx(ctx);
         }
     }
 
     Status compress(const Slice& input, faststring* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         Context* context;
         RETURN_IF_ERROR(_acquire_compression_ctx(&context));
         bool compress_failed = false;
@@ -514,6 +532,8 @@ public:
     }
 
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         auto decompressed_len =
                 LZ4_decompress_safe(input.data, output->data, input.size, output->size);
         if (decompressed_len < 0) {
@@ -639,6 +659,8 @@ public:
     ~SnappyBlockCompression() override {}
 
     Status compress(const Slice& input, faststring* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         size_t max_len = max_compressed_len(input.size);
         output->resize(max_len);
         Slice s(*output);
@@ -649,6 +671,8 @@ public:
     }
 
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         if (!snappy::RawUncompress(input.data, input.size, output->data)) {
             return Status::InvalidArgument("Fail to do Snappy decompress");
         }
@@ -680,6 +704,8 @@ public:
     ~ZlibBlockCompression() {}
 
     Status compress(const Slice& input, faststring* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         size_t max_len = max_compressed_len(input.size);
         output->resize(max_len);
         Slice s(*output);
@@ -694,6 +720,8 @@ public:
 
     Status compress(const std::vector<Slice>& inputs, size_t uncompressed_size,
                     faststring* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         size_t max_len = max_compressed_len(uncompressed_size);
         output->resize(max_len);
 
@@ -734,6 +762,8 @@ public:
     }
 
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         size_t input_size = input.size;
         auto zres =
                 ::uncompress2((Bytef*)output->data, &output->size, (Bytef*)input.data, &input_size);
@@ -768,7 +798,8 @@ public:
         return &s_instance;
     }
     ~ZstdBlockCompression() {
-        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(_query_thread_context);
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         for (auto ctx : _ctx_c_pool) {
             _delete_compression_ctx(ctx);
         }
@@ -788,7 +819,8 @@ public:
     //  https://github.com/facebook/zstd/blob/dev/examples/streaming_compression.c
     Status compress(const std::vector<Slice>& inputs, size_t uncompressed_size,
                     faststring* output) override {
-        _query_thread_context.init();
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         CContext* context;
         RETURN_IF_ERROR(_acquire_compression_ctx(&context));
         bool compress_failed = false;
@@ -867,7 +899,8 @@ public:
     }
 
     Status decompress(const Slice& input, Slice* output) override {
-        _query_thread_context.init();
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         DContext* context;
         bool decompress_failed = false;
         RETURN_IF_ERROR(_acquire_decompression_ctx(&context));
@@ -964,8 +997,6 @@ private:
 
     mutable std::mutex _ctx_d_mutex;
     mutable std::vector<DContext*> _ctx_d_pool;
-
-    QueryThreadContext _query_thread_context;
 };
 
 class GzipBlockCompression : public ZlibBlockCompression {
@@ -977,6 +1008,8 @@ public:
     ~GzipBlockCompression() override = default;
 
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         z_stream z_strm = {};
         z_strm.zalloc = Z_NULL;
         z_strm.zfree = Z_NULL;
@@ -1058,6 +1091,8 @@ public:
     ~GzipBlockCompressionByLibdeflate() override = default;
 
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         if (input.empty()) {
             output->size = 0;
             return Status::OK();
@@ -1090,6 +1125,8 @@ public:
     }
     size_t max_compressed_len(size_t len) override { return 0; };
     Status decompress(const Slice& input, Slice* output) override {
+        SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
+                ExecEnv::GetInstance()->block_compression_mem_tracker());
         auto* input_ptr = input.data;
         auto remain_input_size = input.size;
         auto* output_ptr = output->data;
