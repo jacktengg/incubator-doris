@@ -102,6 +102,7 @@ Status PartitionedHashJoinSinkLocalState::_revoke_unpartitioned_block(RuntimeSta
     auto& p = _parent->cast<PartitionedHashJoinSinkOperatorX>();
     _shared_state->inner_shared_state->hash_table_variants.reset();
     auto row_desc = p._child_x->row_desc();
+    const auto num_slots = row_desc.num_slots();
     std::vector<vectorized::Block> build_blocks;
     auto inner_sink_state_ = _shared_state->inner_runtime_state->get_sink_local_state();
     if (inner_sink_state_) {
@@ -120,7 +121,7 @@ Status PartitionedHashJoinSinkLocalState::_revoke_unpartitioned_block(RuntimeSta
     auto query_id = state->query_id();
     auto mem_tracker = state->get_query_ctx()->query_mem_tracker;
     auto spill_func = [execution_context, build_blocks = std::move(build_blocks), state, query_id,
-                       mem_tracker, this]() mutable {
+                       mem_tracker, num_slots, this]() mutable {
         SCOPED_ATTACH_TASK_WITH_ID(mem_tracker, query_id);
         Defer defer {[&]() {
             // need to reset build_block here, or else build_block will be destructed
@@ -159,10 +160,15 @@ Status PartitionedHashJoinSinkLocalState::_revoke_unpartitioned_block(RuntimeSta
 
         for (size_t block_idx = 0; block_idx != build_blocks.size(); ++block_idx) {
             auto& build_block = build_blocks[block_idx];
-            const auto is_last_block = block_idx == build_blocks.size() - 1;
+            const auto is_last_block = (block_idx == (build_blocks.size() - 1));
             if (UNLIKELY(build_block.empty())) {
                 continue;
             }
+
+            if (build_block.columns() > num_slots) {
+                build_block.erase(num_slots);
+            }
+
             {
                 SCOPED_TIMER(_partition_timer);
                 (void)_partitioner->do_partitioning(state, &build_block, _mem_tracker.get());
@@ -190,8 +196,6 @@ Status PartitionedHashJoinSinkLocalState::_revoke_unpartitioned_block(RuntimeSta
                     partitions_indexes[partition_idx].clear();
                 }
 
-                build_block.clear();
-
                 if (partition_block->rows() >= reserved_size || is_last_block) {
                     if (!flush_rows(partition_block, spilling_stream)) {
                         return;
@@ -200,6 +204,8 @@ Status PartitionedHashJoinSinkLocalState::_revoke_unpartitioned_block(RuntimeSta
                             vectorized::MutableBlock::create_unique(build_block.clone_empty());
                 }
             }
+
+            build_block.clear();
         }
 
         _dependency->set_ready();

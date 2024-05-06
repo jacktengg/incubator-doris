@@ -204,9 +204,8 @@ Status PartitionedHashJoinProbeLocalState::spill_build_block(RuntimeState* state
                         COUNTER_UPDATE(_spill_build_blocks, 1);
                     }
                 }
-                --_spilling_task_count;
 
-                if (_spilling_task_count == 0) {
+                if (_spilling_task_count.fetch_sub(1) == 1) {
                     LOG(INFO) << "hash probe " << _parent->id()
                               << " revoke memory spill_build_block finish";
                     std::unique_lock<std::mutex> lock(_spill_lock);
@@ -272,9 +271,7 @@ Status PartitionedHashJoinProbeLocalState::spill_probe_blocks(RuntimeState* stat
                         }
                     }
 
-                    --_spilling_task_count;
-
-                    if (_spilling_task_count == 0) {
+                    if (_spilling_task_count.fetch_sub(1) == 1) {
                         LOG(INFO) << "hash probe " << _parent->id()
                                   << " revoke memory spill_probe_blocks finish";
                         std::unique_lock<std::mutex> lock(_spill_lock);
@@ -282,8 +279,7 @@ Status PartitionedHashJoinProbeLocalState::spill_probe_blocks(RuntimeState* stat
                     }
                 });
     } else {
-        --_spilling_task_count;
-        if (_spilling_task_count == 0) {
+        if (_spilling_task_count.fetch_sub(1) == 1) {
             std::unique_lock<std::mutex> lock(_spill_lock);
             _dependency->set_ready();
         }
@@ -369,10 +365,10 @@ Status PartitionedHashJoinProbeLocalState::recovery_build_blocks_from_disk(Runti
                 break;
             }
 
-            DCHECK_EQ(mutable_block->columns(), block.columns());
             if (mutable_block->empty()) {
                 *mutable_block = std::move(block);
             } else {
+                DCHECK_EQ(mutable_block->columns(), block.columns());
                 st = mutable_block->merge(std::move(block));
                 if (!st.ok()) {
                     std::unique_lock<std::mutex> lock(_spill_lock);
@@ -725,7 +721,8 @@ bool PartitionedHashJoinProbeOperatorX::need_more_input_data(RuntimeState* state
 
 bool PartitionedHashJoinProbeOperatorX::need_data_from_children(RuntimeState* state) const {
     auto& local_state = get_local_state(state);
-    if (local_state._spilling_task_count != 0) {
+    if (local_state._spilling_task_count != 0 ||
+        local_state._dependency->is_blocked_by() != nullptr) {
         return true;
     }
 
