@@ -359,7 +359,12 @@ Status HashJoinNode::init(const TPlanNode& tnode, RuntimeState* state) {
         _build_expr_ctxs.push_back(ctx);
 
         bool null_aware = eq_join_conjunct.__isset.opcode &&
-                          eq_join_conjunct.opcode == TExprOpcode::EQ_FOR_NULL;
+                          eq_join_conjunct.opcode == TExprOpcode::EQ_FOR_NULL &&
+                          // For a null safe equal join, FE may generate a plan that
+                          // both sides of the conjuct are not nullable, we just treat it
+                          // as a normal equal join conjunct.
+                          (eq_join_conjunct.right.nodes[0].is_nullable ||
+                           eq_join_conjunct.left.nodes[0].is_nullable);
         _is_null_safe_eq_join.push_back(null_aware);
 
         const bool build_side_nullable = _build_expr_ctxs.back()->root()->is_nullable();
