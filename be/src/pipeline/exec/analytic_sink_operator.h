@@ -20,6 +20,8 @@
 
 #include <stdint.h>
 
+#include <cstdint>
+
 #include "operator.h"
 #include "pipeline/dependency.h"
 
@@ -37,6 +39,10 @@ public:
 
     Status init(RuntimeState* state, LocalSinkStateInfo& info) override;
     Status open(RuntimeState* state) override;
+
+    bool need_more_input() {
+        return _whether_need_next_partition(_shared_state->found_partition_end);
+    }
 
 private:
     friend class AnalyticSinkOperatorX;
@@ -90,6 +96,13 @@ public:
     }
 
     bool require_data_distribution() const override { return true; }
+
+    bool need_more_input(RuntimeState* state) {
+        auto& local_state = get_local_state(state);
+        return local_state.need_more_input();
+    }
+
+    size_t get_revocable_mem_size(RuntimeState* state) const;
 
 private:
     Status _insert_range_column(vectorized::Block* block, const vectorized::VExprContextSPtr& expr,

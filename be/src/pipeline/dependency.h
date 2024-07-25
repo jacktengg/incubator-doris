@@ -589,6 +589,7 @@ public:
     int64_t input_total_rows = 0;
     BlockRowPos all_block_end;
     std::vector<vectorized::Block> input_blocks;
+    int64_t input_blocks_data_bytes = 0;
     bool input_eos = false;
     BlockRowPos found_partition_end;
     std::vector<int64_t> origin_cols;
@@ -599,6 +600,16 @@ public:
     // TODO: maybe global?
     std::vector<int64_t> partition_by_column_idxs;
     std::vector<int64_t> ordey_by_column_idxs;
+};
+
+struct SpillAnalyticSharedState : public BasicSharedState {
+    ENABLE_FACTORY_CREATOR(SpillAnalyticSharedState)
+
+public:
+    SpillAnalyticSharedState() = default;
+    std::shared_ptr<BasicSharedState> in_mem_shared_state_sptr;
+    AnalyticSharedState* in_mem_shared_state;
+    Status sink_status;
 };
 
 struct JoinSharedState : public BasicSharedState {

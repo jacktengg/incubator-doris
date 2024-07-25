@@ -440,6 +440,7 @@ bool AnalyticLocalState::init_next_partition(BlockRowPos found_partition_end) {
 }
 
 Status AnalyticLocalState::output_current_block(vectorized::Block* block) {
+    // decrease mem usage
     block->swap(std::move(_shared_state->input_blocks[_output_block_index]));
     _blocks_memory_usage->add(-block->allocated_bytes());
     mem_tracker()->consume(-block->allocated_bytes());
@@ -493,6 +494,15 @@ AnalyticSourceOperatorX::AnalyticSourceOperatorX(ObjectPool* pool, const TPlanNo
             _fn_scope = AnalyticFnScope::ROWS;
         }
     }
+    LOG(INFO) << "window func"
+              << ", fn_scope: " << _fn_scope << ", has_window: " << _has_window
+              << ", has_range_window: " << _has_range_window
+              << ", has_window_start: " << _has_window_start
+              << ", has_window_end: " << _has_window_end << ", window: {type: " << _window.type
+              << ", start:( type:" << _window.window_start.type << ", "
+              << _window.window_start.rows_offset_value << ")"
+              << ", end:( type:" << _window.window_end.type << ", "
+              << _window.window_end.rows_offset_value << ")}";
 }
 
 Status AnalyticSourceOperatorX::init(const TPlanNode& tnode, RuntimeState* state) {
@@ -527,20 +537,61 @@ Status AnalyticSourceOperatorX::get_block(RuntimeState* state, vectorized::Block
             SCOPED_TIMER(local_state._evaluation_timer);
             local_state._shared_state->found_partition_end = local_state._get_partition_by_end();
         }
-        if (local_state._refresh_need_more_input()) {
+        auto b = local_state._refresh_need_more_input();
+        LOG(INFO) << "window func get_block"
+                  << ", input eos: " << local_state._shared_state->input_eos
+                  << "\nall_block_end: " << local_state._shared_state->all_block_end.debug_string()
+                  << "\npartition_by_end: "
+                  << local_state._shared_state->partition_by_end.debug_string()
+                  << "\nfound_partition_end: "
+                  << local_state._shared_state->found_partition_end.debug_string()
+                  << "\ncurrent_row_position: " << local_state._shared_state->current_row_position
+                  << ", need_more_input: " << b;
+        if (b) {
             return Status::OK();
         }
         local_state._next_partition =
                 local_state.init_next_partition(local_state._shared_state->found_partition_end);
+        LOG(INFO) << "window func get_block after init_next_partition"
+                  << ", input eos: " << local_state._shared_state->input_eos
+                  << "\nall_block_end: " << local_state._shared_state->all_block_end.debug_string()
+                  << "\npartition_by_end: "
+                  << local_state._shared_state->partition_by_end.debug_string()
+                  << "\nfound_partition_end: "
+                  << local_state._shared_state->found_partition_end.debug_string()
+                  << "\n_partition_by_start: " << local_state._partition_by_start.debug_string()
+                  << "\n_order_by_start: " << local_state._order_by_start.debug_string()
+                  << "\n_order_by_end: " << local_state._order_by_end.debug_string()
+                  << "\ncurrent_row_position: " << local_state._shared_state->current_row_position
+                  << ", _next_partition: " << local_state._next_partition
+                  << ", _rows_start_offset: " << local_state._rows_start_offset
+                  << ", _rows_end_offset: " << local_state._rows_end_offset
+                  << ", _window_end_position: " << local_state._window_end_position;
         local_state.init_result_columns();
         size_t current_block_rows =
                 local_state._shared_state->input_blocks[local_state._output_block_index].rows();
         static_cast<void>(local_state._executor.get_next(current_block_rows));
+        LOG(INFO) << "window func get_block after get_next"
+                  << ", input eos: " << local_state._shared_state->input_eos
+                  << "\nall_block_end: " << local_state._shared_state->all_block_end.debug_string()
+                  << "\npartition_by_end: "
+                  << local_state._shared_state->partition_by_end.debug_string()
+                  << "\nfound_partition_end: "
+                  << local_state._shared_state->found_partition_end.debug_string()
+                  << "\n_partition_by_start: " << local_state._partition_by_start.debug_string()
+                  << "\n_order_by_start: " << local_state._order_by_start.debug_string()
+                  << "\n_order_by_end: " << local_state._order_by_end.debug_string()
+                  << "\ncurrent_row_position: " << local_state._shared_state->current_row_position
+                  << ", _next_partition: " << local_state._next_partition
+                  << ", _rows_start_offset: " << local_state._rows_start_offset
+                  << ", _rows_end_offset: " << local_state._rows_end_offset
+                  << ", _window_end_position: " << local_state._window_end_position;
         if (local_state._window_end_position == current_block_rows) {
             break;
         }
     }
     RETURN_IF_ERROR(local_state.output_current_block(block));
+    LOG(INFO) << "window func get_block output block: " << block->dump_data();
     RETURN_IF_ERROR(vectorized::VExprContext::filter_block(local_state._conjuncts, block,
                                                            block->columns()));
     local_state.reached_limit(block, eos);

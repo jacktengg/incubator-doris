@@ -316,15 +316,26 @@ Status AnalyticSinkOperatorX::sink(doris::RuntimeState* state, vectorized::Block
 
     local_state.mem_tracker()->consume(input_block->allocated_bytes());
     local_state._blocks_memory_usage->add(input_block->allocated_bytes());
+    local_state._shared_state->input_blocks_data_bytes += input_block->bytes();
 
     //TODO: if need improvement, the is a tips to maintain a free queue,
     //so the memory could reuse, no need to new/delete again;
+    LOG(INFO) << "window func sink block: " << input_block->dump_data();
     local_state._shared_state->input_blocks.emplace_back(std::move(*input_block));
     {
         SCOPED_TIMER(local_state._evaluation_timer);
         local_state._shared_state->found_partition_end = local_state._get_partition_by_end();
     }
-    local_state._refresh_need_more_input();
+    auto b = local_state._refresh_need_more_input();
+    LOG(INFO) << "window func after sink"
+              << ", input eos: " << local_state._shared_state->input_eos
+              << "\nall_block_end: " << local_state._shared_state->all_block_end.debug_string()
+              << "\npartition_by_end: "
+              << local_state._shared_state->partition_by_end.debug_string()
+              << "\nfound_partition_end: "
+              << local_state._shared_state->found_partition_end.debug_string()
+              << "\ncurrent_row_position: " << local_state._shared_state->current_row_position
+              << ", need_more_input: " << b;
     return Status::OK();
 }
 
@@ -337,6 +348,17 @@ Status AnalyticSinkOperatorX::_insert_range_column(vectorized::Block* block,
     auto column = block->get_by_position(result_col_id).column->convert_to_full_column_if_const();
     dst_column->insert_range_from(*column, 0, length);
     return Status::OK();
+}
+
+size_t AnalyticSinkOperatorX::get_revocable_mem_size(RuntimeState* state) const {
+    auto& local_state = get_local_state(state);
+    auto revocable_mem_bytes = local_state._shared_state->input_blocks_data_bytes;
+    for (size_t i = 0; i < _agg_functions_size; ++i) {
+        for (size_t j = 0; j < local_state._agg_expr_ctxs[i].size(); ++j) {
+            revocable_mem_bytes += local_state._shared_state->agg_input_columns[i][j]->byte_size();
+        }
+    }
+    return revocable_mem_bytes;
 }
 
 template class DataSinkOperatorX<AnalyticSinkLocalState>;
