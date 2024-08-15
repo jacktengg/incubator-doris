@@ -306,6 +306,7 @@ Status MemTable::_sort_by_cluster_keys() {
     _stat.sort_times++;
     // sort all rows
     vectorized::Block in_block = _output_mutable_block.to_block();
+    auto reserve_size = in_block.allocated_bytes();
     vectorized::MutableBlock mutable_block =
             vectorized::MutableBlock::build_mutable_block(&in_block);
     auto clone_block = in_block.clone_without_columns();
@@ -346,6 +347,9 @@ Status MemTable::_sort_by_cluster_keys() {
     row_pos_vec.reserve(in_block.rows());
     for (int i = 0; i < row_in_blocks.size(); i++) {
         row_pos_vec.emplace_back(row_in_blocks[i]->_row_pos);
+    }
+    while (!doris::thread_context()->try_reserve_memory(reserve_size)) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     return _output_mutable_block.add_rows(&in_block, row_pos_vec.data(),
                                           row_pos_vec.data() + in_block.rows(), &_column_offset);
@@ -512,9 +516,20 @@ Status MemTable::_to_block(std::unique_ptr<vectorized::Block>* res) {
             _output_mutable_block.swap(_input_mutable_block);
         } else {
             vectorized::Block in_block = _input_mutable_block.to_block();
+            auto reserve_size = in_block.allocated_bytes();
+            while (!doris::thread_context()->try_reserve_memory(reserve_size)) {
+                // if (_state->is_cancelled()) {
+                //     return _state->cancel_reason();
+                // }
+                std::this_thread::sleep_for(std::chrono::milliseconds(500));
+            }
             RETURN_IF_ERROR(_put_into_output(in_block));
         }
     } else {
+        auto reserve_size = _input_mutable_block.allocated_bytes();
+        while (!doris::thread_context()->try_reserve_memory(reserve_size)) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(500));
+        }
         _aggregate<true>();
     }
     if (_keys_type == KeysType::UNIQUE_KEYS && _enable_unique_key_mow &&
