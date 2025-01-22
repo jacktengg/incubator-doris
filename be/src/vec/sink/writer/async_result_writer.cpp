@@ -59,6 +59,9 @@ Status AsyncResultWriter::sink(Block* block, bool eos) {
     }
     if (rows) {
         _memory_used_counter->update(add_block->allocated_bytes());
+        LOG(INFO) << "table sink test, add block to queue, allocated bytes: " << add_block.get()
+                  << ":" << add_block->allocated_bytes()
+                  << ", memoryusage: " << _memory_used_counter->current_value();
         _data_queue.emplace_back(std::move(add_block));
         if (!_data_queue_is_available() && !_is_finished()) {
             _dependency->block();
@@ -83,6 +86,9 @@ std::unique_ptr<Block> AsyncResultWriter::_get_block_from_queue() {
         _dependency->set_ready();
     }
     _memory_used_counter->update(-block->allocated_bytes());
+    LOG(INFO) << "table sink test, _get_block_from_queue, allocated bytes: " << block.get() << ":"
+              << block->allocated_bytes()
+              << ", memoryusage: " << _memory_used_counter->current_value();
     return block;
 }
 
@@ -92,7 +98,8 @@ Status AsyncResultWriter::start_writer(RuntimeState* state, RuntimeProfile* prof
     // so we need to setupt the profile and memory counter here,
     // or else the counter can be nullptr when AsyncResultWriter::sink is called.
     _profile = profile;
-    _memory_used_counter = _profile->get_counter("MemoryUsage");
+    _memory_used_counter =
+            (RuntimeProfile::HighWaterMarkCounter*)(_profile->get_counter("MemoryUsage"));
 
     // Should set to false here, to
     DCHECK(_finish_dependency);
@@ -232,6 +239,8 @@ void AsyncResultWriter::force_close(Status s) {
 
 void AsyncResultWriter::_return_free_block(std::unique_ptr<Block> b) {
     _memory_used_counter->update(b->allocated_bytes());
+    LOG(INFO) << "table sink test, _return_free_block, allocated bytes: " << b.get() << ":"
+              << b->allocated_bytes() << ", memoryusage: " << _memory_used_counter->current_value();
     _free_blocks.enqueue(std::move(b));
 }
 
@@ -242,6 +251,9 @@ std::unique_ptr<Block> AsyncResultWriter::_get_free_block(doris::vectorized::Blo
         b = block->create_same_struct_block(rows, true);
     } else {
         _memory_used_counter->update(-b->allocated_bytes());
+        LOG(INFO) << "table sink test, _get_free_block, allocated bytes: " << b.get() << ":"
+                  << b->allocated_bytes()
+                  << ", memoryusage: " << _memory_used_counter->current_value();
     }
     b->swap(*block);
     return b;

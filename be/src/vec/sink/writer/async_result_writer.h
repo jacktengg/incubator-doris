@@ -100,7 +100,7 @@ private:
     std::shared_ptr<pipeline::Dependency> _finish_dependency;
 
     moodycamel::ConcurrentQueue<std::unique_ptr<Block>> _free_blocks;
-    RuntimeProfile::Counter* _memory_used_counter = nullptr;
+    RuntimeProfile::HighWaterMarkCounter* _memory_used_counter = nullptr;
 };
 
 } // namespace vectorized
