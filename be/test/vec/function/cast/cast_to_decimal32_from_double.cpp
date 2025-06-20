@@ -18,7 +18,7 @@
 #include "cast_to_decimal.h"
 
 namespace doris::vectorized {
-TEST_F(FunctionCastToDecimalTest, test_from_double_to_decimal32) {
+TEST_F(FunctionCastToDecimalTest, test_to_decimal32_from_double) {
     int table_index = 0;
     int test_data_index = 0;
 
