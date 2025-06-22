@@ -3,19 +3,19 @@
 0
 
 -- !sql_1_strict --
-0
+8
 
 -- !sql_2_strict --
-0
+9
 
 -- !sql_0_non_strict --
 0
 
 -- !sql_1_non_strict --
-0
+8
 
 -- !sql_2_non_strict --
-0
+9
 
 -- !sql_3_strict --
 0
@@ -24,10 +24,10 @@
 0
 
 -- !sql_5_strict --
-0
+1
 
 -- !sql_6_strict --
-0
+1
 
 -- !sql_3_non_strict --
 0
@@ -36,10 +36,10 @@
 0
 
 -- !sql_5_non_strict --
-0
+1
 
 -- !sql_6_non_strict --
-0
+1
 
 -- !sql_7_strict --
 0
@@ -354,16 +354,16 @@
 0
 
 -- !sql_61_strict --
-0
+1
 
 -- !sql_62_strict --
-0
+1
 
 -- !sql_63_strict --
-0
+1
 
 -- !sql_64_strict --
-0
+1
 
 -- !sql_57_non_strict --
 0
@@ -378,16 +378,16 @@
 0
 
 -- !sql_61_non_strict --
-0
+1
 
 -- !sql_62_non_strict --
-0
+1
 
 -- !sql_63_non_strict --
-0
+1
 
 -- !sql_64_non_strict --
-0
+1
 
 -- !sql_65_strict --
 0
@@ -720,16 +720,16 @@
 0
 
 -- !sql_122_strict --
-0
+1
 
 -- !sql_123_strict --
-0
+1
 
 -- !sql_124_strict --
-0
+1
 
 -- !sql_125_strict --
-0
+1
 
 -- !sql_118_non_strict --
 0
@@ -744,16 +744,16 @@
 0
 
 -- !sql_122_non_strict --
-0
+1
 
 -- !sql_123_non_strict --
-0
+1
 
 -- !sql_124_non_strict --
-0
+1
 
 -- !sql_125_non_strict --
-0
+1
 
 -- !sql_126_strict --
 0
@@ -1086,16 +1086,16 @@
 0
 
 -- !sql_183_strict --
-0
+1
 
 -- !sql_184_strict --
-0
+1
 
 -- !sql_185_strict --
-0
+1
 
 -- !sql_186_strict --
-0
+1
 
 -- !sql_179_non_strict --
 0
@@ -1110,14 +1110,14 @@
 0
 
 -- !sql_183_non_strict --
-0
+1
 
 -- !sql_184_non_strict --
-0
+1
 
 -- !sql_185_non_strict --
-0
+1
 
 -- !sql_186_non_strict --
-0
+1
 

@@ -20,7 +20,7 @@ suite("test_cast_to_decimal_from_str_invalid_input_const") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     def test_cast_to_decimal_from_str_invalid_input_strs = ["""""",""".""",""" ""","""	""","""abc""","""1 23""","""1	23""","""1.2.3""","""a123.456""",""" a123.456""","""	a123.456""","""123.456a""","""123.456a	""","""123.456	a""","""123.456
 a""","""12a3.456""","""123a.456""","""123.a456""","""123.4a56""","""+-123.456""",
         """+- 123.456""","""-+123.456""","""++123.456""","""--123.456""","""+-.456""","""-+.456""","""++.456""","""--.456""","""0x123""","""0x123.456""","""e""","""-e""","""+e""","""e+""","""e-""","""e1""","""e+1""","""e-1""",""".e""","""+.e""",

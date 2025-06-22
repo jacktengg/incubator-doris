@@ -20,7 +20,7 @@ suite("test_cast_to_decimal32_from_double_overflow") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     sql "drop table if exists test_cast_to_decimal32_9_0_from_float64_overflow;"
     sql "create table test_cast_to_decimal32_9_0_from_float64_overflow(f1 int, f2 double) properties('replication_num'='1');"
     sql """insert into test_cast_to_decimal32_9_0_from_float64_overflow values (0, 999999999.95),(1, -999999999.95),(2, 1000000000.95),(3, -1000000000.95),(4, inf),

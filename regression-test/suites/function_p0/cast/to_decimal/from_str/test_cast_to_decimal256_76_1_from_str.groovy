@@ -20,7 +20,7 @@ suite("test_cast_to_decimal256_76_1_from_str") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     sql "set enable_decimal256 = true;"
     sql "drop table if exists test_cast_to_decimal256_76_1_from_str_7_76_1;"
     sql "create table test_cast_to_decimal256_76_1_from_str_7_76_1(f1 int, f2 string) properties('replication_num'='1');"

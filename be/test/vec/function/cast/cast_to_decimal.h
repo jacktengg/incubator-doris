@@ -2511,7 +2511,7 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                             to_frac += 1;
                         }
                     }
-                    auto to_decimal_num = to_decimal_ctor(to_int, to_frac, ToScale);
+                    to_decimal_num = to_decimal_ctor(to_int, to_frac, ToScale);
                     // dbg_str += fmt::format("({}, {})|", dt_from.to_string(from_decimal_num),
                     //                        dt_to.to_string(to_decimal_num));
                     data_set.push_back({{from_decimal_num}, to_decimal_num});

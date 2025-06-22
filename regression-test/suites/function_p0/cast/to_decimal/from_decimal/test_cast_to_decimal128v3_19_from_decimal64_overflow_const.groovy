@@ -20,7 +20,7 @@ suite("test_cast_to_decimal128v3_19_from_decimal64_overflow_const") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     sql "set debug_skip_fold_constant = true;"
     def test_cast_to_decimal128v3_19_9_from_decimal64_17_0_vals_50 = [("10000000000"),("99999999999999998"),("99999999999999999")]
     sql "set enable_strict_cast=true;"

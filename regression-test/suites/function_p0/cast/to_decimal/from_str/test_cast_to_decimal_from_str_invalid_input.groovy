@@ -20,7 +20,7 @@ suite("test_cast_to_decimal_from_str_invalid_input") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     sql "drop table if exists test_cast_to_decimal_from_str_invalid_input;"
     sql "create table test_cast_to_decimal_from_str_invalid_input(f1 int, f2 string) properties('replication_num'='1');"
     sql """insert into test_cast_to_decimal_from_str_invalid_input values (0, ""),(1, "."),(2, " "),(3, "	"),(4, "abc"),(5, "1 23"),(6, "1	23"),(7, "1.2.3"),(8, "a123.456"),(9, " a123.456"),(10, "	a123.456"),(11, "123.456a"),(12, "123.456a	"),(13, "123.456	a"),(14, "123.456

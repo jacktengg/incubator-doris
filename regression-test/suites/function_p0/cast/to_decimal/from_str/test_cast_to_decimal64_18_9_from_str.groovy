@@ -20,7 +20,7 @@ suite("test_cast_to_decimal64_18_9_from_str") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     sql "drop table if exists test_cast_to_decimal64_18_9_from_str_15_18_9;"
     sql "create table test_cast_to_decimal64_18_9_from_str_15_18_9(f1 int, f2 string) properties('replication_num'='1');"
     sql """insert into test_cast_to_decimal64_18_9_from_str_15_18_9 values (3566, "0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e2147483647"),(3567, "-0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000e2147483647"),(3568, "0"),(3569, "1"),(3570, "9"),(3571, "99999999"),(3572, "900000000"),(3573, "900000001"),(3574, "999999998"),(3575, "999999999"),

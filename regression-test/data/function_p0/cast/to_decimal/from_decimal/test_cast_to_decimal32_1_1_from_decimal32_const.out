@@ -9,25 +9,25 @@
 0.0
 
 -- !sql_2_strict --
-0.0
+0.1
 
 -- !sql_3_strict --
-0.0
+0.8
 
 -- !sql_4_strict --
-0.0
+0.9
 
 -- !sql_1_non_strict --
 0.0
 
 -- !sql_2_non_strict --
-0.0
+0.1
 
 -- !sql_3_non_strict --
-0.0
+0.8
 
 -- !sql_4_non_strict --
-0.0
+0.9
 
 -- !sql_5_strict --
 0.0

@@ -92,6 +92,103 @@ struct FunctionCastTest : public testing::Test {
     void SetUp() override { TimezoneUtils::load_timezones_to_cache(); }
     void TearDown() override {}
 
+    std::string get_sql_type_name(PrimitiveType PT, int precision = 0, int scale = 0) {
+        switch (PT) {
+        case INVALID_TYPE:
+        case TYPE_NULL: /* 1 */
+            __builtin_unreachable();
+            break;
+        case TYPE_BOOLEAN: /* 2: uint8 */
+            return "bool";
+        case TYPE_TINYINT: /* 3: int8 */
+            return "tinyint";
+        case TYPE_SMALLINT: /* 4: int16 */
+            return "smallint";
+        case TYPE_INT: /* 5: int32 */
+            return "int";
+        case TYPE_BIGINT: /* 6: int64 */
+            return "bigint";
+        case TYPE_LARGEINT: /* 7: int128 */
+            return "largeint";
+        case TYPE_FLOAT: /* 8: float32 */
+            return "float";
+        case TYPE_DOUBLE: /* 9: float64*/
+            return "double";
+        case TYPE_VARCHAR: /* 10 */
+            return fmt::format("varchar({})", precision > 0 ? precision : 128);
+        case TYPE_DATE: /* 11 */
+            return "date";
+        case TYPE_DATETIME: /* 12 */
+            return "datetime";
+        case TYPE_BINARY:
+            return "binary";
+        /* 13 */           // Not implemented
+        case TYPE_DECIMAL: /* 14 */
+            return "decimal";
+        case TYPE_CHAR: /* 15 */
+            return fmt::format("char({})", precision > 0 ? precision : 64);
+
+        case TYPE_STRUCT: /* 16 */
+            return "struct";
+        case TYPE_ARRAY: /* 17 */
+            return "array";
+        case TYPE_MAP: /* 18 */
+            return "map";
+        case TYPE_HLL: /* 19 */
+            return "hll";
+        case TYPE_DECIMALV2: /* 20: v2 128bit */
+            return fmt::format("decimalv2({}, {})", precision > 0 ? precision : 27,
+                               scale > 0 ? scale : 9);
+
+        case TYPE_TIME: /*TYPE_TIMEV2*/
+            return "time";
+
+        case TYPE_BITMAP: /* 22: bitmap */
+            return "bitmap";
+        case TYPE_STRING: /* 23 */
+            return "string";
+        case TYPE_QUANTILE_STATE: /* 24 */
+            __builtin_unreachable();
+            break;
+        case TYPE_DATEV2: /* 25 */
+            return "datev2";
+        case TYPE_DATETIMEV2: /* 26 */
+            return precision > 0 ? fmt::format("datetimev2{}", precision) : "datetimev2";
+        case TYPE_TIMEV2: /* 27 */
+            return "time";
+        case TYPE_DECIMAL32: /* 28 */
+            return fmt::format("decimalv3({}, {})", precision > 0 ? precision : 9, scale);
+        case TYPE_DECIMAL64: /* 29 */
+            return fmt::format("decimalv3({}, {})", precision > 0 ? precision : 18,
+                               scale > 0 ? scale : 9);
+        case TYPE_DECIMAL128I: /* 30: v3 128bit */
+            return fmt::format("decimalv3({}, {})", precision > 0 ? precision : 38,
+                               scale > 0 ? scale : 9);
+        case TYPE_JSONB: /* 31 */
+            return "jsonb";
+        case TYPE_VARIANT: /* 32 */
+            return "variant";
+        case TYPE_LAMBDA_FUNCTION: /* 33 */
+            __builtin_unreachable();
+            break;
+        case TYPE_AGG_STATE: /* 34 */
+            __builtin_unreachable();
+            break;
+        case TYPE_DECIMAL256: /* 35 */
+            return fmt::format("decimalv3({}, {})", precision > 0 ? precision : 76,
+                               scale > 0 ? scale : 9);
+        case TYPE_IPV4: /* 36 */
+            return "ipv4";
+        case TYPE_IPV6: /* 37 */
+            return "ipv6";
+        case TYPE_UINT32: /* 38: used as offset */
+        case TYPE_UINT64: /* 39: used as offset */
+        default:
+            __builtin_unreachable();
+            break;
+        }
+    }
+
     std::shared_ptr<FunctionContext> create_context(bool is_strict_mode) {
         auto ctx = std::make_shared<FunctionContext>();
         ctx->set_enable_strict_mode(is_strict_mode);
@@ -228,14 +325,21 @@ struct FunctionCastTest : public testing::Test {
                                       std::unique_ptr<std::ofstream>& ofs_expected_result_const,
                                       std::unique_ptr<std::ofstream>& ofs_case,
                                       std::unique_ptr<std::ofstream>& ofs_expected_result,
-                                      const std::string& sub_dir = "") {
+                                      const std::string& sub_dir = "",
+                                      bool only_const_case = false) {
         std::string case_dir = regression_case_dir;
         if (!sub_dir.empty()) {
             case_dir += "/" + sub_dir;
         }
+        if (!std::filesystem::exists(case_dir)) {
+            std::filesystem::create_directories(case_dir);
+        }
         std::string result_dir = regression_expected_result_dir;
         if (!sub_dir.empty()) {
             result_dir += "/" + sub_dir;
+        }
+        if (!std::filesystem::exists(result_dir)) {
+            std::filesystem::create_directories(result_dir);
         }
         std::string file_path = fmt::format("{}/{}/{}_const.groovy", std::string(getenv("ROOT")),
                                             case_dir, case_name);
@@ -272,6 +376,9 @@ struct FunctionCastTest : public testing::Test {
                 << "-- This file is automatically generated. You should know what you did if "
                    "you want to edit this\n";
 
+        if (only_const_case) {
+            return;
+        }
         file_path =
                 fmt::format("{}/{}/{}.groovy", std::string(getenv("ROOT")), case_dir, case_name);
         ofs_case = std::make_unique<std::ofstream>(file_path,
@@ -291,6 +398,276 @@ struct FunctionCastTest : public testing::Test {
         }
         (*ofs_expected_result) << "-- This file is automatically generated. You should know what "
                                   "you did if you want to edit this\n";
+    }
+
+    template <typename FromValueT, typename ToValueType>
+    void gen_normal_regression_case(
+            const std::string& regression_case_name, const std::string& src_sql_type_name,
+            bool src_value_need_cast_from_str, const std::string& to_sql_type_name,
+            const std::vector<std::pair<FromValueT, ToValueType>>& test_data_set, int table_index,
+            int& test_data_index, std::ofstream* ofs_case, std::ofstream* ofs_expected_result,
+            std::ofstream* ofs_const_case, std::ofstream* ofs_const_expected_result,
+            bool only_const_case = false, bool expect_error_in_strict_mode = false) {
+        (*ofs_const_case) << "    sql \"set debug_skip_fold_constant = true;\"\n";
+
+        auto table_name = fmt::format("{}_{}", regression_case_name, table_index);
+
+        auto value_count = test_data_set.size();
+        auto const_test_with_strict_arg = [&](bool enable_strict_cast) {
+            (*ofs_const_case) << fmt::format("\n    sql \"set enable_strict_cast={};\"\n",
+                                             enable_strict_cast);
+            for (int i = 0; i != value_count; ++i) {
+                auto groovy_var_name = fmt::format("const_sql_{}_{}", table_index, i);
+                std::string const_sql;
+                if constexpr (std::is_same_v<FromValueT, std::string>) {
+                    if (src_value_need_cast_from_str) {
+                        const_sql =
+                                fmt::format(R"("""select "{}", cast(cast("{}" as {}) as {});""")",
+                                            test_data_set[i].first, test_data_set[i].first,
+                                            src_sql_type_name, to_sql_type_name);
+                    } else {
+                        const_sql = fmt::format(R"("""select "{}", cast("{}" as {});""")",
+                                                test_data_set[i].first, test_data_set[i].first,
+                                                to_sql_type_name);
+                    }
+                } else {
+                    if (src_value_need_cast_from_str) {
+                        const_sql = fmt::format(R"("""select {}, cast(cast("{}" as {}) as {});""")",
+                                                test_data_set[i].first, test_data_set[i].first,
+                                                src_sql_type_name, to_sql_type_name);
+                    } else {
+                        const_sql = fmt::format(R"("""select {}, cast({} as {});""")",
+                                                test_data_set[i].first, test_data_set[i].first,
+                                                to_sql_type_name);
+                    }
+                }
+
+                if (enable_strict_cast) {
+                    (*ofs_const_case)
+                            << fmt::format("    def {} = {}\n", groovy_var_name, const_sql);
+                }
+                if (expect_error_in_strict_mode & enable_strict_cast) {
+                    (*ofs_const_case) << fmt::format(R"(
+    test {{
+        sql """${{{}}};"""
+        exception "{}"
+    }}
+)",
+                                                     groovy_var_name, "");
+                } else {
+                    (*ofs_const_case) << fmt::format(
+                            "    qt_sql_{}_{}_{} \"${{{}}}\"\n", table_index, i,
+                            enable_strict_cast ? "strict" : "non_strict", groovy_var_name);
+                    (*ofs_const_expected_result)
+                            << fmt::format("-- !sql_{}_{}_{} --\n", table_index, i,
+                                           enable_strict_cast ? "strict" : "non_strict");
+                    (*ofs_const_expected_result) << fmt::format(
+                            "{}\t{}\n\n", test_data_set[i].first, test_data_set[i].second);
+
+                    (*ofs_const_case)
+                            << fmt::format("    testFoldConst(\"${{{}}}\")\n", groovy_var_name);
+                }
+            }
+        };
+        const_test_with_strict_arg(true);
+        const_test_with_strict_arg(false);
+        if (only_const_case) {
+            return;
+        }
+
+        (*ofs_case) << fmt::format("    sql \"drop table if exists {};\"\n", table_name);
+        (*ofs_case) << fmt::format(
+                "    sql \"create table {}(f1 int, f2 {}) "
+                "properties('replication_num'='1');\"\n",
+                table_name, src_sql_type_name);
+        std::string table_test_expected_results;
+        (*ofs_case) << fmt::format("    sql \"\"\"insert into {} values ", table_name);
+        for (int i = 0; i != value_count;) {
+            (*ofs_case) << fmt::format("({}, \"{}\")", i, test_data_set[i].first);
+            table_test_expected_results += fmt::format("{}\t{}\n", i, test_data_set[i].second);
+            ++i;
+            if (i != value_count) {
+                (*ofs_case) << ",";
+            }
+            if (i % 20 == 0 && i != value_count) {
+                (*ofs_case) << "\n      ";
+            }
+        }
+        (*ofs_case) << ";\n    \"\"\"\n\n";
+
+        auto table_test_with_strict_arg = [&](bool enable_strict_cast) {
+            (*ofs_case) << fmt::format("    sql \"set enable_strict_cast={};\"\n",
+                                       enable_strict_cast);
+            if (expect_error_in_strict_mode & enable_strict_cast) {
+                (*ofs_case) << fmt::format(R"(
+    test {{
+        sql """select f1, cast(f2 as {}) from {} order by 1;"""
+        exception "{}"
+    }}
+)",
+                                           to_sql_type_name, table_name, "");
+            } else {
+                (*ofs_case) << fmt::format(
+                        "    qt_sql_{}_{} 'select f1, cast(f2 as {}) from {} "
+                        "order by "
+                        "1;'\n\n",
+                        table_index, enable_strict_cast ? "strict" : "non_strict", to_sql_type_name,
+                        table_name);
+
+                (*ofs_expected_result) << fmt::format("-- !sql_{}_{} --\n", table_index,
+                                                      enable_strict_cast ? "strict" : "non_strict");
+                (*ofs_expected_result) << table_test_expected_results;
+                (*ofs_expected_result) << "\n";
+            }
+        };
+        table_test_with_strict_arg(true);
+        table_test_with_strict_arg(false);
+    }
+
+    template <typename FromValueT>
+    void gen_overflow_and_invalid_regression_case(
+            const std::string& regression_case_name, const std::string& src_sql_type_name,
+            bool src_value_need_cast_from_str, const std::string& to_sql_type_name,
+            const std::vector<FromValueT>& test_data_set, int table_index, std::ofstream* ofs_case,
+            std::ofstream* ofs_expected_result, std::ofstream* ofs_const_case,
+            std::ofstream* ofs_const_expected_result, bool only_const_case = false) {
+        (*ofs_const_case) << "    sql \"set debug_skip_fold_constant = true;\"\n";
+
+        auto table_name = fmt::format("{}_{}", regression_case_name, table_index);
+
+        auto value_count = test_data_set.size();
+        auto groovy_var_name = fmt::format("{}_test_data", table_name);
+        (*ofs_const_case) << fmt::format("    def {} = [", groovy_var_name);
+        int i = 0;
+        for (const auto& data : test_data_set) {
+            if constexpr (std::is_same_v<FromValueT, std::string>) {
+                (*ofs_const_case) << fmt::format(R"("""{}""")", data);
+            } else {
+                if (src_value_need_cast_from_str) {
+                    (*ofs_const_case) << fmt::format(R"("""{}""")", data);
+                } else {
+                    (*ofs_const_case) << fmt::format(R"({})", data);
+                }
+            }
+            ++i;
+            if (i != value_count) {
+                (*ofs_const_case) << ",";
+            }
+            if (i % 20 == 0 && i != value_count) {
+                (*ofs_const_case) << "\n        ";
+            }
+        }
+        (*ofs_const_case) << fmt::format("]\n");
+
+        auto const_test_with_strict_arg = [&](bool enable_strict_cast) {
+            (*ofs_const_case) << fmt::format("    sql \"set enable_strict_cast={};\"\n",
+                                             enable_strict_cast);
+            std::string src_value;
+            if constexpr (std::is_same_v<FromValueT, std::string>) {
+                if (src_value_need_cast_from_str) {
+                    src_value = fmt::format(R"(cast("${{test_str}}" as {}))", src_sql_type_name);
+                } else {
+                    src_value = R"("${{test_str}}")";
+                }
+            } else {
+                if (src_value_need_cast_from_str) {
+                    src_value = fmt::format(R"(cast("${{test_str}}" as {}))", src_sql_type_name);
+                } else {
+                    src_value = R"(${{test_str}})";
+                }
+            }
+
+            if (enable_strict_cast) {
+                (*ofs_const_case) << fmt::format(R"(
+    for (b in ["false", "true"]) {{
+        sql """set debug_skip_fold_constant = "${{b}}";"""
+        for (test_str in {}) {{
+            test {{
+                sql """select cast({} as {});"""
+                exception "{}"
+            }}
+        }}
+    }}
+)",
+                                                 groovy_var_name, src_value, to_sql_type_name, "");
+
+            } else {
+                (*ofs_const_case) << fmt::format(R"(
+    for (test_str in {}) {{
+        qt_sql_{} """select cast({} as {});"""
+        testFoldConst("""select cast({} as {});""")
+    }}
+)",
+                                                 groovy_var_name, table_name, src_value,
+                                                 to_sql_type_name, src_value, to_sql_type_name);
+                for (int i = 0; i != value_count; ++i) {
+                    (*ofs_const_expected_result) << fmt::format("-- !sql_{} --\n", table_name);
+                    (*ofs_const_expected_result) << "\\N\n\n";
+                }
+            }
+        };
+        const_test_with_strict_arg(true);
+        const_test_with_strict_arg(false);
+        if (only_const_case) {
+            return;
+        }
+
+        (*ofs_case) << fmt::format("    sql \"drop table if exists {};\"\n", table_name);
+        (*ofs_case) << fmt::format(
+                "    sql \"create table {}(f1 int, f2 {}) "
+                "properties('replication_num'='1');\"\n",
+                table_name, src_sql_type_name);
+        (*ofs_case) << fmt::format("    sql \"\"\"insert into {} values ", table_name);
+        for (int i = 0; i != value_count;) {
+            if constexpr (std::is_same_v<FromValueT, std::string>) {
+                (*ofs_case) << fmt::format("({}, \"{}\")", i, test_data_set[i]);
+            } else {
+                (*ofs_case) << fmt::format("({}, {})", i, test_data_set[i]);
+            }
+            ++i;
+            if (i != value_count) {
+                (*ofs_case) << ",";
+            }
+            if (i % 20 == 0 && i != value_count) {
+                (*ofs_case) << "\n      ";
+            }
+        }
+        (*ofs_case) << ";\n    \"\"\"\n\n";
+
+        auto table_test_with_strict_arg = [&](bool enable_strict_cast) {
+            (*ofs_case) << fmt::format("    sql \"set enable_strict_cast={};\"\n",
+                                       enable_strict_cast);
+            if (enable_strict_cast) {
+                (*ofs_case) << fmt::format(R"(
+    def {}_data_start_index = {}
+    def {}_data_end_index = {}
+    for (int data_index = {}_data_start_index; data_index < {}_data_end_index; data_index++) {{
+        test {{
+            sql "select f1, cast(f2 as {}) from {} where f1 = ${{data_index}}"
+            exception "{}"
+        }}
+    }}
+)",
+                                           table_name, 0, table_name, value_count, table_name,
+                                           table_name, to_sql_type_name, table_name, "");
+
+            } else {
+                (*ofs_case) << fmt::format(
+                        "    qt_sql_{}_{} 'select f1, cast(f2 as {}) from {} "
+                        "order by "
+                        "1;'\n\n",
+                        table_index, "non_strict", to_sql_type_name, table_name);
+
+                (*ofs_expected_result)
+                        << fmt::format("-- !sql_{}_{} --\n", table_index, "non_strict");
+                for (int i = 0; i < value_count; ++i) {
+                    (*ofs_expected_result) << fmt::format("{}\t\\N\n", i);
+                }
+                (*ofs_expected_result) << "\n";
+            }
+        };
+        table_test_with_strict_arg(true);
+        table_test_with_strict_arg(false);
     }
 };
 } // namespace doris::vectorized

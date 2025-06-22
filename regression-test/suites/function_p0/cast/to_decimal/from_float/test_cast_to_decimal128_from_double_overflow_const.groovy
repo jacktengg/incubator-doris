@@ -20,44 +20,71 @@ suite("test_cast_to_decimal128_from_double_overflow_const") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     def test_cast_to_decimal128v3_38_0_from_float64_overflow_vals = [(1e+38),(-1e+38),(1e+38),(-1e+38),(inf),
         (-inf),(nan),(-nan)]
     sql "set enable_strict_cast=true;"
-    for (test_str in test_cast_to_decimal128v3_38_0_from_float64_overflow_vals) {
-        test {
-            sql """select cast(cast("${test_str}" as double) as decimalv3(38, 0));"""
-            exception ""
+
+    for (b in ["false", "true"]) {
+        sql """set debug_skip_fold_constant = "${b}";"""
+        for (test_str in test_cast_to_decimal128v3_38_0_from_float64_overflow_vals) {
+            test {
+                sql """select cast(cast("${test_str}" as double) as decimalv3(38, 0));"""
+                exception ""
+            }
         }
     }
     sql "set enable_strict_cast=false;"
+
     for (test_str in test_cast_to_decimal128v3_38_0_from_float64_overflow_vals) {
         qt_sql_test_cast_to_decimal128v3_38_0_from_float64_overflow """select cast(cast("${test_str}" as double) as decimalv3(38, 0));"""
+    }
+
+    for (test_str in test_cast_to_decimal128v3_38_0_from_float64_overflow_vals) {
+        testFoldConst("""select cast(cast("${test_str}" as double) as decimalv3(38, 0));""")
     }
     def test_cast_to_decimal128v3_38_19_from_float64_overflow_vals = [(1e+19),(-1e+19),(1e+19),(-1e+19),(inf),
         (-inf),(nan),(-nan)]
     sql "set enable_strict_cast=true;"
-    for (test_str in test_cast_to_decimal128v3_38_19_from_float64_overflow_vals) {
-        test {
-            sql """select cast(cast("${test_str}" as double) as decimalv3(38, 19));"""
-            exception ""
+
+    for (b in ["false", "true"]) {
+        sql """set debug_skip_fold_constant = "${b}";"""
+        for (test_str in test_cast_to_decimal128v3_38_19_from_float64_overflow_vals) {
+            test {
+                sql """select cast(cast("${test_str}" as double) as decimalv3(38, 19));"""
+                exception ""
+            }
         }
     }
     sql "set enable_strict_cast=false;"
+
     for (test_str in test_cast_to_decimal128v3_38_19_from_float64_overflow_vals) {
         qt_sql_test_cast_to_decimal128v3_38_19_from_float64_overflow """select cast(cast("${test_str}" as double) as decimalv3(38, 19));"""
+    }
+
+    for (test_str in test_cast_to_decimal128v3_38_19_from_float64_overflow_vals) {
+        testFoldConst("""select cast(cast("${test_str}" as double) as decimalv3(38, 19));""")
     }
     def test_cast_to_decimal128v3_38_37_from_float64_overflow_vals = [(10),(-10),(11),(-11),(inf),
         (-inf),(nan),(-nan)]
     sql "set enable_strict_cast=true;"
-    for (test_str in test_cast_to_decimal128v3_38_37_from_float64_overflow_vals) {
-        test {
-            sql """select cast(cast("${test_str}" as double) as decimalv3(38, 37));"""
-            exception ""
+
+    for (b in ["false", "true"]) {
+        sql """set debug_skip_fold_constant = "${b}";"""
+        for (test_str in test_cast_to_decimal128v3_38_37_from_float64_overflow_vals) {
+            test {
+                sql """select cast(cast("${test_str}" as double) as decimalv3(38, 37));"""
+                exception ""
+            }
         }
     }
     sql "set enable_strict_cast=false;"
+
     for (test_str in test_cast_to_decimal128v3_38_37_from_float64_overflow_vals) {
         qt_sql_test_cast_to_decimal128v3_38_37_from_float64_overflow """select cast(cast("${test_str}" as double) as decimalv3(38, 37));"""
+    }
+
+    for (test_str in test_cast_to_decimal128v3_38_37_from_float64_overflow_vals) {
+        testFoldConst("""select cast(cast("${test_str}" as double) as decimalv3(38, 37));""")
     }
 }

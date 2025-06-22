@@ -422,6 +422,8 @@ protected:
         return std::make_shared<FunctionCast>(name, data_types, return_type);
     }
 
+    bool skip_return_type_check() const override { return true; }
+
     DataTypePtr get_return_type_impl(const ColumnsWithTypeAndName& arguments) const override {
         DataTypePtr type = arguments[1].type;
         DCHECK(type != nullptr);

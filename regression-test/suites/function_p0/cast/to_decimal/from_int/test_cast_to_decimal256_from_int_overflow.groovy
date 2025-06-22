@@ -20,7 +20,8 @@ suite("test_cast_to_decimal256_from_int_overflow") {
 
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
-    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.test_from_string --gen_regression_case
+    // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
+    sql "set enable_decimal256 = true;"
     sql "drop table if exists test_cast_to_decimal256_1_0_from_int8_overflow;"
     sql "create table test_cast_to_decimal256_1_0_from_int8_overflow(f1 int, f2 tinyint) properties('replication_num'='1');"
     sql """insert into test_cast_to_decimal256_1_0_from_int8_overflow values (0, -128),(1, -10),(2, 10),(3, 127);
