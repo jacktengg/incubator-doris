@@ -221,7 +221,9 @@ public abstract class Literal extends Expression implements LeafExpression {
             maxVal = new BigDecimal(LargeIntType.MAX_VALUE);
             minVal = new BigDecimal(LargeIntType.MIN_VALUE);
         }
-        return value.compareTo(maxVal) > 0 || value.compareTo(minVal) < 0;
+        BigInteger integerValue = value.toBigInteger();
+        return integerValue.compareTo(maxVal.toBigInteger()) > 0
+                || integerValue.compareTo(minVal.toBigInteger()) < 0;
     }
 
     protected Expression getDecimalLiteral(BigDecimal bigDecimal, DataType targetType) {
