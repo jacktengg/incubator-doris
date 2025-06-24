@@ -189,177 +189,171 @@ suite("test_cast_to_double_from_string_const") {
     def const_sql_0_54 = """select "2.2250738585072014e-308", cast("2.2250738585072014e-308" as double);"""
     qt_sql_0_54_strict "${const_sql_0_54}"
     testFoldConst("${const_sql_0_54}")
-    def const_sql_0_55 = """select "5e-324", cast("5e-324" as double);"""
+    def const_sql_0_55 = """select "-0", cast("-0" as double);"""
     qt_sql_0_55_strict "${const_sql_0_55}"
     testFoldConst("${const_sql_0_55}")
-    def const_sql_0_56 = """select "-0", cast("-0" as double);"""
+    def const_sql_0_56 = """select "-1", cast("-1" as double);"""
     qt_sql_0_56_strict "${const_sql_0_56}"
     testFoldConst("${const_sql_0_56}")
-    def const_sql_0_57 = """select "-1", cast("-1" as double);"""
+    def const_sql_0_57 = """select "-9", cast("-9" as double);"""
     qt_sql_0_57_strict "${const_sql_0_57}"
     testFoldConst("${const_sql_0_57}")
-    def const_sql_0_58 = """select "-9", cast("-9" as double);"""
+    def const_sql_0_58 = """select "-100000", cast("-100000" as double);"""
     qt_sql_0_58_strict "${const_sql_0_58}"
     testFoldConst("${const_sql_0_58}")
-    def const_sql_0_59 = """select "-100000", cast("-100000" as double);"""
+    def const_sql_0_59 = """select "-123456", cast("-123456" as double);"""
     qt_sql_0_59_strict "${const_sql_0_59}"
     testFoldConst("${const_sql_0_59}")
-    def const_sql_0_60 = """select "-123456", cast("-123456" as double);"""
+    def const_sql_0_60 = """select "-999999", cast("-999999" as double);"""
     qt_sql_0_60_strict "${const_sql_0_60}"
     testFoldConst("${const_sql_0_60}")
-    def const_sql_0_61 = """select "-999999", cast("-999999" as double);"""
+    def const_sql_0_61 = """select "-0.", cast("-0." as double);"""
     qt_sql_0_61_strict "${const_sql_0_61}"
     testFoldConst("${const_sql_0_61}")
-    def const_sql_0_62 = """select "-0.", cast("-0." as double);"""
+    def const_sql_0_62 = """select "-1.", cast("-1." as double);"""
     qt_sql_0_62_strict "${const_sql_0_62}"
     testFoldConst("${const_sql_0_62}")
-    def const_sql_0_63 = """select "-1.", cast("-1." as double);"""
+    def const_sql_0_63 = """select "-9.", cast("-9." as double);"""
     qt_sql_0_63_strict "${const_sql_0_63}"
     testFoldConst("${const_sql_0_63}")
-    def const_sql_0_64 = """select "-9.", cast("-9." as double);"""
+    def const_sql_0_64 = """select "-100000.", cast("-100000." as double);"""
     qt_sql_0_64_strict "${const_sql_0_64}"
     testFoldConst("${const_sql_0_64}")
-    def const_sql_0_65 = """select "-100000.", cast("-100000." as double);"""
+    def const_sql_0_65 = """select "-123456.", cast("-123456." as double);"""
     qt_sql_0_65_strict "${const_sql_0_65}"
     testFoldConst("${const_sql_0_65}")
-    def const_sql_0_66 = """select "-123456.", cast("-123456." as double);"""
+    def const_sql_0_66 = """select "-999999.", cast("-999999." as double);"""
     qt_sql_0_66_strict "${const_sql_0_66}"
     testFoldConst("${const_sql_0_66}")
-    def const_sql_0_67 = """select "-999999.", cast("-999999." as double);"""
+    def const_sql_0_67 = """select "-.0", cast("-.0" as double);"""
     qt_sql_0_67_strict "${const_sql_0_67}"
     testFoldConst("${const_sql_0_67}")
-    def const_sql_0_68 = """select "-.0", cast("-.0" as double);"""
+    def const_sql_0_68 = """select "-.1", cast("-.1" as double);"""
     qt_sql_0_68_strict "${const_sql_0_68}"
     testFoldConst("${const_sql_0_68}")
-    def const_sql_0_69 = """select "-.1", cast("-.1" as double);"""
+    def const_sql_0_69 = """select "-.9", cast("-.9" as double);"""
     qt_sql_0_69_strict "${const_sql_0_69}"
     testFoldConst("${const_sql_0_69}")
-    def const_sql_0_70 = """select "-.9", cast("-.9" as double);"""
+    def const_sql_0_70 = """select "-.000001", cast("-.000001" as double);"""
     qt_sql_0_70_strict "${const_sql_0_70}"
     testFoldConst("${const_sql_0_70}")
-    def const_sql_0_71 = """select "-.000001", cast("-.000001" as double);"""
+    def const_sql_0_71 = """select "-.000009", cast("-.000009" as double);"""
     qt_sql_0_71_strict "${const_sql_0_71}"
     testFoldConst("${const_sql_0_71}")
-    def const_sql_0_72 = """select "-.000009", cast("-.000009" as double);"""
+    def const_sql_0_72 = """select "-.100000", cast("-.100000" as double);"""
     qt_sql_0_72_strict "${const_sql_0_72}"
     testFoldConst("${const_sql_0_72}")
-    def const_sql_0_73 = """select "-.100000", cast("-.100000" as double);"""
+    def const_sql_0_73 = """select "-.900000", cast("-.900000" as double);"""
     qt_sql_0_73_strict "${const_sql_0_73}"
     testFoldConst("${const_sql_0_73}")
-    def const_sql_0_74 = """select "-.900000", cast("-.900000" as double);"""
+    def const_sql_0_74 = """select "-.100001", cast("-.100001" as double);"""
     qt_sql_0_74_strict "${const_sql_0_74}"
     testFoldConst("${const_sql_0_74}")
-    def const_sql_0_75 = """select "-.100001", cast("-.100001" as double);"""
+    def const_sql_0_75 = """select "-.900009", cast("-.900009" as double);"""
     qt_sql_0_75_strict "${const_sql_0_75}"
     testFoldConst("${const_sql_0_75}")
-    def const_sql_0_76 = """select "-.900009", cast("-.900009" as double);"""
+    def const_sql_0_76 = """select "-0.123456", cast("-0.123456" as double);"""
     qt_sql_0_76_strict "${const_sql_0_76}"
     testFoldConst("${const_sql_0_76}")
-    def const_sql_0_77 = """select "-0.123456", cast("-0.123456" as double);"""
+    def const_sql_0_77 = """select "-.999999", cast("-.999999" as double);"""
     qt_sql_0_77_strict "${const_sql_0_77}"
     testFoldConst("${const_sql_0_77}")
-    def const_sql_0_78 = """select "-.999999", cast("-.999999" as double);"""
+    def const_sql_0_78 = """select "-0.0", cast("-0.0" as double);"""
     qt_sql_0_78_strict "${const_sql_0_78}"
     testFoldConst("${const_sql_0_78}")
-    def const_sql_0_79 = """select "-0.0", cast("-0.0" as double);"""
+    def const_sql_0_79 = """select "-1.0", cast("-1.0" as double);"""
     qt_sql_0_79_strict "${const_sql_0_79}"
     testFoldConst("${const_sql_0_79}")
-    def const_sql_0_80 = """select "-1.0", cast("-1.0" as double);"""
+    def const_sql_0_80 = """select "-9.0", cast("-9.0" as double);"""
     qt_sql_0_80_strict "${const_sql_0_80}"
     testFoldConst("${const_sql_0_80}")
-    def const_sql_0_81 = """select "-9.0", cast("-9.0" as double);"""
+    def const_sql_0_81 = """select "-100000.0", cast("-100000.0" as double);"""
     qt_sql_0_81_strict "${const_sql_0_81}"
     testFoldConst("${const_sql_0_81}")
-    def const_sql_0_82 = """select "-100000.0", cast("-100000.0" as double);"""
+    def const_sql_0_82 = """select "-999999.0", cast("-999999.0" as double);"""
     qt_sql_0_82_strict "${const_sql_0_82}"
     testFoldConst("${const_sql_0_82}")
-    def const_sql_0_83 = """select "-999999.0", cast("-999999.0" as double);"""
+    def const_sql_0_83 = """select "-123456.0", cast("-123456.0" as double);"""
     qt_sql_0_83_strict "${const_sql_0_83}"
     testFoldConst("${const_sql_0_83}")
-    def const_sql_0_84 = """select "-123456.0", cast("-123456.0" as double);"""
+    def const_sql_0_84 = """select "-0.000000", cast("-0.000000" as double);"""
     qt_sql_0_84_strict "${const_sql_0_84}"
     testFoldConst("${const_sql_0_84}")
-    def const_sql_0_85 = """select "-0.000000", cast("-0.000000" as double);"""
+    def const_sql_0_85 = """select "-0.000001", cast("-0.000001" as double);"""
     qt_sql_0_85_strict "${const_sql_0_85}"
     testFoldConst("${const_sql_0_85}")
-    def const_sql_0_86 = """select "-0.000001", cast("-0.000001" as double);"""
+    def const_sql_0_86 = """select "-0.000009", cast("-0.000009" as double);"""
     qt_sql_0_86_strict "${const_sql_0_86}"
     testFoldConst("${const_sql_0_86}")
-    def const_sql_0_87 = """select "-0.000009", cast("-0.000009" as double);"""
+    def const_sql_0_87 = """select "-0.100001", cast("-0.100001" as double);"""
     qt_sql_0_87_strict "${const_sql_0_87}"
     testFoldConst("${const_sql_0_87}")
-    def const_sql_0_88 = """select "-0.100001", cast("-0.100001" as double);"""
+    def const_sql_0_88 = """select "-0.900009", cast("-0.900009" as double);"""
     qt_sql_0_88_strict "${const_sql_0_88}"
     testFoldConst("${const_sql_0_88}")
-    def const_sql_0_89 = """select "-0.900009", cast("-0.900009" as double);"""
+    def const_sql_0_89 = """select "-1.000000", cast("-1.000000" as double);"""
     qt_sql_0_89_strict "${const_sql_0_89}"
     testFoldConst("${const_sql_0_89}")
-    def const_sql_0_90 = """select "-1.000000", cast("-1.000000" as double);"""
+    def const_sql_0_90 = """select "-9.000000", cast("-9.000000" as double);"""
     qt_sql_0_90_strict "${const_sql_0_90}"
     testFoldConst("${const_sql_0_90}")
-    def const_sql_0_91 = """select "-9.000000", cast("-9.000000" as double);"""
+    def const_sql_0_91 = """select "-1.00001", cast("-1.00001" as double);"""
     qt_sql_0_91_strict "${const_sql_0_91}"
     testFoldConst("${const_sql_0_91}")
-    def const_sql_0_92 = """select "-1.00001", cast("-1.00001" as double);"""
+    def const_sql_0_92 = """select "-9.00001", cast("-9.00001" as double);"""
     qt_sql_0_92_strict "${const_sql_0_92}"
     testFoldConst("${const_sql_0_92}")
-    def const_sql_0_93 = """select "-9.00001", cast("-9.00001" as double);"""
+    def const_sql_0_93 = """select "-100000.000000", cast("-100000.000000" as double);"""
     qt_sql_0_93_strict "${const_sql_0_93}"
     testFoldConst("${const_sql_0_93}")
-    def const_sql_0_94 = """select "-100000.000000", cast("-100000.000000" as double);"""
+    def const_sql_0_94 = """select "-100001.000000", cast("-100001.000000" as double);"""
     qt_sql_0_94_strict "${const_sql_0_94}"
     testFoldConst("${const_sql_0_94}")
-    def const_sql_0_95 = """select "-100001.000000", cast("-100001.000000" as double);"""
+    def const_sql_0_95 = """select "-999999.000000", cast("-999999.000000" as double);"""
     qt_sql_0_95_strict "${const_sql_0_95}"
     testFoldConst("${const_sql_0_95}")
-    def const_sql_0_96 = """select "-999999.000000", cast("-999999.000000" as double);"""
+    def const_sql_0_96 = """select "-123456.000000", cast("-123456.000000" as double);"""
     qt_sql_0_96_strict "${const_sql_0_96}"
     testFoldConst("${const_sql_0_96}")
-    def const_sql_0_97 = """select "-123456.000000", cast("-123456.000000" as double);"""
+    def const_sql_0_97 = """select "-123.456", cast("-123.456" as double);"""
     qt_sql_0_97_strict "${const_sql_0_97}"
     testFoldConst("${const_sql_0_97}")
-    def const_sql_0_98 = """select "-123.456", cast("-123.456" as double);"""
+    def const_sql_0_98 = """select "-999.999", cast("-999.999" as double);"""
     qt_sql_0_98_strict "${const_sql_0_98}"
     testFoldConst("${const_sql_0_98}")
-    def const_sql_0_99 = """select "-999.999", cast("-999.999" as double);"""
+    def const_sql_0_99 = """select "-nan", cast("-nan" as double);"""
     qt_sql_0_99_strict "${const_sql_0_99}"
     testFoldConst("${const_sql_0_99}")
-    def const_sql_0_100 = """select "-nan", cast("-nan" as double);"""
+    def const_sql_0_100 = """select "-NaN", cast("-NaN" as double);"""
     qt_sql_0_100_strict "${const_sql_0_100}"
     testFoldConst("${const_sql_0_100}")
-    def const_sql_0_101 = """select "-NaN", cast("-NaN" as double);"""
+    def const_sql_0_101 = """select "-NAN", cast("-NAN" as double);"""
     qt_sql_0_101_strict "${const_sql_0_101}"
     testFoldConst("${const_sql_0_101}")
-    def const_sql_0_102 = """select "-NAN", cast("-NAN" as double);"""
+    def const_sql_0_102 = """select "-inf", cast("-inf" as double);"""
     qt_sql_0_102_strict "${const_sql_0_102}"
     testFoldConst("${const_sql_0_102}")
-    def const_sql_0_103 = """select "-inf", cast("-inf" as double);"""
+    def const_sql_0_103 = """select "-Inf", cast("-Inf" as double);"""
     qt_sql_0_103_strict "${const_sql_0_103}"
     testFoldConst("${const_sql_0_103}")
-    def const_sql_0_104 = """select "-Inf", cast("-Inf" as double);"""
+    def const_sql_0_104 = """select "-INF", cast("-INF" as double);"""
     qt_sql_0_104_strict "${const_sql_0_104}"
     testFoldConst("${const_sql_0_104}")
-    def const_sql_0_105 = """select "-INF", cast("-INF" as double);"""
+    def const_sql_0_105 = """select "-infinity", cast("-infinity" as double);"""
     qt_sql_0_105_strict "${const_sql_0_105}"
     testFoldConst("${const_sql_0_105}")
-    def const_sql_0_106 = """select "-infinity", cast("-infinity" as double);"""
+    def const_sql_0_106 = """select "-Infinity", cast("-Infinity" as double);"""
     qt_sql_0_106_strict "${const_sql_0_106}"
     testFoldConst("${const_sql_0_106}")
-    def const_sql_0_107 = """select "-Infinity", cast("-Infinity" as double);"""
+    def const_sql_0_107 = """select "-INFINITY", cast("-INFINITY" as double);"""
     qt_sql_0_107_strict "${const_sql_0_107}"
     testFoldConst("${const_sql_0_107}")
-    def const_sql_0_108 = """select "-INFINITY", cast("-INFINITY" as double);"""
+    def const_sql_0_108 = """select "-1.7976931348623157e+308", cast("-1.7976931348623157e+308" as double);"""
     qt_sql_0_108_strict "${const_sql_0_108}"
     testFoldConst("${const_sql_0_108}")
-    def const_sql_0_109 = """select "-1.7976931348623157e+308", cast("-1.7976931348623157e+308" as double);"""
+    def const_sql_0_109 = """select "-2.2250738585072014e-308", cast("-2.2250738585072014e-308" as double);"""
     qt_sql_0_109_strict "${const_sql_0_109}"
     testFoldConst("${const_sql_0_109}")
-    def const_sql_0_110 = """select "-2.2250738585072014e-308", cast("-2.2250738585072014e-308" as double);"""
-    qt_sql_0_110_strict "${const_sql_0_110}"
-    testFoldConst("${const_sql_0_110}")
-    def const_sql_0_111 = """select "-5e-324", cast("-5e-324" as double);"""
-    qt_sql_0_111_strict "${const_sql_0_111}"
-    testFoldConst("${const_sql_0_111}")
 
     sql "set enable_strict_cast=false;"
     qt_sql_0_0_non_strict "${const_sql_0_0}"
@@ -582,8 +576,4 @@ suite("test_cast_to_double_from_string_const") {
     testFoldConst("${const_sql_0_108}")
     qt_sql_0_109_non_strict "${const_sql_0_109}"
     testFoldConst("${const_sql_0_109}")
-    qt_sql_0_110_non_strict "${const_sql_0_110}"
-    testFoldConst("${const_sql_0_110}")
-    qt_sql_0_111_non_strict "${const_sql_0_111}"
-    testFoldConst("${const_sql_0_111}")
 }

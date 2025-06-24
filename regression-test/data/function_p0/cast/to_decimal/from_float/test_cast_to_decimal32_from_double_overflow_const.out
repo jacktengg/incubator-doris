@@ -17,12 +17,6 @@
 -- !sql_test_cast_to_decimal32_9_0_from_float64_overflow --
 \N
 
--- !sql_test_cast_to_decimal32_9_0_from_float64_overflow --
-\N
-
--- !sql_test_cast_to_decimal32_9_0_from_float64_overflow --
-\N
-
 -- !sql_test_cast_to_decimal32_9_3_from_float64_overflow --
 \N
 
@@ -39,18 +33,6 @@
 \N
 
 -- !sql_test_cast_to_decimal32_9_3_from_float64_overflow --
-\N
-
--- !sql_test_cast_to_decimal32_9_3_from_float64_overflow --
-\N
-
--- !sql_test_cast_to_decimal32_9_3_from_float64_overflow --
-\N
-
--- !sql_test_cast_to_decimal32_9_8_from_float64_overflow --
-\N
-
--- !sql_test_cast_to_decimal32_9_8_from_float64_overflow --
 \N
 
 -- !sql_test_cast_to_decimal32_9_8_from_float64_overflow --

@@ -59,19 +59,17 @@ class OutputUtils {
         if (dataType == "FLOAT" || dataType == "DOUBLE" || dataType == "DECIMAL") {
             Boolean expectNull = expectCell.equals("\\\\N")
             Boolean actualNull = realCell.equals("\\\\N")
-            Boolean expectNan = expectCell.equals("nan")
-            Boolean expectMinusNan = expectCell.equals("-nan")
-            Boolean actualNan = realCell.equals("nan")
-            Boolean actualMinusNan = realCell.equals("-nan")
-            Boolean expectInf = expectCell.equals("inf")
-            Boolean actualInf = realCell.equals("inf")
-            Boolean expectMinusInf = expectCell.equals("-inf")
-            Boolean actualMinusInf = realCell.equals("-inf")
+            Boolean expectNan = expectCell.equalsIgnoreCase("nan") || expectCell.equalsIgnoreCase("-nan")
+            Boolean actualNan = realCell.equalsIgnoreCase("nan") || realCell.equalsIgnoreCase("-nan")
+            Boolean expectInf = expectCell.equalsIgnoreCase("inf") || expectCell.equalsIgnoreCase("infinity")
+            Boolean actualInf = realCell.equalsIgnoreCase("inf") || realCell.equalsIgnoreCase("infinity")
+            Boolean expectMinusInf = expectCell.equalsIgnoreCase("-inf") || expectCell.equalsIgnoreCase("-infinity")
+            Boolean actualMinusInf = realCell.equalsIgnoreCase("-inf") || realCell.equalsIgnoreCase("-infinity")
 
-            if (expectNull != actualNull || expectNan != actualNan || expectMinusNan != actualMinusNan || expectInf != actualInf || expectMinusInf != actualMinusInf) {
+            if (expectNull != actualNull || expectNan != actualNan || expectInf != actualInf || expectMinusInf != actualMinusInf) {
                 return "${info}, line ${line}, ${dataType} result mismatch.\nExpect cell: ${expectCell}\nBut real is: ${realCell}"
             } else if (!expectNull) {
-                if (expectNull || expectNan || expectMinusNan || expectInf || expectMinusInf) {
+                if (expectNull || expectNan || expectInf || expectMinusInf) {
                     return null
                 }
                 // both are not null

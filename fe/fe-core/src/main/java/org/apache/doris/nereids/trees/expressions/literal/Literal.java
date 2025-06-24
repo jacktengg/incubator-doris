@@ -46,6 +46,7 @@ import org.apache.doris.nereids.types.SmallIntType;
 import org.apache.doris.nereids.types.TimeV2Type;
 import org.apache.doris.nereids.types.TinyIntType;
 import org.apache.doris.nereids.types.VarcharType;
+import org.apache.log4j.Logger;
 
 import com.google.common.collect.ImmutableList;
 
@@ -64,6 +65,7 @@ import java.util.Optional;
  */
 public abstract class Literal extends Expression implements LeafExpression {
 
+    private static final Logger logger = Logger.getLogger(Literal.class);
     protected final DataType dataType;
 
     /**
@@ -228,6 +230,7 @@ public abstract class Literal extends Expression implements LeafExpression {
 
     protected Expression getDecimalLiteral(BigDecimal bigDecimal, DataType targetType) {
         int pReal = bigDecimal.precision();
+
         int sReal = bigDecimal.scale();
         int pTarget = targetType.isDecimalV2Type()
                 ? ((DecimalV2Type) targetType).getPrecision() : ((DecimalV3Type) targetType).getPrecision();
@@ -238,6 +241,8 @@ public abstract class Literal extends Expression implements LeafExpression {
         }
         BigDecimal result = bigDecimal.setScale(sTarget, RoundingMode.HALF_UP)
                 .round(new MathContext(pTarget, RoundingMode.HALF_UP));
+        logger.info("getDecimalLiteral orig bigDecimal: " + bigDecimal
+                + ", targetType: " + targetType + ", result big decimal: " + result);
         if (targetType.isDecimalV2Type()) {
             return new DecimalLiteral((DecimalV2Type) targetType, result);
         } else {

@@ -124,3 +124,4 @@ suite("test_cast_to_float_from_decimal256_overflow") {
     sql "set enable_strict_cast=false;"
     qt_sql_8_non_strict 'select f1, cast(f2 as float) from test_cast_to_float_from_decimal256_overflow_8 order by 1;'
 
+}

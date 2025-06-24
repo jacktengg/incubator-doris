@@ -1843,14 +1843,14 @@ class Suite implements GroovyInterceptable {
         def sessionVarOrigValue = sql("select @@debug_skip_fold_constant")
         String openFoldConstant = "set debug_skip_fold_constant=false";
         sql(openFoldConstant)
-        logger.info(foldSql)
+        // logger.info(foldSql)
         Tuple2<List<List<Object>>, ResultSetMetaData> tupleResult = null
         tupleResult = JdbcUtils.executeToStringList(context.getConnection(), foldSql)
         def (resultByFoldConstant, meta) = tupleResult
         logger.info("result by fold constant: " + resultByFoldConstant.toString())
         String closeFoldConstant = "set debug_skip_fold_constant=true";
         sql(closeFoldConstant)
-        logger.info(foldSql)
+        // logger.info(foldSql)
         List<List<Object>> resultExpected = sql(foldSql)
         logger.info("result expected: " + resultExpected.toString())
 

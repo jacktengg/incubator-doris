@@ -818,3 +818,4 @@ suite("test_cast_to_float_from_decimal256_overflow_const") {
     testFoldConst("${const_sql_8_28}")
     qt_sql_8_29_non_strict "${const_sql_8_29}"
     testFoldConst("${const_sql_8_29}")
+}

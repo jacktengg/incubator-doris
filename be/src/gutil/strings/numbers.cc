@@ -408,13 +408,6 @@ int FloatToBuffer(float value, int width, char* buffer) {
 
 // refer to: https://en.cppreference.com/w/cpp/types/numeric_limits/max_digits10.html
 int FastDoubleToBuffer(double value, char* buffer) {
-    auto* end = fmt::format_to(buffer, FMT_COMPILE("{:.17g}"), value);
-    *end = '\0';
-    return end - buffer;
-}
-
-int FastFloatToBuffer(float value, char* buffer) {
-    /*
     char* end = nullptr;
     if (std::isnan(value)) {
         static constexpr char nan_str[] = "NaN";
@@ -424,11 +417,44 @@ int FastFloatToBuffer(float value, char* buffer) {
     } else if (std::isinf(value)) {
         static constexpr char inf_str[] = "Infinity";
         static constexpr int inf_str_len = sizeof(inf_str) - 1;
-        memcpy(buffer, inf_str, inf_str_len);
-        end = buffer + inf_str_len;
+        static constexpr char neg_inf_str[] = "-Infinity";
+        static constexpr int neg_inf_str_len = sizeof(neg_inf_str) - 1;
+        if (value > 0) {
+            memcpy(buffer, inf_str, inf_str_len);
+            end = buffer + inf_str_len;
+        } else {
+            memcpy(buffer, neg_inf_str, neg_inf_str_len);
+            end = buffer + neg_inf_str_len;
+        }
     } else {
-    */
-    auto* end = fmt::format_to(buffer, FMT_COMPILE("{:.9g}"), value);
+        end = fmt::format_to(buffer, FMT_COMPILE("{}"), value);
+    }
+    *end = '\0';
+    return end - buffer;
+}
+
+int FastFloatToBuffer(float value, char* buffer) {
+    char* end = nullptr;
+    if (std::isnan(value)) {
+        static constexpr char nan_str[] = "NaN";
+        static constexpr int nan_str_len = sizeof(nan_str) - 1;
+        memcpy(buffer, nan_str, nan_str_len);
+        end = buffer + nan_str_len;
+    } else if (std::isinf(value)) {
+        static constexpr char inf_str[] = "Infinity";
+        static constexpr int inf_str_len = sizeof(inf_str) - 1;
+        static constexpr char neg_inf_str[] = "-Infinity";
+        static constexpr int neg_inf_str_len = sizeof(neg_inf_str) - 1;
+        if (value > 0) {
+            memcpy(buffer, inf_str, inf_str_len);
+            end = buffer + inf_str_len;
+        } else {
+            memcpy(buffer, neg_inf_str, neg_inf_str_len);
+            end = buffer + neg_inf_str_len;
+        }
+    } else {
+        end = fmt::format_to(buffer, FMT_COMPILE("{}"), value);
+    }
     *end = '\0';
     return end - buffer;
 }

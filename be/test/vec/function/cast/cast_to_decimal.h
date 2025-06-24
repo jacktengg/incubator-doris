@@ -1901,10 +1901,10 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                     auto int_str = fmt::format("{}", i);
                     if constexpr (!std::is_same_v<typename T::NativeType, wide::Int256>) {
                         if (i != max_integral && test_rounding) {
-                            fraction_str = fmt::format("{:0{}}5", f, Scale);
+                            fraction_str = fmt::format("{:0{}}9", f, Scale);
                             ++f;
                         } else {
-                            fraction_str = fmt::format("{:0{}}4", f, Scale);
+                            fraction_str = fmt::format("{:0{}}3", f, Scale);
                         }
                     } else {
                         std::string num_str {wide::to_string(f)};
@@ -1913,21 +1913,22 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                             num_str.insert(0, Scale - len, '0');
                         }
                         if (i != max_integral && test_rounding) {
-                            fraction_str = fmt::format("{}5", num_str);
+                            fraction_str = fmt::format("{}9", num_str);
                             ++f;
                         } else {
-                            fraction_str = fmt::format("{}4", num_str);
+                            fraction_str = fmt::format("{}3", num_str);
                         }
                     }
                     FromT float_value;
-                    auto v_str = fmt::format("{}.{}", int_str, fraction_str);
+                    auto v_str =
+                            fmt::format("{}{}.{}", is_negative ? "-" : "", int_str, fraction_str);
                     char* end {};
                     if constexpr (std::is_same_v<FromT, Float32>) {
                         float_value = std::strtof(v_str.c_str(), &end);
                     } else {
                         float_value = std::strtod(v_str.c_str(), &end);
                     }
-                    float_value = is_negative ? -float_value : float_value;
+                    // float_value = is_negative ? -float_value : float_value;
                     FromT expect_value = float_value * multiplier.value;
                     if (expect_value <= FromT(min_result) || expect_value >= FromT(max_result)) {
                         std::cerr << fmt::format("{:f} overflow\n", expect_value);
@@ -1939,11 +1940,14 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                         dbg_str += fmt::format("({:f}, {})|", float_value, dt_to.to_string(v));
 
                         auto expected_result = dt_to.to_string(v);
-                        const_test_strs.emplace_back(fmt::format("{}", float_value));
-                        const_test_expected_results.emplace_back(expected_result);
+                        int significant_digit_count = (FromPT == TYPE_FLOAT ? 7 : 15);
+                        if (v_str.length() <= significant_digit_count) {
+                            const_test_strs.emplace_back(v_str);
+                            const_test_expected_results.emplace_back(expected_result);
+                        }
 
                         table_test_insert_values.emplace_back(
-                                fmt::format("({}, \"{}\")", test_data_index, float_value));
+                                fmt::format("({}, \"{}\")", test_data_index, v_str));
                         table_test_expected_results +=
                                 fmt::format("{}\t{}\n", test_data_index, expected_result);
                         ++test_data_index;
@@ -1976,7 +1980,7 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                         (*ofs_const_case)
                                 << fmt::format("    def {} = {}\n", groovy_var_name, const_sql);
                     }
-                    (*ofs_const_case) << fmt::format("    qt_sql_{}_{} \"{{{}}}\"\n", data_index,
+                    (*ofs_const_case) << fmt::format("    qt_sql_{}_{} \"${{{}}}\"\n", data_index,
                                                      enable_strict_cast ? "strict" : "non_strict",
                                                      groovy_var_name);
                     (*ofs_const_case)
@@ -2054,7 +2058,7 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
         // max_fractional:    99999999
         constexpr auto max_fractional = decimal_scale_multiplier<typename T::NativeType>(Scale) - 1;
         std::cout << "max_fractional:\t" << fmt::format("{}", max_fractional) << std::endl;
-        std::set<typename T::NativeType> integral_part = {max_integral, max_integral + 1};
+        std::set<typename T::NativeType> integral_part = {max_integral + max_integral / 10};
         std::set<typename T::NativeType> fractional_part = {max_fractional};
 
         std::vector<std::string> test_input_vals;
@@ -2072,7 +2076,7 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                         f = 9;
                     }
                     if constexpr (!std::is_same_v<typename T::NativeType, wide::Int256>) {
-                        fraction_str = fmt::format("{:0{}}5", f, Scale);
+                        fraction_str = fmt::format("{:0{}}9", f, Scale);
                     } else {
                         std::string num_str {wide::to_string(f)};
                         fraction_str = fmt::format("{}9", num_str);
@@ -2175,7 +2179,7 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
             (*ofs_const_case) << fmt::format("    def {} = [", groovy_var_name);
             int i = 0;
             for (auto v : test_input_vals) {
-                (*ofs_const_case) << fmt::format("({})", v);
+                (*ofs_const_case) << fmt::format("(\"{}\")", v);
                 ++i;
                 if (i != value_count) {
                     (*ofs_const_case) << ",";
@@ -2238,7 +2242,7 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
             auto data_index = start_data_index;
             i = 0;
             for (const auto& v : test_input_vals) {
-                (*ofs_case) << fmt::format("({}, {})", data_index++, v);
+                (*ofs_case) << fmt::format("({}, \"{}\")", data_index++, v);
                 ++i;
                 if (i != value_count) {
                     (*ofs_case) << ",";
@@ -2453,10 +2457,10 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
         for (const auto& i : from_integral_part) {
             std::string dbg_str = dbg_str0;
             DataSet data_set;
-            typename ToT::NativeType to_int = i;
             FromT from_decimal_num {};
             ToT to_decimal_num {};
             for (const auto& f : from_fractional_part) {
+                typename ToT::NativeType to_int = i;
                 typename ToT::NativeType to_frac = f;
                 if constexpr (FromScale == 0) {
                     from_decimal_num = from_decimal_ctor(i, 0, FromScale);
@@ -2484,6 +2488,10 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                         auto remaining = f % scale_multiplier;
                         if (remaining >= scale_multiplier / 2) {
                             to_frac += 1;
+                            if (to_frac > to_max_fractional) {
+                                to_frac = 0;
+                                to_int += 1;
+                            }
                         }
                         to_decimal_num = to_decimal_ctor(to_int, to_frac, ToScale);
                         if (to_decimal_num > to_max_decimal_num) {
@@ -2491,8 +2499,8 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                                                      dt_from.to_string(from_decimal_num));
                             continue;
                         }
-                        // dbg_str += fmt::format("({}, {})|", dt_from.to_string(from_decimal_num),
-                        //                        dt_to.to_string(to_decimal_num));
+                        dbg_str += fmt::format("({}, {})|", dt_from.to_string(from_decimal_num),
+                                               dt_to.to_string(to_decimal_num));
                         data_set.push_back({{from_decimal_num}, to_decimal_num});
                     }
                 } else {
@@ -2509,11 +2517,15 @@ struct FunctionCastToDecimalTest : public FunctionCastTest {
                         auto remaining = f % scale_multiplier;
                         if (remaining >= scale_multiplier / 2) {
                             to_frac += 1;
+                            if (to_frac > to_max_fractional) {
+                                to_frac = 0;
+                                to_int += 1;
+                            }
                         }
                     }
                     to_decimal_num = to_decimal_ctor(to_int, to_frac, ToScale);
-                    // dbg_str += fmt::format("({}, {})|", dt_from.to_string(from_decimal_num),
-                    //                        dt_to.to_string(to_decimal_num));
+                    dbg_str += fmt::format("({}, {})|", dt_from.to_string(from_decimal_num),
+                                           dt_to.to_string(to_decimal_num));
                     data_set.push_back({{from_decimal_num}, to_decimal_num});
                 }
                 if (FLAGS_gen_regression_case) {

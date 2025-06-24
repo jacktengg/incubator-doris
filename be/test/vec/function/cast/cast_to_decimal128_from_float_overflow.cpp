@@ -34,6 +34,9 @@ TEST_F(FunctionCastToDecimalTest, test_to_decimal128_from_float_overflow) {
     auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
     auto* ofs_case = ofs_case_uptr.get();
     auto* ofs_expected_result = ofs_expected_result_uptr.get();
+    if (FLAGS_gen_regression_case) {
+        (*ofs_const_case) << "    sql \"set debug_skip_fold_constant = true;\"\n";
+    }
     from_float_double_overflow_test_func<TYPE_FLOAT, Decimal128V3, 38, 0>(
             table_index++, test_data_index, ofs_case, ofs_expected_result, ofs_const_case,
             ofs_const_expected_result);

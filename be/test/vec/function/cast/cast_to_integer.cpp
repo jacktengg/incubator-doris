@@ -1049,9 +1049,9 @@ struct FunctionCastToIntTest : public FunctionCastTest {
             std::string to_sql_type_name = get_sql_type_name(ToPT);
             std::string regression_case_name =
                     fmt::format("test_cast_to_{}_from_{}", to_sql_type_name, from_sql_type_name);
-            setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
-                                         ofs_const_expected_result_uptr, ofs_case_uptr,
-                                         ofs_expected_result_uptr, "to_int/from_float");
+            setup_regression_case_output(
+                    regression_case_name, ofs_const_case_uptr, ofs_const_expected_result_uptr,
+                    ofs_case_uptr, ofs_expected_result_uptr, "to_int/from_float", false, true);
             auto* ofs_const_case = ofs_const_case_uptr.get();
             auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
             auto* ofs_case = ofs_case_uptr.get();
@@ -1065,8 +1065,7 @@ struct FunctionCastToIntTest : public FunctionCastTest {
             gen_normal_regression_case(regression_case_name, from_sql_type_name, true,
                                        to_sql_type_name, regression_test_data_set, table_index++,
                                        test_data_index, ofs_case, ofs_expected_result,
-                                       ofs_const_case, ofs_const_expected_result);
-            (*ofs_const_case) << "}";
+                                       ofs_const_case, ofs_const_expected_result, false, true);
             (*ofs_case) << "}";
         }
     }
@@ -1284,10 +1283,8 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                                            to_sql_type_name, test_data_set, table_index,
                                            test_data_index, ofs_case, ofs_expected_result,
                                            ofs_const_case, ofs_const_expected_result);
-                if (FLAGS_gen_regression_case) {
-                    (*ofs_const_case) << "}";
-                    (*ofs_case) << "}";
-                }
+                (*ofs_const_case) << "}";
+                (*ofs_case) << "}";
             }
         }};
         if constexpr (FromScale == 0) {
@@ -1699,9 +1696,9 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                 std::string from_sql_type_name = "datev2";
                 std::string regression_case_name = fmt::format(
                         "test_cast_to_{}_from_{}", to_sql_type_name, from_sql_type_name);
-                setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
-                                             ofs_const_expected_result_uptr, ofs_case_uptr,
-                                             ofs_expected_result_uptr, "to_int/from_datetime");
+                setup_regression_case_output(
+                        regression_case_name, ofs_const_case_uptr, ofs_const_expected_result_uptr,
+                        ofs_case_uptr, ofs_expected_result_uptr, "to_int/from_datetime", false);
                 auto* ofs_const_case = ofs_const_case_uptr.get();
                 auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
                 auto* ofs_case = ofs_case_uptr.get();
@@ -1710,8 +1707,8 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                 gen_normal_regression_case(
                         regression_case_name, from_sql_type_name, true, to_sql_type_name,
                         regression_test_data_set, table_index++, test_data_index, ofs_case,
-                        ofs_expected_result, ofs_const_case, ofs_const_expected_result);
-                (*ofs_const_case) << "}";
+                        ofs_expected_result, ofs_const_case, ofs_const_expected_result, false);
+                // (*ofs_const_case) << "}";
                 (*ofs_case) << "}";
             }
         }
@@ -1814,7 +1811,8 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                                         to_sql_type_name, Scale, piece);
                     setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
                                                  ofs_const_expected_result_uptr, ofs_case_uptr,
-                                                 ofs_expected_result_uptr, "to_int/from_datetime");
+                                                 ofs_expected_result_uptr, "to_int/from_datetime",
+                                                 false);
                     auto* ofs_const_case = ofs_const_case_uptr.get();
                     auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
                     auto* ofs_case = ofs_case_uptr.get();
@@ -1827,8 +1825,8 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                     gen_normal_regression_case(regression_case_name, from_sql_type_name, true,
                                                to_sql_type_name, piece_data, table_index++,
                                                test_data_index, ofs_case, ofs_expected_result,
-                                               ofs_const_case, ofs_const_expected_result);
-                    (*ofs_const_case) << "}";
+                                               ofs_const_case, ofs_const_expected_result, false);
+                    // (*ofs_const_case) << "}";
                     (*ofs_case) << "}";
                 }
             }
@@ -1894,8 +1892,9 @@ struct FunctionCastToIntTest : public FunctionCastTest {
         test_func(false);
         test_func(true);
 
+        /*
         if (FLAGS_gen_regression_case) {
-            std::string from_sql_type_name = "timev2";
+            std::string from_sql_type_name = "time";
             {
                 int table_index = 0;
                 int test_data_index = 0;
@@ -1903,18 +1902,20 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                 std::unique_ptr<std::ofstream> ofs_case_uptr, ofs_expected_result_uptr;
                 std::string regression_case_name = fmt::format(
                         "test_cast_to_{}_from_{}", to_sql_type_name, from_sql_type_name);
-                setup_regression_case_output(
-                        regression_case_name, ofs_const_case_uptr, ofs_const_expected_result_uptr,
-                        ofs_case_uptr, ofs_expected_result_uptr, "to_int/from_datetime", true);
+                setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
+                                             ofs_const_expected_result_uptr, ofs_case_uptr,
+                                             ofs_expected_result_uptr, "to_int/from_datetime", true,
+                                             false);
                 auto* ofs_const_case = ofs_const_case_uptr.get();
                 auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
                 auto* ofs_case = ofs_case_uptr.get();
                 auto* ofs_expected_result = ofs_expected_result_uptr.get();
 
-                gen_normal_regression_case(
-                        regression_case_name, from_sql_type_name, true, to_sql_type_name,
-                        regression_test_data_set, table_index++, test_data_index, ofs_case,
-                        ofs_expected_result, ofs_const_case, ofs_const_expected_result, true);
+                gen_normal_regression_case(regression_case_name, from_sql_type_name, true,
+                                           to_sql_type_name, regression_test_data_set,
+                                           table_index++, test_data_index, ofs_case,
+                                           ofs_expected_result, ofs_const_case,
+                                           ofs_const_expected_result, true, false);
                 (*ofs_const_case) << "}";
             }
 
@@ -1924,9 +1925,10 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                 std::unique_ptr<std::ofstream> ofs_case_uptr, ofs_expected_result_uptr;
                 std::string regression_case_name = fmt::format(
                         "test_cast_to_{}_from_{}_overflow", to_sql_type_name, from_sql_type_name);
-                setup_regression_case_output(
-                        regression_case_name, ofs_const_case_uptr, ofs_const_expected_result_uptr,
-                        ofs_case_uptr, ofs_expected_result_uptr, "to_int/from_datetime", true);
+                setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
+                                             ofs_const_expected_result_uptr, ofs_case_uptr,
+                                             ofs_expected_result_uptr, "to_int/from_datetime", true,
+                                             false);
                 auto* ofs_const_case = ofs_const_case_uptr.get();
                 auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
                 auto* ofs_case = ofs_case_uptr.get();
@@ -1938,6 +1940,7 @@ struct FunctionCastToIntTest : public FunctionCastTest {
                 (*ofs_const_case) << "}";
             }
         }
+        */
     }
 };
 /*

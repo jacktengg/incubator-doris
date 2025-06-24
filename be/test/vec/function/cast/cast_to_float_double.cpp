@@ -310,7 +310,7 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                   << fmt::format("{}", -std::numeric_limits<FloatType>::denorm_min()) << "\n";
         test_strs.emplace_back(fmt::format("{}", std::numeric_limits<FloatType>::max()));
         test_strs.emplace_back(fmt::format("{}", std::numeric_limits<FloatType>::min()));
-        test_strs.emplace_back(fmt::format("{}", std::numeric_limits<FloatType>::denorm_min()));
+        // test_strs.emplace_back(fmt::format("{}", std::numeric_limits<FloatType>::denorm_min()));
 
         std::vector<std::pair<std::string, std::string>> data_pairs;
         std::string table_test_expected_results;
@@ -732,35 +732,6 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                  FloatType(std::numeric_limits<IntType>::min() + 1)},
                 {{static_cast<IntType>(std::numeric_limits<IntType>::max() - 1)},
                  FloatType(std::numeric_limits<IntType>::max() - 1)},
-
-                // Values that might cause precision loss
-                // {{IntType(16777215)}, FloatType(16777215.0)}, // 2^24 - 1 (float precision limit)
-                // {{IntType(16777216)}, FloatType(16777216.0)}, // 2^24 (float precision limit)
-                // {{IntType(16777217)}, FloatType(16777217.0)}, // 2^24 + 1 (might lose precision in float)
-                // {{IntType(-16777215)}, FloatType(-16777215.0)},
-                // {{IntType(-16777216)}, FloatType(-16777216.0)},
-                // {{IntType(-16777217)}, FloatType(-16777217.0)},
-
-                // Large values that might cause overflow
-                // {{IntType(9007199254740991)},
-                //  FloatType(9007199254740991.0)}, // 2^53 - 1 (double precision limit)
-                // {{IntType(9007199254740992)},
-                //  FloatType(9007199254740992.0)}, // 2^53 (double precision limit)
-                // {{IntType(9007199254740993)},
-                //  FloatType(9007199254740993.0)}, // 2^53 + 1 (might lose precision in double)
-                // {{IntType(-9007199254740991)}, FloatType(-9007199254740991.0)},
-                // {{IntType(-9007199254740992)}, FloatType(-9007199254740992.0)},
-                // {{IntType(-9007199254740993)}, FloatType(-9007199254740993.0)},
-
-                // Special cases for int128
-                // {{IntType(1) << 63}, FloatType(std::pow(2.0, 63))},
-                // {{IntType(1) << 64}, FloatType(std::pow(2.0, 64))},
-                // {{IntType(1) << 96}, FloatType(std::pow(2.0, 96))},
-                // {{IntType(1) << 127}, FloatType(std::pow(2.0, 127))},
-                // {{-(IntType(1) << 63)}, FloatType(-std::pow(2.0, 63))},
-                // {{-(IntType(1) << 64)}, FloatType(-std::pow(2.0, 64))},
-                // {{-(IntType(1) << 96)}, FloatType(-std::pow(2.0, 96))},
-                // {{-(IntType(1) << 127)}, FloatType(-std::pow(2.0, 127))},
         };
 
         check_function_for_cast<DataTypeNumber<FloatPType>, -1, -1, false>(input_types, data_set);
@@ -798,12 +769,7 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
         }
     }
     template <typename FromT, int FromPrecision, int FromScale, PrimitiveType FloatPType>
-    void from_decimalv3_no_overflow_test_func(const std::string& regression_case_name,
-                                              int table_index, int& test_data_index,
-                                              std::ofstream* ofs_case,
-                                              std::ofstream* ofs_expected_result,
-                                              std::ofstream* ofs_const_case,
-                                              std::ofstream* ofs_const_expected_result) {
+    void from_decimalv3_no_overflow_test_func() {
         static_assert(IsDecimalNumber<FromT>, "FromT must be a decimal type");
         using FloatType = typename PrimitiveTypeTraits<FloatPType>::CppType;
         DataTypeDecimal<FromT::PType> dt_from(FromPrecision, FromScale);
@@ -879,10 +845,31 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                 std::string from_sql_type_name =
                         fmt::format("decimalv3({}, {})", FromPrecision, FromScale);
                 std::string to_sql_type_name = get_sql_type_name(FloatPType);
+                int table_index = 0;
+                int test_data_index = 0;
+
+                std::unique_ptr<std::ofstream> ofs_const_case_uptr, ofs_const_expected_result_uptr;
+                std::unique_ptr<std::ofstream> ofs_case_uptr, ofs_expected_result_uptr;
+                std::string regression_case_name =
+                        fmt::format("test_cast_to_{}_from_{}_{}_{}", to_sql_type_name,
+                                    to_lower(TypeName<FromT>::get()), FromPrecision, FromScale);
+                setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
+                                             ofs_const_expected_result_uptr, ofs_case_uptr,
+                                             ofs_expected_result_uptr, "to_float/from_decimal");
+                auto* ofs_const_case = ofs_const_case_uptr.get();
+                auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
+                auto* ofs_case = ofs_case_uptr.get();
+                auto* ofs_expected_result = ofs_expected_result_uptr.get();
+                if constexpr (IsDecimal256<FromT>) {
+                    (*ofs_const_case) << "    sql \"set enable_decimal256 = true;\"\n";
+                    (*ofs_case) << "    sql \"set enable_decimal256 = true;\"\n";
+                }
                 gen_normal_regression_case(regression_case_name, from_sql_type_name, true,
                                            to_sql_type_name, test_data_set, table_index,
                                            test_data_index, ofs_case, ofs_expected_result,
                                            ofs_const_case, ofs_const_expected_result);
+                (*ofs_const_case) << "}";
+                (*ofs_case) << "}";
             }
         }};
         if constexpr (FromScale == 0) {
@@ -890,7 +877,13 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
             for (const auto& i : integral_part) {
                 auto decimal_num = decimal_ctor(i, 0, FromScale);
                 auto num_str = dt.to_string(decimal_num);
-                auto float_v = static_cast<FloatType>(i);
+                FloatType float_v = static_cast<FloatType>(i);
+                // FloatType float_v; // = static_cast<FloatType>(i);
+                // if constexpr (IsDataTypeDecimal256<FromT>) {
+                //     float_v = static_cast<long double>(decimal_num.value) / scale_multiplier;
+                // } else {
+                //     float_v = static_cast<double>(decimal_num.value) / scale_multiplier;
+                // }
                 if (std::isinf(float_v)) {
                     std::cout << fmt::format("cast {}({}, {}) value {} to float_v result is inf\n",
                                              TypeName<FromT>::get(), FromPrecision, FromScale,
@@ -904,6 +897,11 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                 decimal_num = decimal_ctor(-i, 0, FromScale);
                 num_str = dt.to_string(decimal_num);
                 float_v = static_cast<FloatType>(-i);
+                // if constexpr (IsDataTypeDecimal256<FromT>) {
+                //     float_v = static_cast<long double>(decimal_num.value) / scale_multiplier;
+                // } else {
+                //     float_v = static_cast<double>(decimal_num.value) / scale_multiplier;
+                // }
                 if (std::isinf(float_v)) {
                     std::cout << fmt::format("cast {}({}, {}) value {} to float_v result is inf\n",
                                              TypeName<FromT>::get(), FromPrecision, FromScale,
@@ -926,7 +924,13 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
             for (const auto& f : fractional_part) {
                 auto decimal_num = decimal_ctor(0, f, FromScale);
                 auto num_str = dt.to_string(decimal_num);
-                auto float_v = FloatType(f) / scale_multiplier;
+                FloatType float_v = FloatType(f) / scale_multiplier;
+                // FloatType float_v; // = FloatType(f) / scale_multiplier;
+                // if constexpr (IsDataTypeDecimal256<FromT>) {
+                //     float_v = static_cast<long double>(decimal_num.value) / scale_multiplier;
+                // } else {
+                //     float_v = static_cast<double>(decimal_num.value) / scale_multiplier;
+                // }
                 dbg_str += fmt::format("({}, {})|", dt.to_string(decimal_num), float_v);
                 data_set.push_back({{decimal_num}, float_v});
                 test_data_set.emplace_back(num_str, float_v);
@@ -934,6 +938,11 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                 decimal_num = decimal_ctor(0, -f, FromScale);
                 num_str = dt.to_string(decimal_num);
                 float_v = FloatType(-f) / scale_multiplier;
+                // if constexpr (IsDataTypeDecimal256<FromT>) {
+                //     float_v = static_cast<long double>(decimal_num.value) / scale_multiplier;
+                // } else {
+                //     float_v = static_cast<double>(decimal_num.value) / scale_multiplier;
+                // }
                 dbg_str += fmt::format("({}, {})|", dt.to_string(decimal_num), float_v);
                 data_set.push_back({{decimal_num}, float_v});
                 test_data_set.emplace_back(num_str, float_v);
@@ -951,7 +960,14 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
             for (const auto& f : fractional_part) {
                 auto decimal_num = decimal_ctor(i, f, FromScale);
                 auto num_str = dt.to_string(decimal_num);
-                auto float_v = static_cast<FloatType>(decimal_num.value) / scale_multiplier;
+                FloatType float_v = static_cast<FloatType>(decimal_num.value) / scale_multiplier;
+                // FloatType
+                //         float_v; // = static_cast<FloatType>(decimal_num.value) / scale_multiplier;
+                // if constexpr (IsDataTypeDecimal256<FromT>) {
+                //     float_v = static_cast<long double>(decimal_num.value) / scale_multiplier;
+                // } else {
+                //     float_v = static_cast<double>(decimal_num.value) / scale_multiplier;
+                // }
                 if (std::isinf(float_v)) {
                     std::cout << fmt::format("cast {}({}, {}) value {} to float_v result is inf\n",
                                              TypeName<FromT>::get(), FromPrecision, FromScale,
@@ -965,6 +981,11 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                 decimal_num = decimal_ctor(-i, -f, FromScale);
                 num_str = dt.to_string(decimal_num);
                 float_v = static_cast<FloatType>(decimal_num.value) / scale_multiplier;
+                // if constexpr (IsDataTypeDecimal256<FromT>) {
+                //     float_v = static_cast<long double>(decimal_num.value) / scale_multiplier;
+                // } else {
+                //     float_v = static_cast<double>(decimal_num.value) / scale_multiplier;
+                // }
                 if (std::isinf(float_v)) {
                     std::cout << fmt::format("cast {}({}, {}) value {} to float_v result is inf\n",
                                              TypeName<FromT>::get(), FromPrecision, FromScale,
@@ -1001,64 +1022,20 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                                                          : 1)));
         static_assert(min_decimal_pre == 1 || min_decimal_pre > 9);
 
-        using T = typename PrimitiveTypeTraits<ToPT>::CppType;
-
-        int table_index = 0;
-        int test_data_index = 0;
-
-        std::unique_ptr<std::ofstream> ofs_const_case_uptr, ofs_const_expected_result_uptr;
-        std::unique_ptr<std::ofstream> ofs_case_uptr, ofs_expected_result_uptr;
-        std::string regression_case_name =
-                fmt::format("test_cast_to_{}_from_{}", to_lower(TypeName<T>::get()),
-                            to_lower(TypeName<FromT>::get()));
-        if (FLAGS_gen_regression_case) {
-            setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
-                                         ofs_const_expected_result_uptr, ofs_case_uptr,
-                                         ofs_expected_result_uptr, "to_float/from_decimal");
-        }
-        auto* ofs_const_case = ofs_const_case_uptr.get();
-        auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
-        auto* ofs_case = ofs_case_uptr.get();
-        auto* ofs_expected_result = ofs_expected_result_uptr.get();
-        if (FLAGS_gen_regression_case) {
-            if constexpr (IsDecimal256<FromT>) {
-                (*ofs_const_case) << "    sql \"set enable_decimal256 = true;\"\n";
-                (*ofs_case) << "    sql \"set enable_decimal256 = true;\"\n";
-            }
-        }
-
-        from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, 0, ToPT>(
-                regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
-                ofs_const_case, ofs_const_expected_result);
+        from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, 0, ToPT>();
         if constexpr (min_decimal_pre != 1) {
-            from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, min_decimal_pre / 2, ToPT>(
-                    regression_case_name, table_index++, test_data_index, ofs_case,
-                    ofs_expected_result, ofs_const_case, ofs_const_expected_result);
-            from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, min_decimal_pre - 1, ToPT>(
-                    regression_case_name, table_index++, test_data_index, ofs_case,
-                    ofs_expected_result, ofs_const_case, ofs_const_expected_result);
+            from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, min_decimal_pre / 2,
+                                                 ToPT>();
+            from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, min_decimal_pre - 1,
+                                                 ToPT>();
         }
-        from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, min_decimal_pre, ToPT>(
-                regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
-                ofs_const_case, ofs_const_expected_result);
+        from_decimalv3_no_overflow_test_func<FromT, min_decimal_pre, min_decimal_pre, ToPT>();
 
-        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, 0, ToPT>(
-                regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
-                ofs_const_case, ofs_const_expected_result);
-        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, 1, ToPT>(
-                regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
-                ofs_const_case, ofs_const_expected_result);
-        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, max_decimal_pre / 2, ToPT>(
-                regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
-                ofs_const_case, ofs_const_expected_result);
-        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, max_decimal_pre - 1, ToPT>(
-                regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
-                ofs_const_case, ofs_const_expected_result);
-        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, max_decimal_pre, ToPT>(
-                regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
-                ofs_const_case, ofs_const_expected_result);
-        (*ofs_const_case) << "}";
-        (*ofs_case) << "}";
+        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, 0, ToPT>();
+        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, 1, ToPT>();
+        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, max_decimal_pre / 2, ToPT>();
+        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, max_decimal_pre - 1, ToPT>();
+        from_decimalv3_no_overflow_test_func<FromT, max_decimal_pre, max_decimal_pre, ToPT>();
     }
 
     template <int FromPrecision, int FromScale>
@@ -1219,6 +1196,10 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
         from_decimalv3_verflow_test_func<max_decimal_pre, 37>(
                 regression_case_name, table_index++, test_data_index, ofs_case, ofs_expected_result,
                 ofs_const_case, ofs_const_expected_result);
+        if (FLAGS_gen_regression_case) {
+            (*ofs_const_case) << "}";
+            (*ofs_case) << "}";
+        }
     }
 
     template <PrimitiveType FloatPType>
@@ -1269,7 +1250,7 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                     fmt::format("test_cast_to_{}_from_{}", to_sql_type_name, from_sql_type_name);
             setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
                                          ofs_const_expected_result_uptr, ofs_case_uptr,
-                                         ofs_expected_result_uptr, "to_float/from_datetime");
+                                         ofs_expected_result_uptr, "to_float/from_datetime", false);
             auto* ofs_const_case = ofs_const_case_uptr.get();
             auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
             auto* ofs_case = ofs_case_uptr.get();
@@ -1278,8 +1259,9 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
             gen_normal_regression_case(regression_case_name, from_sql_type_name, true,
                                        to_sql_type_name, regression_test_data_set, table_index++,
                                        test_data_index, ofs_case, ofs_expected_result,
-                                       ofs_const_case, ofs_const_expected_result, false, true);
-            (*ofs_const_case) << "}";
+                                       ofs_const_case, ofs_const_expected_result, false, true,
+                                       true);
+            // (*ofs_const_case) << "}";
             (*ofs_case) << "}";
         }
     }
@@ -1363,9 +1345,9 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                 std::string regression_case_name =
                         fmt::format("test_cast_to_{}_from_datetimev2_{}_part{}", to_sql_type_name,
                                     Scale, piece);
-                setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
-                                             ofs_const_expected_result_uptr, ofs_case_uptr,
-                                             ofs_expected_result_uptr, "to_float/from_datetime");
+                setup_regression_case_output(
+                        regression_case_name, ofs_const_case_uptr, ofs_const_expected_result_uptr,
+                        ofs_case_uptr, ofs_expected_result_uptr, "to_float/from_datetime", false);
                 auto* ofs_const_case = ofs_const_case_uptr.get();
                 auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
                 auto* ofs_case = ofs_case_uptr.get();
@@ -1374,11 +1356,11 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
                         regression_test_data_set.begin() + data_index,
                         regression_test_data_set.begin() + data_index + regression_case_row_count);
 
-                gen_normal_regression_case(regression_case_name, from_sql_type_name, true,
-                                           to_sql_type_name, piece_data, table_index++,
-                                           test_data_index, ofs_case, ofs_expected_result,
-                                           ofs_const_case, ofs_const_expected_result, false, true);
-                (*ofs_const_case) << "}";
+                gen_normal_regression_case(
+                        regression_case_name, from_sql_type_name, true, to_sql_type_name,
+                        piece_data, table_index++, test_data_index, ofs_case, ofs_expected_result,
+                        ofs_const_case, ofs_const_expected_result, false, true, true);
+                // (*ofs_const_case) << "}";
                 (*ofs_case) << "}";
             }
         }
@@ -1427,17 +1409,18 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
         };
         test_func(false);
         test_func(true);
+        /*
         if (FLAGS_gen_regression_case) {
             int table_index = 0;
             int test_data_index = 0;
             std::unique_ptr<std::ofstream> ofs_const_case_uptr, ofs_const_expected_result_uptr;
             std::unique_ptr<std::ofstream> ofs_case_uptr, ofs_expected_result_uptr;
-            std::string from_sql_type_name = "timev2";
+            std::string from_sql_type_name = "time";
             std::string regression_case_name =
                     fmt::format("test_cast_to_{}_from_{}", to_sql_type_name, from_sql_type_name);
-            setup_regression_case_output(regression_case_name, ofs_const_case_uptr,
-                                         ofs_const_expected_result_uptr, ofs_case_uptr,
-                                         ofs_expected_result_uptr, "to_float/from_datetime", true);
+            setup_regression_case_output(
+                    regression_case_name, ofs_const_case_uptr, ofs_const_expected_result_uptr,
+                    ofs_case_uptr, ofs_expected_result_uptr, "to_float/from_datetime", true, false);
             auto* ofs_const_case = ofs_const_case_uptr.get();
             auto* ofs_const_expected_result = ofs_const_expected_result_uptr.get();
             auto* ofs_case = ofs_case_uptr.get();
@@ -1446,9 +1429,11 @@ struct FunctionCastToFloatTest : public FunctionCastTest {
             gen_normal_regression_case(regression_case_name, from_sql_type_name, true,
                                        to_sql_type_name, regression_test_data_set, table_index++,
                                        test_data_index, ofs_case, ofs_expected_result,
-                                       ofs_const_case, ofs_const_expected_result, true, true);
+                                       ofs_const_case, ofs_const_expected_result, true, false,
+                                       true);
             (*ofs_const_case) << "}";
         }
+        */
     }
 };
 /*

@@ -21,16 +21,17 @@ suite("test_cast_to_decimal256_from_double_overflow") {
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
     // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
+    sql "set enable_decimal256 = true;"
     sql "drop table if exists test_cast_to_decimal256_76_0_from_float64_overflow;"
     sql "create table test_cast_to_decimal256_76_0_from_float64_overflow(f1 int, f2 double) properties('replication_num'='1');"
-    sql """insert into test_cast_to_decimal256_76_0_from_float64_overflow values (0, 1e+76),(1, -1e+76),(2, 1e+76),(3, -1e+76),(4, inf),
-      (5, -inf),(6, nan),(7, -nan);
+    sql """insert into test_cast_to_decimal256_76_0_from_float64_overflow values (0, "1.1e+76"),(1, "-1.1e+76"),(2, "inf"),(3, "-inf"),(4, "nan"),
+      (5, "-nan");
     """
 
     sql "set enable_strict_cast=true;"
 
     def test_cast_to_decimal256_76_0_from_float64_overflow_data_start_index = 0
-    def test_cast_to_decimal256_76_0_from_float64_overflow_data_end_index = 8
+    def test_cast_to_decimal256_76_0_from_float64_overflow_data_end_index = 6
     for (int data_index = test_cast_to_decimal256_76_0_from_float64_overflow_data_start_index; data_index < test_cast_to_decimal256_76_0_from_float64_overflow_data_end_index; data_index++) {
         test {
             sql "select f1, cast(f2 as decimalv3(76, 0)) from test_cast_to_decimal256_76_0_from_float64_overflow where f1 = ${data_index}"
@@ -42,14 +43,14 @@ suite("test_cast_to_decimal256_from_double_overflow") {
 
     sql "drop table if exists test_cast_to_decimal256_76_38_from_float64_overflow;"
     sql "create table test_cast_to_decimal256_76_38_from_float64_overflow(f1 int, f2 double) properties('replication_num'='1');"
-    sql """insert into test_cast_to_decimal256_76_38_from_float64_overflow values (8, 1e+38),(9, -1e+38),(10, 1e+38),(11, -1e+38),(12, inf),
-      (13, -inf),(14, nan),(15, -nan);
+    sql """insert into test_cast_to_decimal256_76_38_from_float64_overflow values (6, "1.1e+38"),(7, "-1.1e+38"),(8, "inf"),(9, "-inf"),(10, "nan"),
+      (11, "-nan");
     """
 
     sql "set enable_strict_cast=true;"
 
-    def test_cast_to_decimal256_76_38_from_float64_overflow_data_start_index = 8
-    def test_cast_to_decimal256_76_38_from_float64_overflow_data_end_index = 16
+    def test_cast_to_decimal256_76_38_from_float64_overflow_data_start_index = 6
+    def test_cast_to_decimal256_76_38_from_float64_overflow_data_end_index = 12
     for (int data_index = test_cast_to_decimal256_76_38_from_float64_overflow_data_start_index; data_index < test_cast_to_decimal256_76_38_from_float64_overflow_data_end_index; data_index++) {
         test {
             sql "select f1, cast(f2 as decimalv3(76, 38)) from test_cast_to_decimal256_76_38_from_float64_overflow where f1 = ${data_index}"
@@ -61,14 +62,14 @@ suite("test_cast_to_decimal256_from_double_overflow") {
 
     sql "drop table if exists test_cast_to_decimal256_76_75_from_float64_overflow;"
     sql "create table test_cast_to_decimal256_76_75_from_float64_overflow(f1 int, f2 double) properties('replication_num'='1');"
-    sql """insert into test_cast_to_decimal256_76_75_from_float64_overflow values (16, 10),(17, -10),(18, 11),(19, -11),(20, inf),
-      (21, -inf),(22, nan),(23, -nan);
+    sql """insert into test_cast_to_decimal256_76_75_from_float64_overflow values (12, "10"),(13, "-10"),(14, "inf"),(15, "-inf"),(16, "nan"),
+      (17, "-nan");
     """
 
     sql "set enable_strict_cast=true;"
 
-    def test_cast_to_decimal256_76_75_from_float64_overflow_data_start_index = 16
-    def test_cast_to_decimal256_76_75_from_float64_overflow_data_end_index = 24
+    def test_cast_to_decimal256_76_75_from_float64_overflow_data_start_index = 12
+    def test_cast_to_decimal256_76_75_from_float64_overflow_data_end_index = 18
     for (int data_index = test_cast_to_decimal256_76_75_from_float64_overflow_data_start_index; data_index < test_cast_to_decimal256_76_75_from_float64_overflow_data_end_index; data_index++) {
         test {
             sql "select f1, cast(f2 as decimalv3(76, 75)) from test_cast_to_decimal256_76_75_from_float64_overflow where f1 = ${data_index}"

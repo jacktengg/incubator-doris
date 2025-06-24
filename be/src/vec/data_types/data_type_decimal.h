@@ -649,7 +649,11 @@ Status convert_from_decimal(typename ToDataType::FieldType* dst,
         } else {
             auto multiplier = FromDataType::get_scale_multiplier(scale);
             for (size_t i = 0; i < size; ++i) {
-                dst[i] = static_cast<ToFieldType>(src[i].value) / multiplier.value;
+                if constexpr (IsDataTypeDecimal256<FromDataType>) {
+                    dst[i] = static_cast<long double>(src[i].value) / multiplier.value;
+                } else {
+                    dst[i] = static_cast<double>(src[i].value) / multiplier.value;
+                }
             }
         }
         return Status::OK();
@@ -704,8 +708,11 @@ void convert_to_decimal(typename ToDataType::FieldType* dst,
             }
         }
         for (size_t i = 0; i < size; ++i) {
+            using DoubleType =
+                    std::conditional_t<IsDataTypeDecimal256<ToDataType>, long double, double>;
             dst[i].value = typename ToDataType::FieldType::NativeType(
-                    FromFieldType(src[i] * multiplier.value + ((src[i] >= 0) ? 0.5 : -0.5)));
+                    static_cast<double>(src[i] * static_cast<DoubleType>(multiplier.value) +
+                                        ((src[i] >= 0) ? 0.5 : -0.5)));
         }
     } else {
         using DecimalFrom =

@@ -23,8 +23,8 @@ suite("test_cast_to_decimal64_from_float_overflow") {
     // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
     sql "drop table if exists test_cast_to_decimal64_18_0_from_float32_overflow;"
     sql "create table test_cast_to_decimal64_18_0_from_float32_overflow(f1 int, f2 float) properties('replication_num'='1');"
-    sql """insert into test_cast_to_decimal64_18_0_from_float32_overflow values (0, 1e+18),(1, -1e+18),(2, 1e+18),(3, -1e+18),(4, inf),
-      (5, -inf),(6, nan),(7, -nan);
+    sql """insert into test_cast_to_decimal64_18_0_from_float32_overflow values (0, "1e+18"),(1, "-1e+18"),(2, "1e+18"),(3, "-1e+18"),(4, "inf"),
+      (5, "-inf"),(6, "nan"),(7, "-nan");
     """
 
     sql "set enable_strict_cast=true;"
@@ -42,8 +42,8 @@ suite("test_cast_to_decimal64_from_float_overflow") {
 
     sql "drop table if exists test_cast_to_decimal64_18_9_from_float32_overflow;"
     sql "create table test_cast_to_decimal64_18_9_from_float32_overflow(f1 int, f2 float) properties('replication_num'='1');"
-    sql """insert into test_cast_to_decimal64_18_9_from_float32_overflow values (8, 1000000000),(9, -1000000000),(10, 1000000000),(11, -1000000000),(12, inf),
-      (13, -inf),(14, nan),(15, -nan);
+    sql """insert into test_cast_to_decimal64_18_9_from_float32_overflow values (8, "1000000000"),(9, "-1000000000"),(10, "1000000000"),(11, "-1000000000"),(12, "inf"),
+      (13, "-inf"),(14, "nan"),(15, "-nan");
     """
 
     sql "set enable_strict_cast=true;"
@@ -61,8 +61,8 @@ suite("test_cast_to_decimal64_from_float_overflow") {
 
     sql "drop table if exists test_cast_to_decimal64_18_17_from_float32_overflow;"
     sql "create table test_cast_to_decimal64_18_17_from_float32_overflow(f1 int, f2 float) properties('replication_num'='1');"
-    sql """insert into test_cast_to_decimal64_18_17_from_float32_overflow values (16, 10),(17, -10),(18, 11),(19, -11),(20, inf),
-      (21, -inf),(22, nan),(23, -nan);
+    sql """insert into test_cast_to_decimal64_18_17_from_float32_overflow values (16, "10"),(17, "-10"),(18, "11"),(19, "-11"),(20, "inf"),
+      (21, "-inf"),(22, "nan"),(23, "-nan");
     """
 
     sql "set enable_strict_cast=true;"

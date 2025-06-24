@@ -21,8 +21,9 @@ suite("test_cast_to_decimal64_from_double_overflow_const") {
     // This test case is generated from the correspoinding be UT test case,
     // update this case if the correspoinding be UT test case is updated,
     // e.g.: ../run-be-ut.sh --run --filter=FunctionCastToDecimalTest.* --gen_regression_case
-    def test_cast_to_decimal64_18_0_from_float64_overflow_vals = [(1e+18),(-1e+18),(1e+18),(-1e+18),(inf),
-        (-inf),(nan),(-nan)]
+    sql "set debug_skip_fold_constant = true;"
+    def test_cast_to_decimal64_18_0_from_float64_overflow_vals = [("1e+18"),("-1e+18"),("1e+18"),("-1e+18"),("inf"),
+        ("-inf"),("nan"),("-nan")]
     sql "set enable_strict_cast=true;"
 
     for (b in ["false", "true"]) {
@@ -43,8 +44,8 @@ suite("test_cast_to_decimal64_from_double_overflow_const") {
     for (test_str in test_cast_to_decimal64_18_0_from_float64_overflow_vals) {
         testFoldConst("""select cast(cast("${test_str}" as double) as decimalv3(18, 0));""")
     }
-    def test_cast_to_decimal64_18_9_from_float64_overflow_vals = [(1000000000),(-1000000000),(1000000001),(-1000000001),(inf),
-        (-inf),(nan),(-nan)]
+    def test_cast_to_decimal64_18_9_from_float64_overflow_vals = [("1000000000"),("-1000000000"),("1000000001"),("-1000000001"),("inf"),
+        ("-inf"),("nan"),("-nan")]
     sql "set enable_strict_cast=true;"
 
     for (b in ["false", "true"]) {
@@ -65,8 +66,8 @@ suite("test_cast_to_decimal64_from_double_overflow_const") {
     for (test_str in test_cast_to_decimal64_18_9_from_float64_overflow_vals) {
         testFoldConst("""select cast(cast("${test_str}" as double) as decimalv3(18, 9));""")
     }
-    def test_cast_to_decimal64_18_17_from_float64_overflow_vals = [(10),(-10),(11),(-11),(inf),
-        (-inf),(nan),(-nan)]
+    def test_cast_to_decimal64_18_17_from_float64_overflow_vals = [("10"),("-10"),("11"),("-11"),("inf"),
+        ("-inf"),("nan"),("-nan")]
     sql "set enable_strict_cast=true;"
 
     for (b in ["false", "true"]) {
