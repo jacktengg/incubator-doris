@@ -83,7 +83,7 @@ public class FloatLiteral extends FractionalLiteral {
             if (Float.isInfinite(value) || Float.isNaN(value)) {
                 throw new CastException(String.format("%s can't cast to %s in strict mode.", getValue(), targetType));
             }
-            BigDecimal bigDecimal = new BigDecimal(value);
+            BigDecimal bigDecimal = new BigDecimal(Float.toString(value));
             return getDecimalLiteral(bigDecimal, targetType);
         }
         return super.uncheckedCastTo(targetType);
