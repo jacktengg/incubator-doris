@@ -614,12 +614,12 @@ public class DateLiteral extends Literal implements ComparableLiteral {
             if (strictCast) {
                 throw new AnalysisException("DateType can't cast to FloatType in strict mode.");
             }
-            return new FloatLiteral(year * 1000 + month * 100 + day);
+            return new FloatLiteral(year * 10000 + month * 100 + day);
         } else if (targetType.isDoubleType()) {
             if (strictCast) {
                 throw new AnalysisException("DateType can't cast to DoubleType in strict mode.");
             }
-            return new DoubleLiteral(year * 1000 + month * 100 + day);
+            return new DoubleLiteral(year * 10000 + month * 100 + day);
         } else if (targetType.isDateTimeV2Type()) {
             return new DateTimeV2Literal(year, month, day, 0, 0, 0);
         }

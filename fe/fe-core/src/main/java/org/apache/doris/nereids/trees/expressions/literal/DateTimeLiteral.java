@@ -353,14 +353,12 @@ public class DateTimeLiteral extends DateLiteral {
             if (strictCast) {
                 throw new AnalysisException("DateTimeType can't cast to FloatType in strict mode.");
             }
-            return new FloatLiteral(
-                    year * 1000000000 + month * 10000000 + day * 100000 + hour * 10000 + minute * 100 + second);
+            return new FloatLiteral(getValue());
         } else if (targetType.isDoubleType()) {
             if (strictCast) {
                 throw new AnalysisException("DateTimeType can't cast to DoubleType in strict mode.");
             }
-            return new DoubleLiteral(
-                    year * 1000000000 + month * 10000000 + day * 100000 + hour * 10000 + minute * 100 + second);
+            return new DoubleLiteral(getValue());
         }
         return super.uncheckedCastTo(targetType);
     }
