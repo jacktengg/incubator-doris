@@ -111,6 +111,10 @@ StringRef RuntimePredicate::_get_string_ref(const Field& field, const PrimitiveT
         const auto& v = field.get<typename PrimitiveTypeTraits<TYPE_DATETIMEV2>::CppType>();
         return StringRef((char*)&v, sizeof(v));
     }
+    case PrimitiveType::TYPE_TIMESTAMPTZ: {
+        _get_value_fn = get_normal_value<TYPE_TIMESTAMPTZ>;
+        break;
+    }
     case PrimitiveType::TYPE_DATE: {
         const auto& v = field.get<typename PrimitiveTypeTraits<TYPE_DATE>::CppType>();
         return StringRef((char*)&v, sizeof(v));
