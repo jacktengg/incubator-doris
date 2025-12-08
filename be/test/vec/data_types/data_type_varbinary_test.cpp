@@ -257,8 +257,9 @@ TEST_F(DataTypeVarbinaryTest, SerDeWriteColumnToMysql) {
     auto serde = dt.get_serde();
     // binary protocol
     doris::MysqlRowBinaryBuffer rb_bin;
-    auto st2 =
-            serde->write_column_to_mysql_binary(*col, rb_bin, /*row_idx=*/0, /*col_const=*/false);
+    auto format_options = DataTypeSerDe::FormatOptions();
+    auto st2 = serde->write_column_to_mysql_binary(*col, rb_bin, /*row_idx=*/0, /*col_const=*/false,
+                                                   format_options);
     EXPECT_TRUE(st2.ok());
     EXPECT_GT(rb_bin.length(), 0);
 }

@@ -472,7 +472,7 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
                                            "9999-12-31 23:59:59", "9999-12-31 23:59:59"};
         for (auto str : values) {
             TimestampTzValue tz {};
-            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
             builder->add_values((const uint8_t*)&tz, 1);
         }
         static_cast<void>(builder->flush());
@@ -487,7 +487,7 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
                                            "8999-12-31 23:59:59", "8999-12-31 23:59:59"};
         for (auto str : values) {
             TimestampTzValue tz {};
-            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
             builder->add_values((const uint8_t*)&tz, 1);
         }
         builder->add_nulls(1);
@@ -502,7 +502,7 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
                                            "9999-12-31 23:59:59", "9999-12-31 23:59:59"};
         for (auto str : values) {
             TimestampTzValue tz {};
-            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
             builder->add_values((const uint8_t*)&tz, 1);
         }
         builder->add_nulls(1);
@@ -518,7 +518,7 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
                                            "8999-12-31 23:59:59", "8999-12-31 23:59:59"};
         for (auto str : values) {
             TimestampTzValue tz {};
-            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
             builder->add_values((const uint8_t*)&tz, 1);
         }
         builder->add_nulls(1);
@@ -549,7 +549,7 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
             segment_zone_map.min());
     std::string max_str = "9999-12-31 23:59:59";
     TimestampTzValue tz_max {};
-    EXPECT_TRUE(tz_max.from_string(StringRef {max_str}, &time_zone, params));
+    EXPECT_TRUE(tz_max.from_string(StringRef {max_str}, &time_zone, params, 0));
     EXPECT_EQ(vectorized::CastToString::from_timestamptz(tz_max, scale), segment_zone_map.max());
     EXPECT_EQ(true, segment_zone_map.has_null());
     EXPECT_EQ(true, segment_zone_map.has_not_null());
@@ -576,7 +576,7 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
     {
         TimestampTzValue tz {};
         StringRef str = StringRef {"8999-12-31 23:59:59"};
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0));
         EXPECT_EQ(vectorized::CastToString::from_timestamptz(tz, scale), zone_maps[1].max());
         EXPECT_EQ(true, zone_maps[1].has_null());
         EXPECT_EQ(true, zone_maps[1].has_not_null());
@@ -586,7 +586,7 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
     {
         TimestampTzValue tz {};
         StringRef str = StringRef {"0000-01-01 00:00:59"};
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0));
         EXPECT_EQ(vectorized::CastToString::from_timestamptz(tz, scale), zone_maps[2].min());
     }
     EXPECT_EQ(vectorized::CastToString::from_timestamptz(tz_max, scale), zone_maps[2].max());
@@ -597,13 +597,13 @@ TEST_F(ColumnZoneMapTest, TimestamptzPage) {
     {
         TimestampTzValue tz {};
         StringRef str = StringRef {"0000-01-01 00:00:59"};
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0));
         EXPECT_EQ(vectorized::CastToString::from_timestamptz(tz, scale), zone_maps[3].min());
     }
     {
         TimestampTzValue tz {};
         StringRef str = StringRef {"8999-12-31 23:59:59"};
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0));
         EXPECT_EQ(vectorized::CastToString::from_timestamptz(tz, scale), zone_maps[3].max());
     }
     EXPECT_EQ(true, zone_maps[3].has_null());

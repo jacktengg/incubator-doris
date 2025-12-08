@@ -1228,10 +1228,10 @@ TEST_F(BlockColumnPredicateTest, test_timestamptz_zonemap_index) {
         // auto zonemap_max_v = type_limit<TimestampTzValue>::max();
         TimestampTzValue zonemap_min_v;
         TimestampTzValue zonemap_max_v;
-        EXPECT_TRUE(
-                zonemap_min_v.from_string(StringRef {"0001-01-01 00:00:00"}, &time_zone, params));
-        EXPECT_TRUE(
-                zonemap_max_v.from_string(StringRef {"8999-12-31 23:59:59"}, &time_zone, params));
+        EXPECT_TRUE(zonemap_min_v.from_string(StringRef {"0001-01-01 00:00:00"}, &time_zone, params,
+                                              0));
+        EXPECT_TRUE(zonemap_max_v.from_string(StringRef {"8999-12-31 23:59:59"}, &time_zone, params,
+                                              0));
         min_field->set_raw_value(&zonemap_min_v, sizeof(zonemap_min_v));
         max_field->set_raw_value(&zonemap_max_v, sizeof(zonemap_max_v));
 
@@ -1240,7 +1240,7 @@ TEST_F(BlockColumnPredicateTest, test_timestamptz_zonemap_index) {
                                            "8999-12-31 23:59:59"};
         for (auto str : values) {
             TimestampTzValue tz {};
-            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
             single_column_predicate_test_func<TYPE_TIMESTAMPTZ, PredicateType::EQ>(
                     {min_field.get(), max_field.get()}, tz, true);
             single_column_predicate_test_func<TYPE_TIMESTAMPTZ, PredicateType::NE>(
@@ -1309,7 +1309,7 @@ TEST_F(BlockColumnPredicateTest, test_timestamptz_zonemap_index) {
                                            "9999-12-31 23:59:59.999999"};
         for (auto str : values) {
             TimestampTzValue tz {};
-            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+            EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 6));
             single_column_predicate_test_func<TYPE_TIMESTAMPTZ, PredicateType::EQ>(
                     {min_field.get(), max_field.get()}, tz, true);
             single_column_predicate_test_func<TYPE_TIMESTAMPTZ, PredicateType::NE>(
@@ -1360,7 +1360,7 @@ TEST_F(BlockColumnPredicateTest, test_timestamptz_bloom_filter) {
     std::vector<TimestampTzValue> values;
     for (const auto& str : str_values) {
         TimestampTzValue tz {};
-        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
         bf->add_bytes((char*)&tz, sizeof(TimestampTzValue));
         values.push_back(tz);
     }
@@ -1371,13 +1371,13 @@ TEST_F(BlockColumnPredicateTest, test_timestamptz_bloom_filter) {
     {
         auto str = "0000-01-01 00:00:00";
         TimestampTzValue tz {};
-        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
         single_column_predicate_test_func<TYPE_TIMESTAMPTZ, PredicateType::EQ>(bf.get(), tz, false);
     }
     {
         auto str = "9999-12-31 23:59:59.999999";
         TimestampTzValue tz {};
-        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 6));
         single_column_predicate_test_func<TYPE_TIMESTAMPTZ, PredicateType::EQ>(bf.get(), tz, false);
     }
 }

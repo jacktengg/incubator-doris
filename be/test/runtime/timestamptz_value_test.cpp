@@ -41,7 +41,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2024-01-01 12:00:00"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0));
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2024, 1, 1, 4, 0, 0, 0))
                 << tz._utc_dt.to_string();
     }
@@ -51,7 +51,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2024-01-01 12:00:00.123456"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 6));
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2024, 1, 1, 4, 0, 0, 123456))
                 << tz._utc_dt.to_string();
     }
@@ -61,7 +61,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2020-01-01 00:00:00 +03:00"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params)) << params.status.to_string();
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0)) << params.status.to_string();
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2019, 12, 31, 21, 0, 0, 0))
                 << tz._utc_dt.to_string();
     }
@@ -71,7 +71,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2020-01-01 00:00:00 -03:00"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params)) << params.status.to_string();
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0)) << params.status.to_string();
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2020, 1, 1, 3, 0, 0, 0))
                 << tz._utc_dt.to_string();
     }
@@ -81,7 +81,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2020-01-01 00:00:00 +08:00"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params)) << params.status.to_string();
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0)) << params.status.to_string();
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2019, 12, 31, 16, 0, 0, 0))
                 << tz._utc_dt.to_string();
     }
@@ -91,7 +91,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2020-01-01 00:00:00 -08:00"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params)) << params.status.to_string();
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0)) << params.status.to_string();
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2020, 1, 1, 8, 0, 0, 0))
                 << tz._utc_dt.to_string();
     }
@@ -101,7 +101,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2020-01-01 00:00:00 +14:00"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params)) << params.status.to_string();
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0)) << params.status.to_string();
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2019, 12, 31, 10, 0, 0, 0))
                 << tz._utc_dt.to_string();
     }
@@ -111,7 +111,7 @@ TEST(TimeStampTzValueTest, from_string) {
         StringRef str {"2020-01-01 00:00:00 -12:00"};
         CastParameters params;
         params.is_strict = true;
-        EXPECT_TRUE(tz.from_string(str, &time_zone, params)) << params.status.to_string();
+        EXPECT_TRUE(tz.from_string(str, &time_zone, params, 0)) << params.status.to_string();
         EXPECT_EQ(tz.to_date_int_val(), make_datetime(2020, 1, 1, 12, 0, 0, 0))
                 << tz._utc_dt.to_string();
     }
@@ -155,7 +155,7 @@ TEST(TimeStampTzValueTest, to_datetime) {
 
     {
         TimestampTzValue tz {};
-        tz.from_string(StringRef {"2024-01-01 12:00:00"}, &time_zone, params);
+        tz.from_string(StringRef {"2024-01-01 12:00:00"}, &time_zone, params, 0);
         DateV2Value<DateTimeV2ValueType> res;
         EXPECT_TRUE(tz.to_datetime(res, time_zone, 6, 6));
         EXPECT_EQ(res.to_date_int_val(), make_datetime(2024, 1, 1, 12, 0, 0, 0)) << res.to_string();
@@ -163,7 +163,7 @@ TEST(TimeStampTzValueTest, to_datetime) {
 
     {
         TimestampTzValue tz {};
-        tz.from_string(StringRef {"2020-01-01 00:00:00 +03:00"}, &time_zone, params);
+        tz.from_string(StringRef {"2020-01-01 00:00:00 +03:00"}, &time_zone, params, 0);
         DateV2Value<DateTimeV2ValueType> res;
         EXPECT_TRUE(tz.to_datetime(res, time_zone, 6, 6));
         EXPECT_EQ(res.to_date_int_val(), make_datetime(2020, 1, 1, 5, 0, 0, 0)) << res.to_string();
@@ -171,7 +171,7 @@ TEST(TimeStampTzValueTest, to_datetime) {
 
     {
         TimestampTzValue tz {};
-        tz.from_string(StringRef {"2020-01-01 00:00:00 -03:00"}, &time_zone, params);
+        tz.from_string(StringRef {"2020-01-01 00:00:00 -03:00"}, &time_zone, params, 0);
         DateV2Value<DateTimeV2ValueType> res;
         EXPECT_TRUE(tz.to_datetime(res, time_zone, 6, 6));
         EXPECT_EQ(res.to_date_int_val(), make_datetime(2020, 1, 1, 11, 0, 0, 0)) << res.to_string();
@@ -179,7 +179,7 @@ TEST(TimeStampTzValueTest, to_datetime) {
 
     {
         TimestampTzValue tz {};
-        tz.from_string(StringRef {"2020-01-01 00:00:00 +08:00"}, &time_zone, params);
+        tz.from_string(StringRef {"2020-01-01 00:00:00 +08:00"}, &time_zone, params, 0);
         DateV2Value<DateTimeV2ValueType> res;
         EXPECT_TRUE(tz.to_datetime(res, time_zone, 6, 6));
         EXPECT_EQ(res.to_date_int_val(), make_datetime(2020, 1, 1, 0, 0, 0, 0)) << res.to_string();
@@ -187,7 +187,7 @@ TEST(TimeStampTzValueTest, to_datetime) {
 
     {
         TimestampTzValue tz {};
-        tz.from_string(StringRef {"2020-01-01 00:00:00 -08:00"}, &time_zone, params);
+        tz.from_string(StringRef {"2020-01-01 00:00:00 -08:00"}, &time_zone, params, 0);
         DateV2Value<DateTimeV2ValueType> res;
         EXPECT_TRUE(tz.to_datetime(res, time_zone, 6, 6));
         EXPECT_EQ(res.to_date_int_val(), make_datetime(2020, 1, 1, 16, 0, 0, 0)) << res.to_string();

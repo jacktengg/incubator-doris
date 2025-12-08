@@ -241,7 +241,7 @@ TEST_F(BlockBloomFilterTest, timestamptz) {
     TimestampTzValue values[3];
     for (int i = 0; i < num; ++i) {
         TimestampTzValue tz {};
-        EXPECT_TRUE(tz.from_string(StringRef {str_values[i]}, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(StringRef {str_values[i]}, &time_zone, params, 0));
         bf->add_bytes((char*)&tz, sizeof(TimestampTzValue));
         values[i] = tz;
     }

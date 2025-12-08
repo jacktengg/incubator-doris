@@ -256,7 +256,7 @@ Status VMysqlResultWriter::_write_one_block(RuntimeState* state, Block& block) {
                     } else {
                         RETURN_IF_ERROR(arguments[col_idx].serde->write_column_to_mysql_binary(
                                 *(arguments[col_idx].column), row_buffer, row_idx,
-                                arguments[col_idx].is_const));
+                                arguments[col_idx].is_const, options));
                     }
                 }
 

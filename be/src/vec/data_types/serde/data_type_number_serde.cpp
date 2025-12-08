@@ -469,7 +469,8 @@ void DataTypeNumberSerDe<T>::insert_column_last_value_multiple_times(IColumn& co
 template <PrimitiveType T>
 Status DataTypeNumberSerDe<T>::write_column_to_mysql_binary(const IColumn& column,
                                                             MysqlRowBinaryBuffer& result,
-                                                            int64_t row_idx, bool col_const) const {
+                                                            int64_t row_idx, bool col_const,
+                                                            const FormatOptions& options) const {
     int buf_ret = 0;
     auto& data = assert_cast<const ColumnType&>(column).get_data();
     const auto col_index = index_check_const(row_idx, col_const);

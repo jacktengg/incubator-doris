@@ -156,9 +156,10 @@ TEST_F(DataTypeVarbinarySerDeTest, MysqlTextAndBinaryAndConst) {
     // binary protocol (smoke)
     {
         MysqlRowBinaryBuffer rb;
+        auto format_options = DataTypeSerDe::FormatOptions();
         rb.start_binary_row(vals.size());
         for (int i = 0; i < static_cast<int>(vals.size()); ++i) {
-            auto st = serde.write_column_to_mysql_binary(*col, rb, i, false);
+            auto st = serde.write_column_to_mysql_binary(*col, rb, i, false, format_options);
             EXPECT_TRUE(st.ok()) << st.to_string();
         }
         EXPECT_GT(rb.length(), 0);

@@ -431,7 +431,8 @@ Status DataTypeStructSerDe::read_column_from_arrow(IColumn& column, const arrow:
 
 Status DataTypeStructSerDe::write_column_to_mysql_binary(const IColumn& column,
                                                          MysqlRowBinaryBuffer& result,
-                                                         int64_t row_idx, bool col_const) const {
+                                                         int64_t row_idx, bool col_const,
+                                                         const FormatOptions& options) const {
     return Status::NotSupported("Struct type does not support write to mysql binary format");
 }
 

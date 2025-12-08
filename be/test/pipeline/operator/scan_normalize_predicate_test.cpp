@@ -1407,7 +1407,7 @@ TEST_F(ScanNormalizePredicate, test_timestamptz_predicate) {
     params.is_strict = true;
     for (auto& str : test_values) {
         TimestampTzValue tz {};
-        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params));
+        EXPECT_TRUE(tz.from_string(StringRef {str}, &time_zone, params, 0));
         test_tz_values.push_back(tz);
         test_tz_raw_values.push_back(tz.to_date_int_val());
     }

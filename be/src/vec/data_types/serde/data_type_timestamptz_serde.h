@@ -45,6 +45,22 @@ public:
     Status from_string_strict_mode_batch(
             const ColumnString& str, IColumn& column, const FormatOptions& options,
             const NullMap::value_type* null_map = nullptr) const override;
+
+    Status serialize_one_cell_to_json(const IColumn& column, int64_t row_num, BufferWritable& bw,
+                                      FormatOptions& options) const override;
+
+    Status serialize_column_to_json(const IColumn& column, int64_t start_idx, int64_t end_idx,
+                                    BufferWritable& bw, FormatOptions& options) const override;
+
+    Status deserialize_one_cell_from_json(IColumn& column, Slice& slice,
+                                          const FormatOptions& options) const override;
+
+    Status deserialize_column_from_json_vector(IColumn& column, std::vector<Slice>& slices,
+                                               uint64_t* num_deserialized,
+                                               const FormatOptions& options) const override;
+    Status write_column_to_mysql_binary(const IColumn& column, MysqlRowBinaryBuffer& row_buffer,
+                                        int64_t row_idx, bool col_const,
+                                        const FormatOptions& options) const override;
     int get_scale() const override { return _scale; }
 
 private:
