@@ -446,7 +446,6 @@ TabletColumnPtr create_timestamptz_column(int32_t id, bool is_nullable) {
     column->_length = 8;
     column->_index_length = 8;
     column->_is_bf_column = false;
-    column->_has_bitmap_index = false;
     return column;
 }
 
