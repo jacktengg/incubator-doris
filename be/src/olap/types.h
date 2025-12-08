@@ -1335,7 +1335,8 @@ struct FieldTypeTraits<FieldType::OLAP_FIELD_TYPE_TIMESTAMPTZ>
         vectorized::CastParameters params;
         TimestampTzValue value;
         auto tz = cctz::utc_time_zone();
-        if (!vectorized::CastToTimstampTz::from_string(StringRef(scan_key), value, params, &tz)) {
+        if (!vectorized::CastToTimstampTz::from_string(StringRef(scan_key), value, params, &tz,
+                                                       6)) {
             throw Exception(Status::InternalError(
                     "Cast to timestamptz is not supported in current context"));
         }

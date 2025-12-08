@@ -270,7 +270,8 @@ Status FoldConstantExecutor::_get_result(void* src, size_t size,
     }
     case TYPE_TIMESTAMPTZ: {
         auto value = binary_cast<uint64_t, TimestampTzValue>(*(int64_t*)src);
-        result = vectorized::CastToString::from_timestamptz(value, type->get_scale());
+        result = vectorized::CastToString::from_timestamptz(value, type->get_scale(),
+                                                            options.timezone);
         break;
     }
     case TYPE_DECIMALV2: {

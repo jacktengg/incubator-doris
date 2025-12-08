@@ -20,6 +20,21 @@ suite("test_timestamptz_cast") {
 
     sql " set time_zone = '+08:00'; "
 
+    sql " set debug_skip_fold_constant = false; "
+    qt_cast_from_string0 """
+    select cast("2020-01-01 00:00:00.123456+08:00" as timestamptz(5));
+    """
+    qt_cast_from_string1 """
+    select cast("2020-01-01 23:59:59.999999+08:00" as timestamptz(5));
+    """
+    sql " set debug_skip_fold_constant = true; "
+    qt_cast_from_string2 """
+    select cast("2020-01-01 00:00:00.123456+08:00" as timestamptz(5));
+    """
+    qt_cast_from_string3 """
+    select cast("2020-01-01 23:59:59.999999+08:00" as timestamptz(5));
+    """
+
     sql """
         DROP TABLE IF EXISTS `timestamptz_cast_test_table_1`;
     """

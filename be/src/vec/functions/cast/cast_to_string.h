@@ -62,7 +62,8 @@ struct CastToString {
 
     static inline std::string from_datetimev2(const DateV2Value<DateTimeV2ValueType>& from,
                                               UInt32 scale = -1);
-    static inline std::string from_timestamptz(const TimestampTzValue& from, UInt32 scale);
+    static inline std::string from_timestamptz(const TimestampTzValue& from, UInt32 scale,
+                                               const cctz::time_zone* timezone = nullptr);
     static inline void push_datetimev2(const DateV2Value<DateTimeV2ValueType>& from, UInt32 scale,
                                        ColumnString::Chars& chars);
 
@@ -453,8 +454,15 @@ inline std::string CastToString::from_datetimev2(const DateV2Value<DateTimeV2Val
     return std::string(buf, pos - 1);
 }
 
-inline std::string CastToString::from_timestamptz(const TimestampTzValue& from, UInt32 scale) {
-    return from.to_string(cctz::utc_time_zone(), scale);
+inline std::string CastToString::from_timestamptz(const TimestampTzValue& from, UInt32 scale,
+                                                  const cctz::time_zone* timezone) {
+    cctz::time_zone tz;
+    if (timezone == nullptr) {
+        tz = cctz::utc_time_zone();
+    } else {
+        tz = *timezone;
+    }
+    return from.to_string(tz, scale);
 }
 inline void CastToString::push_datetimev2(const DateV2Value<DateTimeV2ValueType>& from,
                                           UInt32 scale, ColumnString::Chars& chars) {
@@ -475,7 +483,6 @@ inline void CastToString::push_datetimev2(const DateV2Value<DateTimeV2ValueType>
 inline void CastToString::push_timestamptz(const TimestampTzValue& from, UInt32 scale,
                                            BufferWritable& bw,
                                            const DataTypeSerDe::FormatOptions& options) {
-    // todo: use state->timezone
     auto str = from.to_string(*options.timezone, scale);
     bw.write(str.data(), str.size());
 }

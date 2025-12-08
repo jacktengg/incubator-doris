@@ -27,11 +27,9 @@ Field DataTypeTimeStampTz::get_field(const TExprNode& node) const {
     TimestampTzValue res;
     CastParameters params {.status = Status::OK(), .is_strict = true};
 
-    // cctz::time_zone timezone_obj;
-    // TimezoneUtils::find_cctz_time_zone("+08:00", timezone_obj);
     if (!CastToTimstampTz::from_string(
                 {node.date_literal.value.c_str(), node.date_literal.value.size()}, res, params,
-                nullptr)) [[unlikely]] {
+                nullptr, _scale)) [[unlikely]] {
         throw doris::Exception(doris::ErrorCode::INVALID_ARGUMENT,
                                "Invalid value: {} for type TimeStampTz({})",
                                node.date_literal.value, _scale);

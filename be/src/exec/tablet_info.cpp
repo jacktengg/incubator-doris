@@ -590,7 +590,7 @@ static Status _create_partition_key(const TExprNode& t_expr, BlockRow* part_key,
             vectorized::CastParameters params {.status = Status::OK(), .is_strict = true};
             if (!vectorized::CastToTimstampTz::from_string(
                         {t_expr.date_literal.value.c_str(), t_expr.date_literal.value.size()}, res,
-                        params, nullptr)) [[unlikely]] {
+                        params, nullptr, 6)) [[unlikely]] {
                 std::stringstream ss;
                 ss << "invalid timestamptz literal in partition column, value="
                    << t_expr.date_literal;

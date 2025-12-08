@@ -22,11 +22,11 @@
 namespace doris {
 
 bool TimestampTzValue::from_string(const StringRef& str, const cctz::time_zone* local_time_zone,
-                                   vectorized::CastParameters& params) {
+                                   vectorized::CastParameters& params, uint32_t to_scale) {
     using namespace vectorized;
     if (params.is_strict) {
         return CastToDatetimeV2::from_string_strict_mode<true, DataTimeCastEnumType::TIMESTAMP_TZ>(
-                str, _utc_dt, local_time_zone, 6, params);
+                str, _utc_dt, local_time_zone, to_scale, params);
     } else {
         // This from_string implementation is derived from:
         /*
@@ -41,9 +41,9 @@ bool TimestampTzValue::from_string(const StringRef& str, const cctz::time_zone* 
     }
         */
         return CastToDatetimeV2::from_string_strict_mode<false, DataTimeCastEnumType::TIMESTAMP_TZ>(
-                       str, _utc_dt, local_time_zone, 6, params) ||
+                       str, _utc_dt, local_time_zone, to_scale, params) ||
                CastToDatetimeV2::from_string_non_strict_mode_impl<
-                       DataTimeCastEnumType::TIMESTAMP_TZ>(str, _utc_dt, local_time_zone, 6,
+                       DataTimeCastEnumType::TIMESTAMP_TZ>(str, _utc_dt, local_time_zone, to_scale,
                                                            params);
     }
 }

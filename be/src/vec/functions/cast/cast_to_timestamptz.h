@@ -32,13 +32,15 @@ namespace doris::vectorized {
 
 struct CastToTimstampTz {
     static inline bool from_string(const StringRef& from, TimestampTzValue& to,
-                                   CastParameters& params, const cctz::time_zone* local_time_zone);
+                                   CastParameters& params, const cctz::time_zone* local_time_zone,
+                                   uint32_t to_scale);
 };
 
 inline bool CastToTimstampTz::from_string(const StringRef& from, TimestampTzValue& to,
                                           CastParameters& params,
-                                          const cctz::time_zone* local_time_zone) {
-    return to.from_string(from, local_time_zone, params);
+                                          const cctz::time_zone* local_time_zone,
+                                          uint32_t to_scale) {
+    return to.from_string(from, local_time_zone, params, to_scale);
 }
 
 template <CastModeType Mode>

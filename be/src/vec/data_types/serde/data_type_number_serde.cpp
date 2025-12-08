@@ -932,7 +932,7 @@ bool DataTypeNumberSerDe<T>::write_column_to_hive_text(const IColumn& column, Bu
                                                        int64_t row_idx,
                                                        const FormatOptions& options) const {
     auto& data = assert_cast<const ColumnType&, TypeCheckOnRelease::DISABLE>(column).get_data();
-    if constexpr (is_date_type(T) || is_time_type(T) || is_ip(T)) {
+    if constexpr (is_date_type(T) || is_timestamptz_type(T) || is_time_type(T) || is_ip(T)) {
         if (_nesting_level > 1) {
             bw.write('"');
         }

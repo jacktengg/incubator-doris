@@ -61,7 +61,7 @@ public:
 
     // Parses a string, CastParameters can control whether strict mode is used
     bool from_string(const StringRef& str, const cctz::time_zone* local_time_zone,
-                     vectorized::CastParameters& params);
+                     vectorized::CastParameters& params, uint32_t to_scale);
 
     // Converts from a datetime value
     bool from_datetime(const DateV2Value<DateTimeV2ValueType>& dt,
