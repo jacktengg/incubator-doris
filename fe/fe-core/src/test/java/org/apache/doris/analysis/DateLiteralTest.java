@@ -19,6 +19,7 @@ package org.apache.doris.analysis;
 
 import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.qe.ConnectContext;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ import org.junit.jupiter.api.Test;
 public class DateLiteralTest {
 
     @Test
-    public void testTimestampInit() throws AnalysisException {
+    public void testTimestampTzInit() throws AnalysisException {
         String value;
         DateLiteral dateLiteral;
         String expectedResult;
@@ -35,6 +36,31 @@ public class DateLiteralTest {
         dateLiteral = new DateLiteral(value, ScalarType.createTimeStampTzType(6));
         expectedResult = "'2020-02-02 01:03:04.123456+00:00'";
         Assertions.assertEquals(expectedResult, dateLiteral.toSql());
+    }
+
+    @Test
+    public void testTimestampTzStringForQuery() throws AnalysisException {
+        try {
+            ConnectContext context = new ConnectContext();
+            context.setThreadLocalInfo();
+            DateLiteral dateLiteral = new DateLiteral("2020-02-02 12:00:03.123456+00:00",
+                    ScalarType.createTimeStampTzType(6));
+            String timeZone;
+            String expected;
+
+            timeZone = "+08:00";
+            context.getSessionVariable().setTimeZone(timeZone);
+            expected = "2020-02-02 20:00:03.123456+08:00";
+            Assertions.assertEquals(expected, dateLiteral.getStringValueForQuery(null));
+
+            timeZone = "-08:00";
+            context.getSessionVariable().setTimeZone(timeZone);
+            expected = "2020-02-02 04:00:03.123456-08:00";
+            Assertions.assertEquals(expected, dateLiteral.getStringValueForQuery(null));
+        } finally {
+            ConnectContext.remove();
+        }
+
     }
 
     @Test

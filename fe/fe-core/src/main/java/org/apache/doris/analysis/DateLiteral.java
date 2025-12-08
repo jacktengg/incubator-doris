@@ -678,6 +678,22 @@ public class DateLiteral extends LiteralExpr {
     }
 
     @Override
+    public String getStringValueForQuery(FormatOptions options) {
+        if (!type.isTimeStampTz()) {
+            return getStringValue();
+        }
+        try {
+            String offset = DateUtils.getTimeZone().getRules().getOffset(java.time.Instant.now()).toString();
+            DateLiteral dateLiteral = new DateLiteral(getStringValue(),
+                    ScalarType.createDatetimeV2Type(((ScalarType) type).getScalarScale()));
+            return dateLiteral.getStringValue() + offset;
+        } catch (Exception e) {
+            LOG.warn("generate timestamptz({})'s string value for query failed. ", getStringValue(), e);
+            return getStringValue();
+        }
+    }
+
+    @Override
     public String getStringValue() {
         char[] dateTimeChars = new char[26]; // Enough to hold "YYYY-MM-DD HH:MM:SS.mmmmmm"
 
