@@ -86,7 +86,8 @@ public:
     Status read_column_from_pb(IColumn& column, const PValues& arg) const override;
 
     void write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result, Arena& mem_pool,
-                                 int32_t col_id, int64_t row_num) const override;
+                                 int32_t col_id, int64_t row_num,
+                                 const FormatOptions& options) const override;
 
     void read_one_cell_from_jsonb(IColumn& column, const JsonbValue* arg) const override;
 
@@ -114,7 +115,8 @@ public:
 
     Status write_column_to_orc(const std::string& timezone, const IColumn& column,
                                const NullMap* null_map, orc::ColumnVectorBatch* orc_col_batch,
-                               int64_t start, int64_t end, vectorized::Arena& arena) const override;
+                               int64_t start, int64_t end, vectorized::Arena& arena,
+                               const FormatOptions& options) const override;
 
     Status deserialize_column_from_fixed_json(IColumn& column, Slice& slice, uint64_t rows,
                                               uint64_t* num_deserialized,

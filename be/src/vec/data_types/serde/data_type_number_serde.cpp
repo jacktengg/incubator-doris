@@ -520,7 +520,8 @@ Status DataTypeNumberSerDe<T>::write_column_to_orc(const std::string& timezone,
                                                    const IColumn& column, const NullMap* null_map,
                                                    orc::ColumnVectorBatch* orc_col_batch,
                                                    int64_t start, int64_t end,
-                                                   vectorized::Arena& arena) const {
+                                                   vectorized::Arena& arena,
+                                                   const FormatOptions& options) const {
     auto& col_data = assert_cast<const ColumnType&>(column).get_data();
 
     if constexpr (T == TYPE_LARGEINT) { // largeint
@@ -608,7 +609,8 @@ template <PrimitiveType T>
 void DataTypeNumberSerDe<T>::write_one_cell_to_jsonb(const IColumn& column,
                                                      JsonbWriterT<JsonbOutStream>& result,
                                                      Arena& mem_pool, int32_t col_id,
-                                                     int64_t row_num) const {
+                                                     int64_t row_num,
+                                                     const FormatOptions& options) const {
     result.writeKey(cast_set<JsonbKeyValue::keyid_type>(col_id));
     StringRef data_ref = column.get_data_at(row_num);
     // TODO: Casting unsigned integers to signed integers may result in loss of data precision.

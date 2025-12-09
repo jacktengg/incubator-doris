@@ -277,8 +277,8 @@ Status DataTypeArraySerDe::deserialize_column_from_jsonb(IColumn& column,
 }
 
 void DataTypeArraySerDe::write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
-                                                 Arena& arena, int32_t col_id,
-                                                 int64_t row_num) const {
+                                                 Arena& arena, int32_t col_id, int64_t row_num,
+                                                 const FormatOptions& options) const {
     // JsonbKeyValue::keyid_type is uint16_t and col_id is int32_t, need a cast
     result.writeKey(cast_set<JsonbKeyValue::keyid_type>(col_id));
     const char* begin = nullptr;
@@ -357,7 +357,8 @@ Status DataTypeArraySerDe::write_column_to_mysql_binary(const IColumn& column,
 Status DataTypeArraySerDe::write_column_to_orc(const std::string& timezone, const IColumn& column,
                                                const NullMap* null_map,
                                                orc::ColumnVectorBatch* orc_col_batch, int64_t start,
-                                               int64_t end, vectorized::Arena& arena) const {
+                                               int64_t end, vectorized::Arena& arena,
+                                               const FormatOptions& options) const {
     auto* cur_batch = dynamic_cast<orc::ListVectorBatch*>(orc_col_batch);
     cur_batch->offsets[0] = 0;
 
@@ -369,7 +370,7 @@ Status DataTypeArraySerDe::write_column_to_orc(const std::string& timezone, cons
         size_t next_offset = offsets[row_id];
         RETURN_IF_ERROR(nested_serde->write_column_to_orc(timezone, nested_column, nullptr,
                                                           cur_batch->elements.get(), offset,
-                                                          next_offset, arena));
+                                                          next_offset, arena, options));
         cur_batch->offsets[row_id + 1] = next_offset;
     }
     cur_batch->elements->numElements = nested_column.size();

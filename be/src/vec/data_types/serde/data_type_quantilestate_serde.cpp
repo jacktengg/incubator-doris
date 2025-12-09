@@ -23,7 +23,8 @@ namespace doris::vectorized {
 
 void DataTypeQuantileStateSerDe::write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
                                                          Arena& arena, int32_t col_id,
-                                                         int64_t row_num) const {
+                                                         int64_t row_num,
+                                                         const FormatOptions& options) const {
     const auto& col = reinterpret_cast<const ColumnQuantileState&>(column);
     auto& val = col.get_element(row_num);
     size_t actual_size = val.get_serialized_size();

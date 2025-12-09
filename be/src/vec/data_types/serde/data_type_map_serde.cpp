@@ -321,8 +321,8 @@ void DataTypeMapSerDe::read_one_cell_from_jsonb(IColumn& column, const JsonbValu
 }
 
 void DataTypeMapSerDe::write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
-                                               Arena& arena, int32_t col_id,
-                                               int64_t row_num) const {
+                                               Arena& arena, int32_t col_id, int64_t row_num,
+                                               const FormatOptions& options) const {
     result.writeKey(cast_set<JsonbKeyValue::keyid_type>(col_id));
     const char* begin = nullptr;
     // maybe serialize_value_into_arena should move to here later.
@@ -429,7 +429,8 @@ Status DataTypeMapSerDe::write_column_to_mysql_binary(const IColumn& column,
 Status DataTypeMapSerDe::write_column_to_orc(const std::string& timezone, const IColumn& column,
                                              const NullMap* null_map,
                                              orc::ColumnVectorBatch* orc_col_batch, int64_t start,
-                                             int64_t end, vectorized::Arena& arena) const {
+                                             int64_t end, vectorized::Arena& arena,
+                                             const FormatOptions& options) const {
     auto* cur_batch = dynamic_cast<orc::MapVectorBatch*>(orc_col_batch);
     cur_batch->offsets[0] = 0;
 
@@ -443,10 +444,10 @@ Status DataTypeMapSerDe::write_column_to_orc(const std::string& timezone, const 
 
         RETURN_IF_ERROR(key_serde->write_column_to_orc(timezone, nested_keys_column, nullptr,
                                                        cur_batch->keys.get(), offset, next_offset,
-                                                       arena));
+                                                       arena, options));
         RETURN_IF_ERROR(value_serde->write_column_to_orc(timezone, nested_values_column, nullptr,
                                                          cur_batch->elements.get(), offset,
-                                                         next_offset, arena));
+                                                         next_offset, arena, options));
 
         cur_batch->offsets[row_id + 1] = next_offset;
     }

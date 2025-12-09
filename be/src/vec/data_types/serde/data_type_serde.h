@@ -426,8 +426,8 @@ public:
 
     // JSONB serializer and deserializer, should write col_id
     virtual void write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
-                                         Arena& mem_pool, int32_t col_id,
-                                         int64_t row_num) const = 0;
+                                         Arena& mem_pool, int32_t col_id, int64_t row_num,
+                                         const FormatOptions& options) const = 0;
 
     virtual void read_one_cell_from_jsonb(IColumn& column, const JsonbValue* arg) const = 0;
 
@@ -462,7 +462,8 @@ public:
     virtual Status write_column_to_orc(const std::string& timezone, const IColumn& column,
                                        const NullMap* null_map,
                                        orc::ColumnVectorBatch* orc_col_batch, int64_t start,
-                                       int64_t end, vectorized::Arena& arena) const = 0;
+                                       int64_t end, vectorized::Arena& arena,
+                                       const FormatOptions& options) const = 0;
     // ORC deserializer
 
     virtual void set_return_object_as_string(bool value) { _return_object_as_string = value; }

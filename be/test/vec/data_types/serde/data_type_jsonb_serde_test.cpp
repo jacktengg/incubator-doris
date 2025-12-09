@@ -164,8 +164,11 @@ TEST_F(DataTypeJsonbSerDeTest, serdes) {
             jsonb_writer.writeStartObject();
             Arena pool;
 
+            DataTypeSerDe::FormatOptions options;
+            auto tz = cctz::utc_time_zone();
+            options.timezone = &tz;
             for (size_t j = 0; j != row_count; ++j) {
-                serde.write_one_cell_to_jsonb(*source_column, jsonb_writer, pool, 0, j);
+                serde.write_one_cell_to_jsonb(*source_column, jsonb_writer, pool, 0, j, options);
             }
             jsonb_writer.writeEndObject();
 
@@ -210,10 +213,15 @@ TEST_F(DataTypeJsonbSerDeTest, serdes) {
         {
             // test write_column_to_orc
             Arena arena;
+            TimezoneUtils::load_timezones_to_cache();
+            DataTypeSerDe::FormatOptions format_options;
+            cctz::time_zone tz;
+            TimezoneUtils::find_cctz_time_zone("UTC", tz);
+            format_options.timezone = &tz;
             auto orc_batch =
                     std::make_unique<orc::StringVectorBatch>(row_count, *orc::getDefaultPool());
             Status st = serde.write_column_to_orc("UTC", *source_column, nullptr, orc_batch.get(),
-                                                  0, row_count - 1, arena);
+                                                  0, row_count - 1, arena, format_options);
             EXPECT_EQ(st, Status::OK()) << "Failed to write column to orc: " << st;
             EXPECT_EQ(orc_batch->numElements, row_count - 1);
         }

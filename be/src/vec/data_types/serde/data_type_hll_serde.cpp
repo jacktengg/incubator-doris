@@ -107,8 +107,8 @@ Status DataTypeHLLSerDe::read_column_from_pb(IColumn& column, const PValues& arg
 }
 
 void DataTypeHLLSerDe::write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
-                                               Arena& arena, int32_t col_id,
-                                               int64_t row_num) const {
+                                               Arena& arena, int32_t col_id, int64_t row_num,
+                                               const FormatOptions& options) const {
     result.writeKey(cast_set<JsonbKeyValue::keyid_type>(col_id));
     const auto& data_column = assert_cast<const ColumnHLL&>(column);
     auto& hll_value = data_column.get_element(row_num);
@@ -173,7 +173,8 @@ bool DataTypeHLLSerDe::write_column_to_mysql_text(const IColumn& column, BufferW
 Status DataTypeHLLSerDe::write_column_to_orc(const std::string& timezone, const IColumn& column,
                                              const NullMap* null_map,
                                              orc::ColumnVectorBatch* orc_col_batch, int64_t start,
-                                             int64_t end, vectorized::Arena& arena) const {
+                                             int64_t end, vectorized::Arena& arena,
+                                             const FormatOptions& options) const {
     auto& col_data = assert_cast<const ColumnHLL&>(column);
     orc::StringVectorBatch* cur_batch = dynamic_cast<orc::StringVectorBatch*>(orc_col_batch);
     // First pass: calculate total memory needed and collect serialized values

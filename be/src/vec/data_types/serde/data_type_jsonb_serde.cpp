@@ -193,7 +193,8 @@ Status DataTypeJsonbSerDe::read_column_from_arrow(IColumn& column, const arrow::
 Status DataTypeJsonbSerDe::write_column_to_orc(const std::string& timezone, const IColumn& column,
                                                const NullMap* null_map,
                                                orc::ColumnVectorBatch* orc_col_batch, int64_t start,
-                                               int64_t end, vectorized::Arena& arena) const {
+                                               int64_t end, vectorized::Arena& arena,
+                                               const FormatOptions& options) const {
     auto* cur_batch = dynamic_cast<orc::StringVectorBatch*>(orc_col_batch);
     const auto& string_column = assert_cast<const ColumnString&>(column);
     // First pass: calculate total memory needed and collect serialized values

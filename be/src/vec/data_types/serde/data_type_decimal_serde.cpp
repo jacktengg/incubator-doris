@@ -383,7 +383,8 @@ Status DataTypeDecimalSerDe<T>::write_column_to_orc(const std::string& timezone,
                                                     const IColumn& column, const NullMap* null_map,
                                                     orc::ColumnVectorBatch* orc_col_batch,
                                                     int64_t start, int64_t end,
-                                                    vectorized::Arena& arena) const {
+                                                    vectorized::Arena& arena,
+                                                    const FormatOptions& options) const {
     if constexpr (T == TYPE_DECIMAL256) {
         return Status::NotSupported("write_column_to_orc with type " + column.get_name());
     } else {
@@ -446,7 +447,8 @@ void DataTypeDecimalSerDe<T>::insert_column_last_value_multiple_times(IColumn& c
 template <PrimitiveType T>
 void DataTypeDecimalSerDe<T>::write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
                                                       Arena& mem_pool, int32_t col_id,
-                                                      int64_t row_num) const {
+                                                      int64_t row_num,
+                                                      const FormatOptions& options) const {
     StringRef data_ref = column.get_data_at(row_num);
     result.writeKey(cast_set<JsonbKeyValue::keyid_type>(col_id));
     if constexpr (T == TYPE_DECIMALV2) {

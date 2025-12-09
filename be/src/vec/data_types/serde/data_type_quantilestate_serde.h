@@ -94,7 +94,8 @@ public:
     }
 
     void write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result, Arena& mem_pool,
-                                 int32_t col_id, int64_t row_num) const override;
+                                 int32_t col_id, int64_t row_num,
+                                 const FormatOptions& options) const override;
 
     void read_one_cell_from_jsonb(IColumn& column, const JsonbValue* arg) const override;
 
@@ -136,8 +137,8 @@ public:
 
     Status write_column_to_orc(const std::string& timezone, const IColumn& column,
                                const NullMap* null_map, orc::ColumnVectorBatch* orc_col_batch,
-                               int64_t start, int64_t end,
-                               vectorized::Arena& arena) const override {
+                               int64_t start, int64_t end, vectorized::Arena& arena,
+                               const FormatOptions& options) const override {
         auto& col_data = assert_cast<const ColumnQuantileState&>(column);
         orc::StringVectorBatch* cur_batch = dynamic_cast<orc::StringVectorBatch*>(orc_col_batch);
         // First pass: calculate total memory needed and collect serialized values

@@ -340,6 +340,8 @@ Status ScanLocalState<Derived>::_normalize_predicate(vectorized::VExprContext* c
                 return Status::OK();
             }
 
+            SlotDescriptor* slot = nullptr;
+            ColumnValueRangeType* range = nullptr;
             PushDownType pdt = PushDownType::UNACCEPTABLE;
             RETURN_IF_ERROR(_eval_const_conjuncts(context, &pdt));
             if (pdt == PushDownType::ACCEPTABLE) {

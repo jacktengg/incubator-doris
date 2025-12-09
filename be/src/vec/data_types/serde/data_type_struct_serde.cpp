@@ -248,8 +248,8 @@ Status DataTypeStructSerDe::deserialize_column_from_json_vector(
 }
 
 void DataTypeStructSerDe::write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
-                                                  Arena& arena, int32_t col_id,
-                                                  int64_t row_num) const {
+                                                  Arena& arena, int32_t col_id, int64_t row_num,
+                                                  const FormatOptions& options) const {
     result.writeKey(cast_set<JsonbKeyValue::keyid_type>(col_id));
     const char* begin = nullptr;
     // maybe serialize_value_into_arena should move to here later.
@@ -440,14 +440,15 @@ Status DataTypeStructSerDe::write_column_to_orc(const std::string& timezone, con
                                                 const NullMap* null_map,
                                                 orc::ColumnVectorBatch* orc_col_batch,
                                                 int64_t start, int64_t end,
-                                                vectorized::Arena& arena) const {
+                                                vectorized::Arena& arena,
+                                                const FormatOptions& options) const {
     auto* cur_batch = dynamic_cast<orc::StructVectorBatch*>(orc_col_batch);
     const auto& struct_col = assert_cast<const ColumnStruct&>(column);
     for (auto row_id = start; row_id < end; row_id++) {
         for (int i = 0; i < struct_col.tuple_size(); ++i) {
             RETURN_IF_ERROR(elem_serdes_ptrs[i]->write_column_to_orc(
                     timezone, struct_col.get_column(i), nullptr, cur_batch->fields[i], row_id,
-                    row_id + 1, arena));
+                    row_id + 1, arena, options));
         }
     }
 
