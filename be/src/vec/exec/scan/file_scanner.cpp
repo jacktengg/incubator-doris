@@ -1056,6 +1056,13 @@ Status FileScanner::_get_next_reader() {
             if (push_down_predicates) {
                 RETURN_IF_ERROR(_process_late_arrival_conjuncts());
             }
+
+            // Set condition cache digest from scan operator for external table condition caching
+            if (_local_state) {
+                parquet_reader->set_condition_cache_digest(
+                        _local_state->get_condition_cache_digest());
+            }
+
             RETURN_IF_ERROR(_init_parquet_reader(std::move(parquet_reader), file_meta_cache_ptr));
 
             need_to_get_parsed_schema = true;
@@ -1078,6 +1085,12 @@ Status FileScanner::_get_next_reader() {
             if (push_down_predicates) {
                 RETURN_IF_ERROR(_process_late_arrival_conjuncts());
             }
+
+            // Set condition cache digest from scan operator for external table condition caching
+            if (_local_state) {
+                orc_reader->set_condition_cache_digest(_local_state->get_condition_cache_digest());
+            }
+
             RETURN_IF_ERROR(_init_orc_reader(std::move(orc_reader), file_meta_cache_ptr));
 
             need_to_get_parsed_schema = true;

@@ -173,7 +173,8 @@ public:
                 const TupleDescriptor* tuple_descriptor, const RowDescriptor* row_descriptor,
                 const std::unordered_map<std::string, int>* colname_to_slot_id,
                 const VExprContextSPtrs* not_single_slot_filter_conjuncts,
-                const std::unordered_map<int, VExprContextSPtrs>* slot_id_to_filter_conjuncts);
+                const std::unordered_map<int, VExprContextSPtrs>* slot_id_to_filter_conjuncts,
+                bool has_any_predicates);
     Status next_batch(Block* block, size_t batch_size, size_t* read_rows, bool* batch_eof);
     int64_t lazy_read_filtered_rows() const { return _lazy_read_filtered_rows; }
     int64_t predicate_filter_time() const { return _predicate_filter_time; }
@@ -196,6 +197,11 @@ public:
     void set_col_name_to_block_idx(
             std::unordered_map<std::string, uint32_t>* col_name_to_block_idx) {
         _col_name_to_block_idx = col_name_to_block_idx;
+    }
+
+    void set_condition_cache_context(uint64_t digest, const std::string& file_path) {
+        _condition_cache_digest = digest;
+        _condition_cache_file_path = file_path;
     }
 
 protected:
@@ -239,6 +245,10 @@ private:
     Status _get_current_batch_row_id(size_t read_rows);
     Status _fill_row_id_columns(Block* block, size_t read_rows, bool is_current_row_ids);
 
+    void _init_condition_cache(bool has_any_predicates);
+    void _update_condition_cache(size_t read_rows, size_t filtered_rows);
+    void _store_condition_cache();
+
     io::FileReaderSPtr _file_reader;
     std::unordered_map<std::string, std::unique_ptr<ParquetColumnReader>>
             _column_readers; // table_column_name
@@ -281,6 +291,13 @@ private:
     std::vector<rowid_t> _current_batch_row_ids;
 
     std::unordered_map<std::string, uint32_t>* _col_name_to_block_idx = nullptr;
+
+    // Condition cache support for external tables
+    uint64_t _condition_cache_digest = 0;
+    std::string _condition_cache_file_path;
+    bool _find_condition_cache = false;
+    std::shared_ptr<std::vector<bool>> _condition_cache;
+    int64_t _condition_cache_rows_read = 0; // tracks row position within the row group
 };
 #include "common/compile_check_end.h"
 

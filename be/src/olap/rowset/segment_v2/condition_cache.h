@@ -35,6 +35,7 @@
 #include "runtime/exec_env.h"
 #include "runtime/memory/lru_cache_policy.h"
 #include "runtime/memory/mem_tracker.h"
+#include "util/hash_util.hpp"
 #include "util/slice.h"
 #include "util/time.h"
 
@@ -42,11 +43,15 @@ namespace doris::segment_v2 {
 
 class ConditionCacheHandle;
 
+// The number of rows per condition cache block.
+// Both internal table segments and external table row groups use this granularity.
+inline constexpr int CONDITION_CACHE_OFFSET = 2048;
+
 class ConditionCache : public LRUCachePolicy {
 public:
     using LRUCachePolicy::insert;
 
-    // The cache key or segment lru cache
+    // The cache key for segment lru cache (internal tables)
     struct CacheKey {
         CacheKey(RowsetId rowset_id_, int64_t segment_id_, uint64_t digest_)
                 : rowset_id(rowset_id_), segment_id(segment_id_), digest(digest_) {}
@@ -61,6 +66,30 @@ public:
             memcpy(buf + 8, &digest, 8);
 
             return rowset_id.to_string() + std::string(buf, 16);
+        }
+    };
+
+    // The cache key for external table files (Parquet/ORC)
+    struct FileCacheKey {
+        FileCacheKey(const std::string& file_path_, int32_t row_group_id_, uint64_t digest_)
+                : file_path(file_path_), row_group_id(row_group_id_), digest(digest_) {}
+        std::string file_path;
+        int32_t row_group_id;
+        uint64_t digest;
+
+        // Encode to a flat binary which can be used as LRUCache's key
+        [[nodiscard]] std::string encode() const {
+            if (file_path.empty()) {
+                return "";
+            }
+            char buf[12];
+            memcpy(buf, &row_group_id, 4);
+            memcpy(buf + 4, &digest, 8);
+            // Use hash of file path to reduce key size
+            uint64_t path_hash = HashUtil::hash64(file_path.c_str(), file_path.size(), 0);
+            char path_buf[8];
+            memcpy(path_buf, &path_hash, 8);
+            return std::string(path_buf, 8) + std::string(buf, 12);
         }
     };
 
@@ -89,7 +118,11 @@ public:
 
     bool lookup(const CacheKey& key, ConditionCacheHandle* handle);
 
+    bool lookup(const FileCacheKey& key, ConditionCacheHandle* handle);
+
     void insert(const CacheKey& key, std::shared_ptr<std::vector<bool>> filter_result);
+
+    void insert(const FileCacheKey& key, std::shared_ptr<std::vector<bool>> filter_result);
 };
 
 class ConditionCacheHandle {

@@ -49,4 +49,30 @@ void ConditionCache::insert(const CacheKey& key, std::shared_ptr<std::vector<boo
                                    result->capacity(), result->capacity(), CachePriority::NORMAL));
 }
 
+bool ConditionCache::lookup(const FileCacheKey& key, ConditionCacheHandle* handle) {
+    if (key.encode().empty()) {
+        return false;
+    }
+    auto* lru_handle = LRUCachePolicy::lookup(key.encode());
+    if (lru_handle == nullptr) {
+        return false;
+    }
+    *handle = ConditionCacheHandle(this, lru_handle);
+    return true;
+}
+
+void ConditionCache::insert(const FileCacheKey& key, std::shared_ptr<std::vector<bool>> result) {
+    if (key.encode().empty()) {
+        return;
+    }
+    std::unique_ptr<ConditionCache::CacheValue> cache_value_ptr =
+            std::make_unique<ConditionCache::CacheValue>();
+    cache_value_ptr->filter_result = result;
+
+    ConditionCacheHandle(
+            this,
+            LRUCachePolicy::insert(key.encode(), (void*)cache_value_ptr.release(),
+                                   result->capacity(), result->capacity(), CachePriority::NORMAL));
+}
+
 } // namespace doris::segment_v2

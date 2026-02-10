@@ -54,6 +54,7 @@
 #include "io/fs/file_reader.h"
 #include "olap/id_manager.h"
 #include "olap/rowset/segment_v2/column_reader.h"
+#include "olap/rowset/segment_v2/condition_cache.h"
 #include "olap/utils.h"
 #include "orc/Exceptions.hh"
 #include "orc/Int128.hh"
@@ -67,6 +68,7 @@
 #include "runtime/primitive_type.h"
 #include "runtime/runtime_state.h"
 #include "runtime/thread_context.h"
+#include "util/doris_metrics.h"
 #include "util/runtime_profile.h"
 #include "util/slice.h"
 #include "util/timezone_utils.h"
@@ -1384,6 +1386,10 @@ Status OrcReader::set_fill_columns(
             }
         }
     }
+
+    // Initialize condition cache for external table
+    _init_condition_cache();
+
     return Status::OK();
 }
 
@@ -2210,8 +2216,16 @@ std::string OrcReader::get_field_name_lower_case(const orc::Type* orc_type, int 
 }
 
 Status OrcReader::get_next_block(Block* block, size_t* read_rows, bool* eof) {
+    // If condition cache indicates all rows are filtered, skip reading
+    if (_is_file_filtered) {
+        *eof = true;
+        *read_rows = 0;
+        _store_condition_cache();
+        return Status::OK();
+    }
     RETURN_IF_ERROR(_get_next_block_impl(block, read_rows, eof));
     if (*eof) {
+        _store_condition_cache();
         COUNTER_UPDATE(_orc_profile.selected_row_group_count,
                        _reader_metrics.SelectedRowGroupCount);
         COUNTER_UPDATE(_orc_profile.evaluated_row_group_count,
@@ -2313,6 +2327,8 @@ Status OrcReader::_get_next_block_impl(Block* block, size_t* read_rows, bool* eo
         RETURN_IF_ERROR(_fill_row_id_columns(block));
 
         if (block->rows() == 0) {
+            // All rows filtered by ORC internal filter (lazy read path)
+            _update_condition_cache(_batch->numElements, _batch->numElements);
             RETURN_IF_ERROR(_convert_dict_cols_to_string_cols(block, nullptr));
             *eof = true;
             *read_rows = 0;
@@ -2346,6 +2362,8 @@ Status OrcReader::_get_next_block_impl(Block* block, size_t* read_rows, bool* eo
             Block::erase_useless_column(block, column_to_keep);
             RETURN_IF_ERROR(_convert_dict_cols_to_string_cols(block, &batch_vec));
             *read_rows = block->rows();
+            // Update condition cache: _batch->numElements total, (_batch->numElements - *read_rows) filtered
+            _update_condition_cache(_batch->numElements, _batch->numElements - *read_rows);
 #ifndef NDEBUG
             for (auto col : *block) {
                 col.column->sanity_check();
@@ -2438,6 +2456,8 @@ Status OrcReader::_get_next_block_impl(Block* block, size_t* read_rows, bool* eo
         RETURN_IF_ERROR(_fill_row_id_columns(block));
 
         if (block->rows() == 0) {
+            // All rows filtered by ORC internal filter (non-lazy read path)
+            _update_condition_cache(_batch->numElements, _batch->numElements);
             RETURN_IF_ERROR(_convert_dict_cols_to_string_cols(block, nullptr));
             *eof = true;
             *read_rows = 0;
@@ -2484,6 +2504,8 @@ Status OrcReader::_get_next_block_impl(Block* block, size_t* read_rows, bool* eo
                     for (auto& col : columns_to_filter) {
                         std::move(*block->get_by_position(col).column).assume_mutable()->clear();
                     }
+                    // All rows filtered - update condition cache
+                    _update_condition_cache(_batch->numElements, _batch->numElements);
                     Block::erase_useless_column(block, column_to_keep);
                     return _convert_dict_cols_to_string_cols(block, &batch_vec);
                 }
@@ -2523,6 +2545,8 @@ Status OrcReader::_get_next_block_impl(Block* block, size_t* read_rows, bool* eo
         }
 #endif
         *read_rows = block->rows();
+        // Update condition cache: _batch->numElements total, (_batch->numElements - *read_rows) filtered
+        _update_condition_cache(_batch->numElements, _batch->numElements - *read_rows);
     }
     return Status::OK();
 }
@@ -3270,6 +3294,98 @@ void OrcReader::_execute_filter_position_delete_rowids(IColumn::Filter& filter) 
     for (; l < r; l++) {
         filter[*l - start] = 0;
     }
+}
+
+void OrcReader::_init_condition_cache() {
+    if (_condition_cache_digest == 0 || _scan_range.path.empty()) {
+        return;
+    }
+    // Only use condition cache when we have conjuncts that need evaluation
+    if (_lazy_read_ctx.conjuncts.empty()) {
+        _condition_cache_digest = 0;
+        return;
+    }
+
+    auto* condition_cache = segment_v2::ConditionCache::instance();
+
+    // Use row_group_id=0 since ORC reader processes the file range as one unit
+    segment_v2::ConditionCache::FileCacheKey cache_key(_scan_range.path, 0,
+                                                       _condition_cache_digest);
+
+    DorisMetrics::instance()->condition_cache_search_count->increment(1);
+
+    segment_v2::ConditionCacheHandle handle;
+    _find_condition_cache = condition_cache->lookup(cache_key, &handle);
+
+    int64_t num_rows = _remaining_rows;
+    int64_t num_blocks = num_rows / segment_v2::CONDITION_CACHE_OFFSET + 1;
+
+    if (_find_condition_cache) {
+        DorisMetrics::instance()->condition_cache_hit_count->increment(1);
+        VLOG_DEBUG << "ORC condition cache hit, file: " << _scan_range.path
+                   << ", digest: " << _condition_cache_digest;
+
+        const auto& filter_result = *(handle.get_filter_result());
+        // Check if all blocks are filtered - if so, mark the file as fully filtered
+        bool all_filtered = true;
+        for (int64_t i = 0; i < std::min((int64_t)filter_result.size(), num_blocks); i++) {
+            if (filter_result[i]) {
+                all_filtered = false;
+                break;
+            }
+        }
+        if (all_filtered) {
+            _is_file_filtered = true;
+        }
+        // Store the cached filter result for use during batch reads
+        _condition_cache = std::make_shared<std::vector<bool>>(filter_result);
+    } else {
+        // Allocate a new condition cache vector, initialized to false
+        // Each entry corresponds to a block of CONDITION_CACHE_OFFSET rows
+        _condition_cache = std::make_shared<std::vector<bool>>(num_blocks, false);
+    }
+}
+
+void OrcReader::_update_condition_cache(size_t read_rows, size_t filtered_rows) {
+    if (_condition_cache_digest == 0 || _find_condition_cache || !_condition_cache) {
+        return;
+    }
+
+    // Mark blocks that have at least some rows passing the filter
+    size_t passed_rows = read_rows - filtered_rows;
+    if (passed_rows > 0) {
+        // Calculate which blocks are covered by the current batch
+        int64_t start_block = _condition_cache_rows_read / segment_v2::CONDITION_CACHE_OFFSET;
+        int64_t end_row = _condition_cache_rows_read + read_rows;
+        int64_t end_block = (end_row - 1) / segment_v2::CONDITION_CACHE_OFFSET;
+
+        // Mark all blocks in the current batch range as having passing rows
+        // This is conservative: we mark the whole range because we don't track
+        // per-row positions within the batch
+        for (int64_t i = start_block;
+             i <= end_block && i < static_cast<int64_t>(_condition_cache->size()); i++) {
+            (*_condition_cache)[i] = true;
+        }
+    }
+
+    _condition_cache_rows_read += read_rows;
+}
+
+void OrcReader::_store_condition_cache() {
+    if (_condition_cache_digest == 0 || _find_condition_cache || !_condition_cache) {
+        return;
+    }
+
+    auto* condition_cache = segment_v2::ConditionCache::instance();
+
+    // Use row_group_id=0 since ORC reader processes the file range as one unit
+    segment_v2::ConditionCache::FileCacheKey cache_key(_scan_range.path, 0,
+                                                       _condition_cache_digest);
+
+    VLOG_DEBUG << "ORC condition cache insert, file: " << _scan_range.path
+               << ", digest: " << _condition_cache_digest;
+
+    condition_cache->insert(cache_key, std::move(_condition_cache));
 }
 
 #include "common/compile_check_end.h"

@@ -35,12 +35,15 @@
 #include "exprs/create_predicate_function.h"
 #include "exprs/hybrid_set.h"
 #include "olap/rowset/segment_v2/column_reader.h"
+#include "olap/rowset/segment_v2/condition_cache.h"
+#include "olap/rowset/segment_v2/row_ranges.h"
 #include "runtime/define_primitive_type.h"
 #include "runtime/descriptors.h"
 #include "runtime/runtime_state.h"
 #include "runtime/thread_context.h"
 #include "runtime/types.h"
 #include "schema_desc.h"
+#include "util/doris_metrics.h"
 #include "vec/columns/column_const.h"
 #include "vec/columns/column_nullable.h"
 #include "vec/columns/column_string.h"
@@ -110,7 +113,8 @@ Status RowGroupReader::init(
         const TupleDescriptor* tuple_descriptor, const RowDescriptor* row_descriptor,
         const std::unordered_map<std::string, int>* colname_to_slot_id,
         const VExprContextSPtrs* not_single_slot_filter_conjuncts,
-        const std::unordered_map<int, VExprContextSPtrs>* slot_id_to_filter_conjuncts) {
+        const std::unordered_map<int, VExprContextSPtrs>* slot_id_to_filter_conjuncts,
+        bool has_any_predicates) {
     _tuple_descriptor = tuple_descriptor;
     _row_descriptor = row_descriptor;
     _col_name_to_slot_id = colname_to_slot_id;
@@ -122,6 +126,12 @@ Status RowGroupReader::init(
         // Query task that only select columns in path.
         return Status::OK();
     }
+
+    // Initialize condition cache BEFORE creating column readers, so that
+    // _read_ranges is pruned by cached filter results and column readers
+    // will skip I/O for filtered blocks.
+    _init_condition_cache(has_any_predicates);
+
     const size_t MAX_GROUP_BUF_SIZE = config::parquet_rowgroup_max_buffer_mb << 20;
     const size_t MAX_COLUMN_BUF_SIZE = config::parquet_column_max_buffer_mb << 20;
     size_t max_buf_size =
@@ -194,6 +204,7 @@ Status RowGroupReader::init(
             return a->execute_cost() < b->execute_cost();
         });
     }
+
     return Status::OK();
 }
 
@@ -404,7 +415,13 @@ Status RowGroupReader::next_batch(Block* block, size_t batch_size, size_t* read_
                                         block->rows(), col.column->size(), col.name);
         }
 #endif
+        size_t original_read_rows = *read_rows;
         *read_rows = block->rows();
+        // Update condition cache with filter results
+        _update_condition_cache(original_read_rows, original_read_rows - *read_rows);
+        if (*batch_eof) {
+            _store_condition_cache();
+        }
         return Status::OK();
     }
 }
@@ -597,6 +614,8 @@ Status RowGroupReader::_do_lazy_read(Block* block, size_t batch_size, size_t* re
             if (!pre_eof) {
                 // If continuous batches are skipped, we can cache them to skip a whole page
                 _cached_filtered_rows += pre_read_rows;
+                // All rows filtered - update condition cache (no rows passed)
+                _update_condition_cache(pre_read_rows, pre_read_rows);
                 if (pre_raw_read_rows >= config::doris_scanner_row_num) {
                     *read_rows = 0;
                     _convert_dict_cols_to_string_cols(block);
@@ -607,6 +626,9 @@ Status RowGroupReader::_do_lazy_read(Block* block, size_t batch_size, size_t* re
                 *read_rows = 0;
                 *batch_eof = true;
                 _lazy_read_filtered_rows += (pre_read_rows + _cached_filtered_rows);
+                // All rows filtered at end of row group - update and store cache
+                _update_condition_cache(pre_read_rows, pre_read_rows);
+                _store_condition_cache();
                 _convert_dict_cols_to_string_cols(block);
                 return Status::OK();
             }
@@ -622,6 +644,7 @@ Status RowGroupReader::_do_lazy_read(Block* block, size_t batch_size, size_t* re
         DCHECK_EQ(pre_read_rows + _cached_filtered_rows, 0);
         *read_rows = 0;
         *batch_eof = true;
+        _store_condition_cache();
         return Status::OK();
     }
 
@@ -675,6 +698,11 @@ Status RowGroupReader::_do_lazy_read(Block* block, size_t batch_size, size_t* re
     *read_rows = column_size;
 
     *batch_eof = pre_eof;
+    // Update condition cache: pre_read_rows total, (pre_read_rows - column_size) filtered
+    _update_condition_cache(pre_read_rows, pre_read_rows - column_size);
+    if (*batch_eof) {
+        _store_condition_cache();
+    }
     RETURN_IF_ERROR(_fill_partition_columns(block, column_size, _lazy_read_ctx.partition_columns));
     RETURN_IF_ERROR(_fill_missing_columns(block, column_size, _lazy_read_ctx.missing_columns));
 #ifndef NDEBUG
@@ -1183,6 +1211,103 @@ ParquetColumnReader::ColumnStatistics RowGroupReader::merged_column_statistics()
     }
     return st;
 }
+
+void RowGroupReader::_init_condition_cache(bool has_any_predicates) {
+    if (_condition_cache_digest == 0 || _condition_cache_file_path.empty()) {
+        return;
+    }
+    // Only use condition cache when we have conjuncts that need evaluation
+    if (!has_any_predicates && _lazy_read_ctx.conjuncts.empty()) {
+        _condition_cache_digest = 0;
+        return;
+    }
+
+    auto* condition_cache = segment_v2::ConditionCache::instance();
+
+    segment_v2::ConditionCache::FileCacheKey cache_key(_condition_cache_file_path, _row_group_id,
+                                                       _condition_cache_digest);
+
+    DorisMetrics::instance()->condition_cache_search_count->increment(1);
+
+    segment_v2::ConditionCacheHandle handle;
+    _find_condition_cache = condition_cache->lookup(cache_key, &handle);
+
+    int64_t num_rows = _row_group_meta.num_rows;
+    int64_t num_blocks = num_rows / segment_v2::CONDITION_CACHE_OFFSET + 1;
+
+    if (_find_condition_cache) {
+        DorisMetrics::instance()->condition_cache_hit_count->increment(1);
+        VLOG_DEBUG << "External table condition cache hit, file: " << _condition_cache_file_path
+                   << ", row_group: " << _row_group_id << ", digest: " << _condition_cache_digest;
+
+        const auto& filter_result = *(handle.get_filter_result());
+
+        // Build a RowRanges containing all the blocks that should be filtered out
+        RowRanges filtered_ranges;
+        for (int64_t i = 0; i < std::min(static_cast<int64_t>(filter_result.size()), num_blocks);
+             i++) {
+            if (!filter_result[i]) {
+                filtered_ranges.add(RowRange(i * segment_v2::CONDITION_CACHE_OFFSET,
+                                             (i + 1) * segment_v2::CONDITION_CACHE_OFFSET));
+            }
+        }
+
+        // Subtract filtered blocks from the read ranges
+        RowRanges new_read_ranges;
+        RowRanges::ranges_exception(_read_ranges, filtered_ranges, &new_read_ranges);
+        _read_ranges = std::move(new_read_ranges);
+        _is_row_group_filtered = _read_ranges.is_empty();
+
+        // Store the cached filter result for use during batch reads
+        _condition_cache = std::make_shared<std::vector<bool>>(filter_result);
+    } else {
+        // Allocate a new condition cache vector, initialized to false
+        // Each entry corresponds to a block of CONDITION_CACHE_OFFSET rows
+        _condition_cache = std::make_shared<std::vector<bool>>(num_blocks, false);
+    }
+}
+
+void RowGroupReader::_update_condition_cache(size_t read_rows, size_t filtered_rows) {
+    if (_condition_cache_digest == 0 || _find_condition_cache || !_condition_cache) {
+        return;
+    }
+
+    // Mark blocks that have at least some rows passing the filter
+    size_t passed_rows = read_rows - filtered_rows;
+    if (passed_rows > 0) {
+        // Calculate which blocks in the row group are covered by the current batch
+        int64_t start_block = _condition_cache_rows_read / segment_v2::CONDITION_CACHE_OFFSET;
+        int64_t end_row = _condition_cache_rows_read + read_rows;
+        int64_t end_block = (end_row - 1) / segment_v2::CONDITION_CACHE_OFFSET;
+
+        // Mark all blocks in the current batch range as having passing rows
+        // This is conservative: we mark the whole range because we don't track
+        // per-row positions within the batch
+        for (int64_t i = start_block;
+             i <= end_block && i < static_cast<int64_t>(_condition_cache->size()); i++) {
+            (*_condition_cache)[i] = true;
+        }
+    }
+
+    _condition_cache_rows_read += read_rows;
+}
+
+void RowGroupReader::_store_condition_cache() {
+    if (_condition_cache_digest == 0 || _find_condition_cache || !_condition_cache) {
+        return;
+    }
+
+    auto* condition_cache = segment_v2::ConditionCache::instance();
+
+    segment_v2::ConditionCache::FileCacheKey cache_key(_condition_cache_file_path, _row_group_id,
+                                                       _condition_cache_digest);
+
+    VLOG_DEBUG << "External table condition cache insert, file: " << _condition_cache_file_path
+               << ", row_group: " << _row_group_id << ", digest: " << _condition_cache_digest;
+
+    condition_cache->insert(cache_key, std::move(_condition_cache));
+}
+
 #include "common/compile_check_end.h"
 
 } // namespace doris::vectorized

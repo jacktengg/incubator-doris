@@ -220,6 +220,8 @@ public:
         _row_id_column_iterator_pair = iterator_pair;
     }
 
+    void set_condition_cache_digest(uint64_t digest) { _condition_cache_digest = digest; }
+
     static bool inline is_hive1_col_name(const orc::Type* orc_type_ptr) {
         for (uint64_t idx = 0; idx < orc_type_ptr->getSubtypeCount(); idx++) {
             if (!_is_hive1_col_name(orc_type_ptr->getFieldName(idx))) {
@@ -638,6 +640,10 @@ private:
 
     Status _fill_row_id_columns(Block* block);
 
+    void _init_condition_cache();
+    void _update_condition_cache(size_t read_rows, size_t filtered_rows);
+    void _store_condition_cache();
+
     bool _seek_to_read_one_line() {
         if (_read_by_rows) {
             if (_row_ids.empty()) {
@@ -761,6 +767,13 @@ private:
     std::unordered_map<std::string, uint32_t>* _col_name_to_block_idx = nullptr;
 
     VExprSPtrs _push_down_exprs;
+
+    // Condition cache support for external tables
+    uint64_t _condition_cache_digest = 0;
+    bool _find_condition_cache = false;
+    bool _is_file_filtered = false;
+    std::shared_ptr<std::vector<bool>> _condition_cache;
+    int64_t _condition_cache_rows_read = 0; // tracks row position within the file
 };
 
 class StripeStreamInputStream : public orc::InputStream, public ProfileCollector {

@@ -173,6 +173,8 @@ public:
         _row_id_column_iterator_pair = iterator_pair;
     }
 
+    void set_condition_cache_digest(uint64_t digest) { _condition_cache_digest = digest; }
+
     bool count_read_rows() override { return true; }
 
 protected:
@@ -362,6 +364,9 @@ private:
 
     std::vector<std::unique_ptr<MutilColumnBlockPredicate>> _push_down_predicates;
     Arena _arena;
+
+    // Condition cache digest for external table condition caching
+    uint64_t _condition_cache_digest = 0;
 };
 #include "common/compile_check_end.h"
 
