@@ -68,6 +68,7 @@ MemTable::MemTable(int64_t tablet_id, std::shared_ptr<TabletSchema> tablet_schem
     SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
             _resource_ctx->memory_context()->mem_tracker()->write_tracker());
     SCOPED_CONSUME_MEM_TRACKER(_mem_tracker);
+    SCOPED_CONSUME_MEM_TRACKER(ExecEnv::GetInstance()->memtable_memory_limiter()->mem_tracker2());
     _vec_row_comparator = std::make_shared<RowInBlockComparator>(_tablet_schema);
     if (partial_update_info != nullptr) {
         _partial_update_mode = partial_update_info->update_mode();
@@ -154,6 +155,7 @@ void MemTable::_init_agg_functions(const vectorized::Block* block) {
 MemTable::~MemTable() {
     SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
             _resource_ctx->memory_context()->mem_tracker()->write_tracker());
+    SCOPED_CONSUME_MEM_TRACKER(ExecEnv::GetInstance()->memtable_memory_limiter()->mem_tracker2());
     {
         SCOPED_CONSUME_MEM_TRACKER(_mem_tracker);
         g_memtable_cnt << -1;
@@ -198,6 +200,7 @@ Status MemTable::insert(const vectorized::Block* input_block,
     SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
             _resource_ctx->memory_context()->mem_tracker()->write_tracker());
     SCOPED_CONSUME_MEM_TRACKER(_mem_tracker);
+    SCOPED_CONSUME_MEM_TRACKER(ExecEnv::GetInstance()->memtable_memory_limiter()->mem_tracker2());
 
     if (_is_first_insertion) {
         _is_first_insertion = false;
@@ -644,6 +647,7 @@ void MemTable::shrink_memtable_by_agg() {
     SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
             _resource_ctx->memory_context()->mem_tracker()->write_tracker());
     SCOPED_CONSUME_MEM_TRACKER(_mem_tracker);
+    SCOPED_CONSUME_MEM_TRACKER(ExecEnv::GetInstance()->memtable_memory_limiter()->mem_tracker2());
     if (_keys_type == KeysType::DUP_KEYS) {
         return;
     }

@@ -193,6 +193,8 @@ Status FlushToken::_do_flush_memtable(MemTable* memtable, int32_t segment_id, in
         SCOPED_SWITCH_THREAD_MEM_TRACKER_LIMITER(
                 memtable->resource_ctx()->memory_context()->mem_tracker()->write_tracker());
         SCOPED_CONSUME_MEM_TRACKER(memtable->mem_tracker());
+        SCOPED_CONSUME_MEM_TRACKER(
+                ExecEnv::GetInstance()->memtable_memory_limiter()->mem_tracker2());
 
         DEFER_RELEASE_RESERVED();
 

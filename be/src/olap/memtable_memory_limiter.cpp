@@ -19,6 +19,8 @@
 
 #include <bvar/bvar.h>
 
+#include <set>
+
 #include "common/config.h"
 #include "olap/memtable.h"
 #include "olap/memtable_writer.h"
@@ -69,6 +71,7 @@ Status MemTableMemoryLimiter::init(int64_t process_mem_limit) {
     g_load_hard_mem_limit.set_value(_load_hard_mem_limit);
     g_load_soft_mem_limit.set_value(_load_soft_mem_limit);
     _mem_tracker = std::make_unique<MemTracker>("AllMemTableMemory");
+    _mem_tracker2 = std::make_unique<MemTracker>("AllMemTableMemory2");
     REGISTER_HOOK_METRIC(memtable_memory_limiter_mem_consumption,
                          [this]() { return _mem_tracker->consumption(); });
     _log_timer.start();
@@ -291,6 +294,13 @@ void MemTableMemoryLimiter::_refresh_mem_tracker() {
     _queue_mem_usage = 0;
     _active_mem_usage = 0;
     _active_writers.clear();
+    // Use write_tracker for accurate memory tracking.
+    // write_tracker tracks all memory allocated during load process,
+    // including RowsetWriter's internal buffers that outlive individual MemTables.
+    // Multiple writers may share the same write_tracker, so we need to deduplicate.
+    std::set<void*> seen_write_trackers;
+    int64_t total_write_tracker_mem = 0;
+    int64_t total_mem_tracker_mem = 0;
     for (auto it = _writers.begin(); it != _writers.end();) {
         if (auto writer = it->lock()) {
             // The memtable is currently used by writer to insert blocks.
@@ -305,6 +315,16 @@ void MemTableMemoryLimiter::_refresh_mem_tracker() {
 
             auto write_usage = writer->mem_consumption(MemType::WRITE_FINISHED);
             _queue_mem_usage += write_usage;
+
+            total_mem_tracker_mem += writer->total_mem_tracker_consumption();
+
+            // Collect write_tracker consumption with deduplication
+            auto* wt_ptr = writer->write_tracker_ptr();
+            if (wt_ptr != nullptr &&
+                seen_write_trackers.find(wt_ptr) == seen_write_trackers.end()) {
+                seen_write_trackers.insert(wt_ptr);
+                total_write_tracker_mem += writer->write_tracker_mem_consumption();
+            }
             ++it;
         } else {
             *it = std::move(_writers.back());
@@ -316,7 +336,10 @@ void MemTableMemoryLimiter::_refresh_mem_tracker() {
     g_memtable_write_memory.set_value(_queue_mem_usage);
     g_memtable_flush_memory.set_value(_flush_mem_usage);
     g_memtable_load_memory.set_value(_mem_usage);
-    VLOG_DEBUG << "refreshed mem_tracker, num writers: " << _writers.size();
+    LOG(INFO) << "refreshed mem_tracker, num writers: " << _writers.size()
+              << ", write_tracker_mem: " << total_write_tracker_mem
+              << ", total_mem_tracker_mem: " << total_mem_tracker_mem
+              << ", total mem usage2: " << _mem_tracker2->consumption();
     _mem_tracker->set_consumption(_mem_usage);
     if (!_hard_limit_reached()) {
         _hard_limit_end_cond.notify_all();
