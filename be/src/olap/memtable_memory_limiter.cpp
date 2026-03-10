@@ -24,6 +24,7 @@
 #include "common/config.h"
 #include "olap/memtable.h"
 #include "olap/memtable_writer.h"
+#include "runtime/memory/heap_profiler.h"
 #include "runtime/workload_group/workload_group_manager.h"
 #include "util/doris_metrics.h"
 #include "util/mem_info.h"
@@ -286,6 +287,32 @@ void MemTableMemoryLimiter::refresh_mem_tracker() {
         auto log_str =
                 doris::ProcessProfile::instance()->memory_profile()->process_memory_detail_str();
         LOG_LONG_STRING(INFO, log_str);
+    }
+
+    constexpr int64_t dbg_mem_limit = 46 * 1024 * 1024 * 1024LL;
+    auto rss = PerfCounters::get_vm_rss(); // from /proc VmRSS VmHWM
+    // if (_mem_tracker->consumption() > dbg_mem_limit) {
+    if (rss >= dbg_mem_limit) {
+        static bool dumped = false;
+        if (dumped) {
+            return;
+        }
+        dumped = true;
+        std::string dot = HeapProfiler::instance()->dump_heap_profile_to_dot();
+        if (!dot.empty()) {
+            dot += "\n-------------------------------------------------------\n";
+            dot += "Copy the text after `digraph` in the above output to "
+                   "http://www.webgraphviz.com to generate a dot graph.\n"
+                   "after start heap profiler, if there is no operation, will print `No nodes "
+                   "to "
+                   "print`."
+                   "If there are many errors: `addr2line: Dwarf Error`,"
+                   "or other FAQ, reference doc: "
+                   "https://doris.apache.org/community/developer-guide/debug-tool/#4-qa\n";
+            auto log_str =
+                    fmt::format("memtable reach hard limit, dump heap profile to dot: {}", dot);
+            LOG_LONG_STRING(INFO, log_str);
+        }
     }
 }
 
