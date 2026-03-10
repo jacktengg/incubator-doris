@@ -51,6 +51,7 @@ public:
     void refresh_mem_tracker();
 
     MemTracker* mem_tracker() { return _mem_tracker.get(); }
+    MemTracker* mem_tracker2() { return _mem_tracker2.get(); }
 
     int64_t mem_usage() const { return _mem_usage; }
 
@@ -73,6 +74,7 @@ private:
 
     // sum of all mem table memory.
     std::unique_ptr<MemTracker> _mem_tracker;
+    std::unique_ptr<MemTracker> _mem_tracker2;
     int64_t _load_hard_mem_limit = -1;
     int64_t _load_soft_mem_limit = -1;
     int64_t _load_safe_mem_permit = -1;
