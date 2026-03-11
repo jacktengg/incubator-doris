@@ -364,6 +364,7 @@ void MemTableMemoryLimiter::_refresh_mem_tracker() {
     g_memtable_flush_memory.set_value(_flush_mem_usage);
     g_memtable_load_memory.set_value(_mem_usage);
     LOG(INFO) << "refreshed mem_tracker, num writers: " << _writers.size()
+              << ", _mem_usage: " << _mem_usage
               << ", write_tracker_mem: " << total_write_tracker_mem
               << ", global_memtable_tracker_mem: "
               << ExecEnv::GetInstance()->global_memtable_tracker()->consumption()
