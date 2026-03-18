@@ -354,6 +354,7 @@ void ColumnNullable::append_data_by_selector(IColumn::MutablePtr& res,
 void ColumnNullable::append_data_by_selector(IColumn::MutablePtr& res,
                                              const IColumn::Selector& selector, size_t begin,
                                              size_t end) const {
+    LOG(INFO) << "xxx column nullable append_data_by_selector, begin: " << begin << ", end: " << end;
     auto& res_column = assert_cast<ColumnNullable&>(*res);
     auto res_nested_column = res_column.get_nested_column_ptr();
     get_nested_column().append_data_by_selector(res_nested_column, selector, begin, end);

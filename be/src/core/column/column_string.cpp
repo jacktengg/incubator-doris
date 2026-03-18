@@ -273,6 +273,19 @@ void ColumnStr<T>::insert_indices_from(const IColumn& src, const uint32_t* indic
             dst_chars_pos += size_to_append;
         }
     };
+    if constexpr (std::is_same_v<T, uint64_t>) {
+        if (src.is_column_string64()) {
+            LOG(INFO) << "xxx insert_indices_from, this column is ColumnStr<UInt64>, src column is ColumnStr<UInt64>";
+        } else {
+            LOG(INFO) << "xxx insert_indices_from, this column is ColumnStr<UInt64>, src column is ColumnStr<UInt32>";
+        }
+    } else {
+        if (src.is_column_string64()) {
+            LOG(INFO) << "xxx insert_indices_from, this column is ColumnStr<UInt32>, src column is ColumnStr<UInt64>";
+        } else {
+            LOG(INFO) << "xxx insert_indices_from, this column is ColumnStr<UInt32>, src column is ColumnStr<UInt32>";
+        }
+    }
     if (src.is_column_string64()) {
         do_insert(assert_cast<const ColumnStr<uint64_t>&>(src));
     } else {
@@ -431,6 +444,14 @@ MutableColumnPtr ColumnStr<T>::permute(const IColumn::Permutation& perm, size_t 
 
     Chars& res_chars = res->chars;
     auto& res_offsets = res->offsets;
+    if constexpr (std::is_same_v<UInt64, T>) {
+    LOG(INFO) << "xxx permute column_str64, size: " << size << ", limit: " << limit << ", perm size: " << perm.size()
+              << ", chars size: " << chars.size() << ", offsets size: " << offsets.size();
+    } else {
+    LOG(INFO) << "xxx permute column_str32, size: " << size << ", limit: " << limit << ", perm size: " << perm.size()
+              << ", chars size: " << chars.size() << ", offsets size: " << offsets.size();
+
+    }
 
     if (limit == size) {
         res_chars.resize(chars.size());
@@ -439,6 +460,7 @@ MutableColumnPtr ColumnStr<T>::permute(const IColumn::Permutation& perm, size_t 
         for (size_t i = 0; i < limit; ++i) {
             new_chars_size += size_at(perm[i]);
         }
+        LOG(INFO) << "xxx permute column_str, new chars size: " << new_chars_size;
         res_chars.resize(new_chars_size);
     }
 
@@ -451,6 +473,9 @@ MutableColumnPtr ColumnStr<T>::permute(const IColumn::Permutation& perm, size_t 
         size_t string_offset = offsets[j - 1];
         size_t string_size = offsets[j] - string_offset;
 
+        LOG(INFO) << "xxx permute column_str, j: " << j << ", offsets[j - 1]:" << offsets[j - 1]<< ", offsets[j]:" << offsets[j]
+            << ", string_offset: " << string_offset << ", string_size: " << string_size
+            << ", current_new_offset: " << current_new_offset;
         memcpy_small_allow_read_write_overflow15(&res_chars[current_new_offset],
                                                  &chars[string_offset], string_size);
 
