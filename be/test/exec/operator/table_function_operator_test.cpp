@@ -22,6 +22,7 @@
 #include <gen_cpp/Types_types.h>
 #include <gtest/gtest.h>
 
+#include <chrono>
 #include <memory>
 #include <vector>
 
@@ -470,7 +471,7 @@ struct UnnestTest : public ::testing::Test {
         obj_pool = std::make_unique<ObjectPool>();
         query_ctx = generate_one_query();
         runtime_profile = std::make_shared<RuntimeProfile>("test");
-        runtime_state->batsh_size = 5;
+        runtime_state->batsh_size = 8160;
         runtime_state->_query_ctx = query_ctx.get();
         runtime_state->_query_id = query_ctx->query_id();
         runtime_state->resize_op_id_to_local_state(-100);
@@ -595,6 +596,98 @@ struct UnnestTest : public ::testing::Test {
         }
         tplan_node_table_function_node.table_function_node.expand_conjuncts.push_back(expand_expr);
         // end of TTableFunctionNode setup
+
+        // Set projections
+        TExpr texpr_proj0;
+        texpr_proj0.nodes.emplace_back();
+        texpr_proj0.nodes[0].node_type = TExprNodeType::SLOT_REF;
+        texpr_proj0.nodes[0].type = type_desc_int;
+        texpr_proj0.nodes[0].num_children = 0;
+        texpr_proj0.nodes[0].__set_slot_ref(TSlotRef());
+        texpr_proj0.nodes[0].slot_ref = slot_ref_id;
+        texpr_proj0.nodes[0].output_scale = -1;
+        texpr_proj0.nodes[0].is_nullable = true;
+        texpr_proj0.nodes[0].label = "id";
+
+        TExpr texpr_proj1;
+        texpr_proj1.nodes.emplace_back();
+        texpr_proj1.nodes[0].node_type = TExprNodeType::SLOT_REF;
+        texpr_proj1.nodes[0].type = type_desc_int;
+        texpr_proj1.nodes[0].num_children = 0;
+        texpr_proj1.nodes[0].__set_slot_ref(TSlotRef());
+        texpr_proj1.nodes[0].slot_ref = slot_ref_unnest_tag;
+        texpr_proj1.nodes[0].output_scale = -1;
+        texpr_proj1.nodes[0].is_nullable = true;
+        texpr_proj1.nodes[0].label = "tag";
+
+        tplan_node_table_function_node.projections.push_back(texpr_proj0);
+        tplan_node_table_function_node.projections.push_back(texpr_proj1);
+        tplan_node_table_function_node.output_tuple_id = tuple2.id;
+        tplan_node_table_function_node.nereids_id = 144;
+        // end of tplan_node_table_function_node
+    }
+
+    void setup_explode_plan_node(TPlanNode& tplan_node_table_function_node, bool outer) {
+        // Set main TPlanNode properties
+        tplan_node_table_function_node.node_id = 0;
+        tplan_node_table_function_node.node_type = TPlanNodeType::TABLE_FUNCTION_NODE;
+        tplan_node_table_function_node.num_children = 1;
+        tplan_node_table_function_node.limit = -1;
+
+        tplan_node_table_function_node.row_tuples.push_back(tuple0.id);
+        tplan_node_table_function_node.row_tuples.push_back(tuple1.id);
+        tplan_node_table_function_node.nullable_tuples.push_back(false);
+        tplan_node_table_function_node.nullable_tuples.push_back(false);
+        tplan_node_table_function_node.compact_data = false;
+        tplan_node_table_function_node.is_serial_operator = false;
+
+        // setup table function node
+        tplan_node_table_function_node.__set_table_function_node(TTableFunctionNode());
+
+        // setup fnCallExprList of table function node
+        TExpr fn_expr;
+
+        fn_expr.nodes.emplace_back();
+        fn_expr.nodes[0].node_type = TExprNodeType::FUNCTION_CALL;
+        fn_expr.nodes[0].type.types.emplace_back(type_node_int);
+        fn_expr.nodes[0].num_children = 1;
+
+        // setup TFunction of table function node
+        fn_expr.nodes[0].__set_fn(TFunction());
+        fn_expr.nodes[0].fn.__set_name(TFunctionName());
+        fn_expr.nodes[0].fn.name.function_name = outer ? "explode_outer" : "explode";
+
+        fn_expr.nodes[0].fn.arg_types.emplace_back(type_desc_array_int);
+        fn_expr.nodes[0].fn.ret_type.types.emplace_back(type_node_int);
+
+        fn_expr.nodes[0].fn.has_var_args = false;
+        fn_expr.nodes[0].fn.signature = outer ? "explode_outer(array<int>)" : "explode(array<int>)";
+        fn_expr.nodes[0].fn.__set_scalar_fn(TScalarFunction());
+        fn_expr.nodes[0].fn.scalar_fn.symbol = "";
+        fn_expr.nodes[0].fn.id = 0;
+        fn_expr.nodes[0].fn.vectorized = true;
+        fn_expr.nodes[0].fn.is_udtf_function = false;
+        fn_expr.nodes[0].fn.is_static_load = false;
+        fn_expr.nodes[0].fn.expiration_time = 360;
+        fn_expr.nodes[0].is_nullable = true;
+
+        // explode input slot ref: array<int>
+        fn_expr.nodes.emplace_back();
+        fn_expr.nodes[1].node_type = TExprNodeType::SLOT_REF;
+        fn_expr.nodes[1].type = type_desc_array_int;
+        fn_expr.nodes[1].num_children = 0;
+        fn_expr.nodes[1].__set_slot_ref(TSlotRef());
+        fn_expr.nodes[1].slot_ref = slot_ref_tags;
+        fn_expr.nodes[1].output_scale = -1;
+        fn_expr.nodes[1].is_nullable = true;
+        fn_expr.nodes[1].label = "tags";
+
+        tplan_node_table_function_node.table_function_node.fnCallExprList.push_back(fn_expr);
+
+        // Set output slot IDs
+        tplan_node_table_function_node.table_function_node.outputSlotIds.push_back(slot_desc_id.id);
+        tplan_node_table_function_node.table_function_node.outputSlotIds.push_back(
+                slot_desc_unnest_tag.id);
 
         // Set projections
         TExpr texpr_proj0;
@@ -917,5 +1010,101 @@ TEST_F(UnnestTest, outer) {
         EXPECT_TRUE(eos);
         EXPECT_TRUE(ColumnHelper::block_equal(output_block, expected_output_block));
     }
+}
+
+TEST_F(UnnestTest, benchmark_fast_path) {
+    TDescriptorTable desc_table;
+    desc_table.tupleDescriptors.push_back(tuple0);
+    desc_table.tupleDescriptors.push_back(tuple1);
+    desc_table.tupleDescriptors.push_back(tuple2);
+
+    desc_table.slotDescriptors.push_back(slot_desc_id);
+    desc_table.slotDescriptors.push_back(slot_desc_tags);
+    desc_table.slotDescriptors.push_back(slot_desc_unnest_tag);
+    desc_table.slotDescriptors.push_back(slot_desc_id_2);
+    desc_table.slotDescriptors.push_back(slot_desc_unnest_tag2);
+
+    setup_exec_env();
+
+    TPlanNode tplan_node_table_function_node;
+    setup_explode_plan_node(tplan_node_table_function_node, false);
+
+    DescriptorTbl* desc_tbl;
+    auto st = DescriptorTbl::create(obj_pool.get(), desc_table, &desc_tbl);
+    EXPECT_TRUE(st.ok());
+
+    DataTypePtr data_type_int(std::make_shared<DataTypeInt32>());
+    auto data_type_int_nullable = make_nullable(data_type_int);
+    DataTypePtr data_type_array_type(std::make_shared<DataTypeArray>(data_type_int_nullable));
+    auto data_type_array_type_nullable = make_nullable(data_type_array_type);
+
+    auto build_input_block = [&](int num_rows, int array_size) {
+        auto result_block = std::make_unique<Block>();
+        auto id_column = ColumnInt32::create();
+        for (int i = 0; i < num_rows; i++) {
+            id_column->insert_data((const char*)(&i), 0);
+        }
+        result_block->insert(ColumnWithTypeAndName(make_nullable(std::move(id_column)),
+                                                   data_type_int_nullable, "id"));
+
+        auto arr_data_column = ColumnInt32::create();
+        auto arr_offsets_column = ColumnOffset64::create();
+        ColumnArray::Offset64 offset = 0;
+
+        for (int i = 0; i < num_rows; i++) {
+            for (int j = 0; j < array_size; j++) {
+                int32_t val = i * array_size + j;
+                arr_data_column->insert_data((const char*)(&val), 0);
+            }
+            offset += array_size;
+            arr_offsets_column->insert_data((const char*)(&offset), 0);
+        }
+        auto array_column = ColumnArray::create(make_nullable(std::move(arr_data_column)),
+                                                std::move(arr_offsets_column));
+        result_block->insert(ColumnWithTypeAndName(make_nullable(std::move(array_column)),
+                                                   data_type_array_type_nullable, "tags"));
+        return result_block;
+    };
+
+    // Benchmark with large dataset
+    const int num_rows = 100'000'000;
+    const int array_size = 100;
+    const int64_t expected_output_rows = static_cast<int64_t>(num_rows) * array_size;
+
+    std::shared_ptr<TableFunctionOperatorX> table_func_op =
+            create_test_operators(desc_tbl, tplan_node_table_function_node);
+    auto* local_state = runtime_state->get_local_state(table_func_op->operator_id());
+    auto* table_func_local_state = dynamic_cast<TableFunctionLocalState*>(local_state);
+
+    auto input_block = build_input_block(num_rows, array_size);
+    table_func_local_state->_child_block = std::move(input_block);
+    table_func_local_state->_child_eos = true;
+
+    st = table_func_op->push(runtime_state.get(), table_func_local_state->_child_block.get(),
+                             table_func_local_state->_child_eos);
+    ASSERT_TRUE(st.ok()) << "push failed: " << st.to_string();
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    int total_rows = 0;
+    bool eos = false;
+    while (!eos) {
+        Block output_block;
+        st = table_func_op->pull(runtime_state.get(), &output_block, &eos);
+        ASSERT_TRUE(st.ok()) << "pull failed: " << st.to_string();
+        total_rows += output_block.rows();
+    }
+
+    auto end = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::microseconds>(end - start);
+
+    EXPECT_EQ(total_rows, expected_output_rows);
+    std::cout << "Benchmark results:" << std::endl;
+    std::cout << "  Input: " << num_rows << " rows, " << array_size << " elements per array"
+              << std::endl;
+    std::cout << "  Output: " << total_rows << " rows" << std::endl;
+    std::cout << "  Time: " << duration.count() << " microseconds" << std::endl;
+    std::cout << "  Throughput: " << (total_rows * 1000000.0 / duration.count()) << " rows/sec"
+              << std::endl;
 }
 } // namespace doris

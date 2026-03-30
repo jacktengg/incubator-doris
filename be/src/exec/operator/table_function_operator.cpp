@@ -26,6 +26,9 @@
 #include "exec/operator/operator.h"
 #include "exprs/table_function/table_function_factory.h"
 #include "util/simd/bits.h"
+#include "common/cast_set.h"
+#include "core/column/column_nullable.h"
+#include "core/assert_cast.h"
 
 namespace doris {
 #include "common/compile_check_begin.h"
@@ -76,6 +79,7 @@ Status TableFunctionLocalState::open(RuntimeState* state) {
         RETURN_IF_ERROR(fn->open());
     }
     _cur_child_offset = -1;
+    _block_fast_path_prepared = false;
     return Status::OK();
 }
 
@@ -160,6 +164,155 @@ bool TableFunctionLocalState::_is_inner_and_empty() {
     return false;
 }
 
+bool TableFunctionLocalState::_can_use_block_fast_path() const {
+    auto& p = _parent->cast<TableFunctionOperatorX>();
+    // Fast path is only valid when:
+    // - only one table function exists
+    // - there is an active child row to expand
+    // - the child block is non-empty
+    // - the table function can expose nested/offsets via prepare_block_fast_path()
+    return p._fn_num == 1 && _cur_child_offset != -1 && _child_block->rows() > 0 &&
+           _fns[0]->support_block_fast_path();
+}
+
+Status TableFunctionLocalState::_get_expanded_block_block_fast_path(
+        RuntimeState* state, std::vector<MutableColumnPtr>& columns) {
+    auto& p = _parent->cast<TableFunctionOperatorX>();
+    // Fast path for explode-like table functions:
+    // Instead of calling TableFunction::get_value() row-by-row, copy the nested column range
+    // directly when the nested values in this output batch are contiguous in memory.
+    if (!_block_fast_path_prepared) {
+        RETURN_IF_ERROR(
+                _fns[0]->prepare_block_fast_path(_child_block.get(), state, &_block_fast_path_ctx));
+        _block_fast_path_prepared = true;
+        _block_fast_path_row = _cur_child_offset;
+        _block_fast_path_in_row_offset = 0;
+    }
+
+    const auto remaining_capacity =
+            state->batch_size() - cast_set<int>(columns[p._child_slots.size()]->size());
+    if (remaining_capacity <= 0) {
+        return Status::OK();
+    }
+
+    if (_block_fast_path_ctx.offsets_ptr == nullptr ||
+        _block_fast_path_ctx.nested_col.get() == nullptr) {
+        return Status::InternalError("block fast path context is invalid");
+    }
+
+    const auto& offsets = *_block_fast_path_ctx.offsets_ptr;
+    const auto child_rows = cast_set<int64_t>(offsets.size());
+    if (child_rows != cast_set<int64_t>(_child_block->rows())) {
+        return Status::InternalError("block fast path offsets size mismatch");
+    }
+
+    std::vector<uint32_t> row_ids;
+    row_ids.reserve(remaining_capacity);
+    uint64_t first_nested_idx = 0;
+    uint64_t expected_next_nested_idx = 0;
+
+    int64_t child_row = _block_fast_path_row;
+    uint64_t in_row_offset = _block_fast_path_in_row_offset;
+    int produced_rows = 0;
+
+    while (produced_rows < remaining_capacity && child_row < child_rows) {
+        if (_block_fast_path_ctx.array_nullmap_data &&
+            _block_fast_path_ctx.array_nullmap_data[child_row]) {
+            // NULL array row: skip it here. Slow path will handle output semantics if needed.
+            child_row++;
+            in_row_offset = 0;
+            continue;
+        }
+
+        const uint64_t prev_off = child_row == 0 ? 0 : offsets[child_row - 1];
+        const uint64_t cur_off = offsets[child_row];
+        const uint64_t nested_len = cur_off - prev_off;
+
+        if (in_row_offset >= nested_len) {
+            child_row++;
+            in_row_offset = 0;
+            continue;
+        }
+
+        const uint64_t remaining_in_row = nested_len - in_row_offset;
+        const int take_count =
+                std::min<int>(remaining_capacity - produced_rows, cast_set<int>(remaining_in_row));
+        const uint64_t nested_start = prev_off + in_row_offset;
+
+        DCHECK_LE(nested_start + take_count, cur_off);
+        DCHECK_LE(nested_start + take_count, _block_fast_path_ctx.nested_col->size());
+
+        if (produced_rows == 0) {
+            first_nested_idx = nested_start;
+            expected_next_nested_idx = nested_start;
+        } else if (nested_start != expected_next_nested_idx) {
+            // This fast path requires a single contiguous nested range to avoid per-row scatter.
+            return Status::NotSupported("block fast path requires contiguous nested range");
+        }
+
+        // Map each produced output row back to its source child row for copying non-table-function
+        // columns via insert_indices_from().
+        for (int j = 0; j < take_count; ++j) {
+            row_ids.push_back(cast_set<uint32_t>(child_row));
+        }
+
+        produced_rows += take_count;
+        expected_next_nested_idx += take_count;
+        in_row_offset += take_count;
+        if (in_row_offset >= nested_len) {
+            child_row++;
+            in_row_offset = 0;
+        }
+    }
+
+    if (produced_rows > 0) {
+        for (auto index : p._output_slot_indexs) {
+            auto src_column = _child_block->get_by_position(index).column;
+            columns[index]->insert_indices_from(*src_column, row_ids.data(),
+                                                row_ids.data() + produced_rows);
+        }
+
+        auto& out_col = columns[p._child_slots.size()];
+        if (out_col->is_nullable()) {
+            auto* out_nullable = assert_cast<ColumnNullable*>(out_col.get());
+            out_nullable->get_nested_column_ptr()->insert_range_from(
+                    *_block_fast_path_ctx.nested_col, first_nested_idx, produced_rows);
+            auto* nullmap_column = assert_cast<ColumnUInt8*>(
+                    out_nullable->get_null_map_column_ptr().get());
+            auto& nullmap_data = nullmap_column->get_data();
+            const size_t old_size = nullmap_data.size();
+            nullmap_data.resize(old_size + produced_rows);
+            if (_block_fast_path_ctx.nested_nullmap_data != nullptr) {
+                memcpy(nullmap_data.data() + old_size,
+                       _block_fast_path_ctx.nested_nullmap_data + first_nested_idx,
+                       produced_rows * sizeof(UInt8));
+            } else {
+                memset(nullmap_data.data() + old_size, 0,
+                       produced_rows * sizeof(UInt8));
+            }
+        } else {
+            out_col->insert_range_from(*_block_fast_path_ctx.nested_col, first_nested_idx,
+                                       produced_rows);
+        }
+    }
+
+    _block_fast_path_row = child_row;
+    _block_fast_path_in_row_offset = in_row_offset;
+    _cur_child_offset = child_row >= child_rows ? -1 : child_row;
+
+    if (child_row >= child_rows) {
+        for (TableFunction* fn : _fns) {
+            fn->process_close();
+        }
+        _child_block->clear_column_data(_parent->cast<TableFunctionOperatorX>()
+                                                ._child->row_desc()
+                                                .num_materialized_slots());
+        _block_fast_path_prepared = false;
+    }
+
+    return Status::OK();
+}
+
 Status TableFunctionLocalState::get_expanded_block(RuntimeState* state, Block* output_block,
                                                    bool* eos) {
     SCOPED_TIMER(_process_rows_timer);
@@ -177,48 +330,67 @@ Status TableFunctionLocalState::get_expanded_block(RuntimeState* state, Block* o
             _fns[i]->set_nullable();
         }
     }
-    while (columns[p._child_slots.size()]->size() < state->batch_size()) {
+    // Try the block fast path first. If the table function reports NOT_IMPLEMENTED (e.g. non-
+    // contiguous nested range), fall back to the original row-wise path.
+    bool fallback_to_slow_path = false;
+    if (state->enable_insert_strict() && _can_use_block_fast_path()) {
         RETURN_IF_CANCELLED(state);
-
-        if (_child_block->rows() == 0) {
-            break;
+        auto st = _get_expanded_block_block_fast_path(state, columns);
+        if (!st.ok()) {
+            if (st.is<ErrorCode::NOT_IMPLEMENTED_ERROR>()) {
+                fallback_to_slow_path = true;
+                _block_fast_path_prepared = false;
+            } else {
+                return st;
+            }
         }
-
-        bool skip_child_row = false;
+    } else {
+        fallback_to_slow_path = true;
+    }
+    if (fallback_to_slow_path) {
         while (columns[p._child_slots.size()]->size() < state->batch_size()) {
-            int idx = _find_last_fn_eos_idx();
-            if (idx == 0 || skip_child_row) {
-                _copy_output_slots(columns, p);
-                // all table functions' results are exhausted, process next child row.
-                process_next_child_row();
-                if (_cur_child_offset == -1) {
-                    break;
+            RETURN_IF_CANCELLED(state);
+
+            if (_child_block->rows() == 0) {
+                break;
+            }
+
+            bool skip_child_row = false;
+            while (columns[p._child_slots.size()]->size() < state->batch_size()) {
+                int idx = _find_last_fn_eos_idx();
+                if (idx == 0 || skip_child_row) {
+                    _copy_output_slots(columns, p);
+                    // all table functions' results are exhausted, process next child row.
+                    process_next_child_row();
+                    if (_cur_child_offset == -1) {
+                        break;
+                    }
+                } else if (idx < p._fn_num && idx != -1) {
+                    // some of table functions' results are exhausted.
+                    if (!_roll_table_functions(idx)) {
+                        // continue to process next child row.
+                        continue;
+                    }
                 }
-            } else if (idx < p._fn_num && idx != -1) {
-                // some of table functions' results are exhausted.
-                if (!_roll_table_functions(idx)) {
-                    // continue to process next child row.
+
+                // if any table function is not outer and has empty result, go to next child row
+                if (skip_child_row = _is_inner_and_empty(); skip_child_row) {
                     continue;
                 }
-            }
 
-            // if any table function is not outer and has empty result, go to next child row
-            if (skip_child_row = _is_inner_and_empty(); skip_child_row) {
-                continue;
-            }
-
-            DCHECK_LE(1, p._fn_num);
-            // It may take multiple iterations of this while loop to process a child row if
-            // any table function produces a large number of rows.
-            auto repeat_times = _fns[p._fn_num - 1]->get_value(
-                    columns[p._child_slots.size() + p._fn_num - 1],
-                    //// It has already been checked that
-                    // columns[p._child_slots.size()]->size() < state->batch_size(),
-                    // so columns[p._child_slots.size()]->size() will not exceed the range of int.
-                    state->batch_size() - (int)columns[p._child_slots.size()]->size());
-            _current_row_insert_times += repeat_times;
-            for (int i = 0; i < p._fn_num - 1; i++) {
-                _fns[i]->get_same_many_values(columns[i + p._child_slots.size()], repeat_times);
+                DCHECK_LE(1, p._fn_num);
+                // It may take multiple iterations of this while loop to process a child row if
+                // any table function produces a large number of rows.
+                auto repeat_times = _fns[p._fn_num - 1]->get_value(
+                        columns[p._child_slots.size() + p._fn_num - 1],
+                        //// It has already been checked that
+                        // columns[p._child_slots.size()]->size() < state->batch_size(),
+                        // so columns[p._child_slots.size()]->size() will not exceed the range of int.
+                        state->batch_size() - (int)columns[p._child_slots.size()]->size());
+                _current_row_insert_times += repeat_times;
+                for (int i = 0; i < p._fn_num - 1; i++) {
+                    _fns[i]->get_same_many_values(columns[i + p._child_slots.size()], repeat_times);
+                }
             }
         }
     }
@@ -463,6 +635,7 @@ void TableFunctionLocalState::process_next_child_row() {
                                                     .num_materialized_slots());
         }
         _cur_child_offset = -1;
+        _block_fast_path_prepared = false;
         return;
     }
 

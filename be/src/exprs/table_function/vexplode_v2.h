@@ -49,6 +49,10 @@ public:
     void set_generate_row_index(bool generate_row_index) {
         _generate_row_index = generate_row_index;
     }
+      bool support_block_fast_path() const override;
+    Status prepare_block_fast_path(Block* block, RuntimeState* state,
+                                   BlockFastPathContext* ctx) override;
+
 
 private:
     Status _process_init_variant(Block* block, int value_column_idx, int children_column_idx);

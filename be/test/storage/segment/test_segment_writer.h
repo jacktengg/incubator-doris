@@ -114,12 +114,12 @@ public:
             row.encode_single_field(cid, &full_encoded_key, true /*full_encode*/);
         }
 
-        if (_is_mow_with_cluster_key()) {
+        /*if (_is_mow_with_cluster_key()) {
             return Status::InternalError(
                     "TestSegmentWriter::append_row does not support mow tables with cluster key");
         } else if (_is_mow()) {
             RETURN_IF_ERROR(_primary_key_index_builder->add_item(full_encoded_key));
-        } else {
+        } else */{
             // At the beginning of one block, so add a short key index entry
             if ((_num_rows_written % _opts.num_rows_per_block) == 0) {
                 std::string encoded_key;
