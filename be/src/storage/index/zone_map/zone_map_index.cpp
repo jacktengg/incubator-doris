@@ -159,6 +159,12 @@ void TypedZoneMapIndexWriter<Type>::add_values(const void* values, size_t count)
                 }
             }
         }
+        if constexpr (Type == PrimitiveType::TYPE_DOUBLE) {
+            LOG(INFO) << "xxxxxxx add_values, value count: " << count << ", min value: " << min
+                      << ", max value: " << max << ", has_nan: " << _page_zone_map.has_nan
+                      << ", has_positive_inf: " << _page_zone_map.has_positive_inf
+                      << ", has_negative_inf: " << _page_zone_map.has_negative_inf;
+        }
         _update_page_zonemap(min, max);
     } else {
         auto [min, max] = std::minmax_element(vals, vals + count);
@@ -220,6 +226,25 @@ Status TypedZoneMapIndexWriter<Type>::flush() {
     if (_page_zone_map.has_nan) {
         _segment_zone_map.has_nan = true;
     }
+    if constexpr (Type == PrimitiveType::TYPE_DOUBLE) {
+        auto seg_zonemap_min_val = _segment_zone_map.min_value.template get<Type>();
+        auto seg_zonemap_max_val = _segment_zone_map.max_value.template get<Type>();
+        auto seg_zonemap_min_val_is_inf = std::isinf(seg_zonemap_min_val);
+        auto seg_zonemap_max_val_is_inf = std::isinf(seg_zonemap_max_val);
+
+        auto page_zonemap_min_val = _page_zone_map.min_value.template get<Type>();
+        auto page_zonemap_max_val = _page_zone_map.max_value.template get<Type>();
+        auto page_zonemap_min_val_is_inf = std::isinf(page_zonemap_min_val);
+        auto page_zonemap_max_val_is_inf = std::isinf(page_zonemap_max_val);
+        LOG(INFO) << "xxxxxxx segment zone map min value: " << seg_zonemap_min_val
+                  << ", max value: " << seg_zonemap_max_val
+                  << ", min is inf: " << seg_zonemap_min_val_is_inf
+                  << ", max is inf: " << seg_zonemap_max_val_is_inf
+                  << ", page zone map min value: " << page_zonemap_min_val
+                  << ", max value: " << page_zonemap_max_val
+                  << ", min is inf: " << page_zonemap_min_val_is_inf
+                  << ", max is inf: " << page_zonemap_max_val_is_inf;
+    }
 
     ZoneMapPB zone_map_pb;
     modify_index_before_flush(_page_zone_map);
@@ -243,6 +268,25 @@ Status TypedZoneMapIndexWriter<Type>::finish(io::FileWriter* file_writer,
     ZoneMapIndexPB* meta = index_meta->mutable_zone_map_index();
     // store segment zone map
     modify_index_before_flush(_segment_zone_map);
+    if constexpr (Type == PrimitiveType::TYPE_DOUBLE) {
+        auto seg_zonemap_min_val = _segment_zone_map.min_value.template get<Type>();
+        auto seg_zonemap_max_val = _segment_zone_map.max_value.template get<Type>();
+        auto seg_zonemap_min_val_is_inf = std::isinf(seg_zonemap_min_val);
+        auto seg_zonemap_max_val_is_inf = std::isinf(seg_zonemap_max_val);
+
+        auto page_zonemap_min_val = _page_zone_map.min_value.template get<Type>();
+        auto page_zonemap_max_val = _page_zone_map.max_value.template get<Type>();
+        auto page_zonemap_min_val_is_inf = std::isinf(page_zonemap_min_val);
+        auto page_zonemap_max_val_is_inf = std::isinf(page_zonemap_max_val);
+        LOG(INFO) << "xxxxxxx finish, segment zone map min value: " << seg_zonemap_min_val
+                  << ", max value: " << seg_zonemap_max_val
+                  << ", min is inf: " << seg_zonemap_min_val_is_inf
+                  << ", max is inf: " << seg_zonemap_max_val_is_inf
+                  << ", page zone map min value: " << page_zonemap_min_val
+                  << ", max value: " << page_zonemap_max_val
+                  << ", min is inf: " << page_zonemap_min_val_is_inf
+                  << ", max is inf: " << page_zonemap_max_val_is_inf;
+    }
     _segment_zone_map.to_proto(meta->mutable_segment_zone_map(), _data_type);
 
     // write out zone map for each data pages

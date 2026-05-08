@@ -20,6 +20,7 @@
 #include <arrow/builder.h>
 
 #include <cstdint>
+#include <limits>
 
 #include "common/exception.h"
 #include "common/status.h"
@@ -767,7 +768,10 @@ std::string DataTypeNumberSerDe<T>::to_olap_string(const Field& field) const {
         return std::string(buf);
     } else if constexpr (T == TYPE_TINYINT || T == TYPE_SMALLINT || T == TYPE_INT ||
                          T == TYPE_BIGINT || T == TYPE_FLOAT || T == TYPE_DOUBLE) {
-        return CastToString::from_number(field.get<T>());
+        auto str = CastToString::from_number(field.get<T>());
+        LOG(INFO) << "xxxx Converting value to olap string: " << field.get<T>() << " => '" << str
+                  << "'";
+        return str;
     } else if constexpr (T == TYPE_LARGEINT) {
         auto value = field.get<T>();
         fmt::memory_buffer buffer;
@@ -797,9 +801,14 @@ Status DataTypeNumberSerDe<T>::from_olap_string(const std::string& str, Field& f
     if (!try_parse_impl<T, false>(val, StringRef(str), params)) {
         return Status::InvalidArgument("parse number fail, string: '{}'", str);
     }
+    if constexpr (T == TYPE_DOUBLE) {
+        LOG(INFO) << "xxxx Parsed value from olap string: '" << str << "' => " << val;
+    }
     // In zonemap or some float values passed from FE(column's default value or
     // schema change like operations), Nan and inf is not allowed.
     if constexpr (is_float_or_double(T)) {
+        auto is_inf = std::isinf(val);
+        LOG(INFO) << "xxxx Checking if value is NaN or Infinity: " << val << ", is_inf: " << is_inf;
         if (std::isnan(val) || std::isinf(val)) {
             return Status::InvalidArgument(
                     "parse number fail: NaN/Infinity not allowed in olap string: '{}'", str);

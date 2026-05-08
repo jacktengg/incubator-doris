@@ -22,6 +22,7 @@
 
 #include "common/compare.h"
 #include "core/column/column_dictionary.h"
+#include "core/data_type/define_primitive_type.h"
 #include "storage/index/bloom_filter/bloom_filter.h"
 #include "storage/index/inverted/inverted_index_cache.h" // IWYU pragma: keep
 #include "storage/index/inverted/inverted_index_reader.h"
@@ -143,10 +144,16 @@ public:
                             Compare::greater_equal(zone_map.max_value.template get<Type>(), _value),
                     true);
         } else if constexpr (PT == PredicateType::NE) {
-            return _operator(
-                    Compare::equal(zone_map.min_value.template get<Type>(), _value) &&
-                            Compare::equal(zone_map.max_value.template get<Type>(), _value),
-                    true);
+            auto zonemap_min_val = zone_map.min_value.template get<Type>();
+            auto zonemap_max_val = zone_map.max_value.template get<Type>();
+            auto eq_min = Compare::equal(zonemap_min_val, _value);
+            auto eq_max = Compare::equal(zonemap_max_val, _value);
+            if constexpr (Type == PrimitiveType::TYPE_DOUBLE) {
+                LOG(INFO) << "xxxxxxx zone map min value: " << zonemap_min_val
+                          << ", max value: " << zonemap_max_val << ", predicate value: " << _value
+                          << ", eq_min: " << eq_min << ", eq_max: " << eq_max;
+            }
+            return _operator(eq_min && eq_max, true);
         } else if constexpr (PT == PredicateType::LT || PT == PredicateType::LE) {
             return _operator(zone_map.min_value.template get<Type>(), _value);
         } else {
