@@ -38,8 +38,10 @@ namespace doris {
 
 class OlapTableBlockConvertor {
 public:
-    OlapTableBlockConvertor(TupleDescriptor* output_tuple_desc)
-            : _output_tuple_desc(output_tuple_desc) {}
+    OlapTableBlockConvertor(TupleDescriptor* output_tuple_desc, bool is_insert, bool is_strict_mode)
+            : _output_tuple_desc(output_tuple_desc),
+              _is_insert(is_insert),
+              _is_strict_mode(is_strict_mode) {}
 
     Status validate_and_convert_block(RuntimeState* state, Block* input_block,
                                       std::shared_ptr<Block>& block,
@@ -93,6 +95,9 @@ private:
     Status _partial_update_fill_auto_inc_cols(Block* block, size_t rows);
 
     TupleDescriptor* _output_tuple_desc = nullptr;
+
+    bool _is_insert = false;
+    bool _is_strict_mode = false;
 
     std::map<std::pair<int, int>, DecimalV2Value> _max_decimalv2_val;
     std::map<std::pair<int, int>, DecimalV2Value> _min_decimalv2_val;

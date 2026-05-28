@@ -124,5 +124,6 @@ message POlapTableSchemaParam {
     optional int32 sequence_map_col_unique_id = 16 [default = -1];
     optional PartialUpdateNewRowPolicyPB partial_update_new_key_policy = 17 [default = APPEND];
     optional POlapTableIndexSchema row_binlog_index_schema = 18;
+    optional bool is_insert = 19 [default = false];
 };
 

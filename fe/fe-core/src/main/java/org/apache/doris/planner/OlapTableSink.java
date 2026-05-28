@@ -123,6 +123,9 @@ public class OlapTableSink extends DataSink {
     private boolean singleReplicaLoad;
 
     private boolean isStrictMode = false;
+    // True only for insert statements (set in the nereids insert init). It stays false for
+    // stream/routine/broker/mysql load.
+    private boolean isInsert = false;
     private long txnId = -1;
 
     private List<Expr> partitionExprs;
@@ -213,6 +216,7 @@ public class OlapTableSink extends DataSink {
     public void init(TUniqueId loadId, long txnId, long dbId, long loadChannelTimeoutS,
             int sendBatchParallelism, boolean loadToSingleTablet, boolean isStrictMode,
             long txnExpirationS, OlapInsertCommandContext olapInsertCtx) throws UserException {
+        this.isInsert = true;
         init(loadId, txnId, dbId, loadChannelTimeoutS, sendBatchParallelism, loadToSingleTablet,
                 isStrictMode, txnExpirationS);
         for (Long partitionId : partitionIds) {
@@ -401,6 +405,7 @@ public class OlapTableSink extends DataSink {
         schemaParam.setTableId(table.getId());
         schemaParam.setVersion(table.getIndexMetaByIndexId(table.getBaseIndexId()).getSchemaVersion());
         schemaParam.setIsStrictMode(isStrictMode);
+        schemaParam.setIsInsert(isInsert);
 
         schemaParam.tuple_desc = DescriptorToThriftConverter.toThrift(tupleDescriptor);
         for (SlotDescriptor slotDesc : tupleDescriptor.getSlots()) {

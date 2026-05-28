@@ -818,7 +818,6 @@ Status StreamLoadAction::_process_put(HttpRequest* http_req,
     }
     DCHECK(ctx->put_result.__isset.pipeline_params);
     ctx->put_result.pipeline_params.query_options.__set_enable_strict_cast(false);
-    ctx->put_result.pipeline_params.query_options.__set_enable_insert_strict(strictMode);
     if (config::is_cloud_mode() && ctx->two_phase_commit && ctx->is_mow_table()) {
         return Status::NotSupported("stream load 2pc is unsupported for mow table");
     }

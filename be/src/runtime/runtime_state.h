@@ -239,8 +239,9 @@ public:
         return _query_options.__isset.enable_strict_cast && _query_options.enable_strict_cast;
     }
 
-    bool enable_insert_strict() const {
-        return _query_options.__isset.enable_insert_strict && _query_options.enable_insert_strict;
+    bool enable_insert_value_auto_cast() const {
+        return _query_options.__isset.enable_insert_value_auto_cast &&
+               _query_options.enable_insert_value_auto_cast;
     }
 
     bool enable_segment_limit_pushdown() const {

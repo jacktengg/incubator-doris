@@ -217,7 +217,8 @@ Status VTabletWriterV2::_init(RuntimeState* state, RuntimeProfile* profile) {
                 _output_tuple_desc->slots().size(), _vec_output_expr_ctxs.size());
     }
 
-    _block_convertor = std::make_unique<OlapTableBlockConvertor>(_output_tuple_desc);
+    _block_convertor = std::make_unique<OlapTableBlockConvertor>(
+            _output_tuple_desc, _schema->is_insert(), _schema->is_strict_mode());
     // if partition_type is OLAP_TABLE_SINK_HASH_PARTITIONED, we handle the processing of auto_increment column
     // on exchange node rather than on TabletWriter
     _block_convertor->init_autoinc_info(

@@ -62,7 +62,8 @@ Status TabletSinkHashPartitioner::open(RuntimeState* state) {
     }
     // if _part_type == TPartitionType::OLAP_TABLE_SINK_HASH_PARTITIONED, we handle the processing of auto_increment column
     // on exchange node rather than on TabletWriter
-    _block_convertor = std::make_unique<OlapTableBlockConvertor>(_tablet_sink_tuple_desc);
+    _block_convertor = std::make_unique<OlapTableBlockConvertor>(
+            _tablet_sink_tuple_desc, _schema->is_insert(), _schema->is_strict_mode());
     _block_convertor->init_autoinc_info(_schema->db_id(), _schema->table_id(), state->batch_size());
     _location = state->obj_pool()->add(new OlapTableLocationParam(_tablet_sink_location));
     _row_distribution.init(

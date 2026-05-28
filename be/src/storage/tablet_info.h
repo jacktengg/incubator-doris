@@ -120,6 +120,7 @@ public:
     void set_timezone(std::string timezone) { _timezone = timezone; }
     std::string timezone() const { return _timezone; }
     bool is_strict_mode() const { return _is_strict_mode; }
+    bool is_insert() const { return _is_insert; }
     int32_t sequence_map_col_uid() const { return _sequence_map_col_uid; }
     std::string debug_string() const;
 
@@ -140,6 +141,8 @@ private:
             PartialUpdateNewRowPolicyPB::APPEND};
     std::set<std::string> _partial_update_input_columns;
     bool _is_strict_mode = false;
+    // True only for insert statements.
+    bool _is_insert = false;
     std::string _auto_increment_column;
     int32_t _auto_increment_column_unique_id;
     int64_t _timestamp_ms = 0;

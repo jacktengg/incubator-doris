@@ -219,9 +219,15 @@ Status OlapTableBlockConvertor::_internal_validate_column(RuntimeState* state, B
                                const unsigned char* null_map) {
         return !filter_map[row] && (null_map == nullptr || null_map[j] == 0);
     };
+    bool truncate_str = false;
+    if (_is_insert) {
+        truncate_str = !state->enable_strict_mode() && state->enable_insert_value_auto_cast();
+    } else {
+        truncate_str = !_is_strict_mode;
+    }
 
     // may change orig_column if substring function is performed
-    auto string_column_checker = [&state, &error_msg, need_to_validate,
+    auto string_column_checker = [truncate_str, &state, &error_msg, need_to_validate,
                                   set_invalid_and_append_error_msg](
                                          ColumnPtr& orig_column, const DataTypePtr& orig_type,
                                          IColumn::Permutation* rows,
@@ -253,12 +259,14 @@ Status OlapTableBlockConvertor::_internal_validate_column(RuntimeState* state, B
         }
 
         if (invalid_count) {
-            // For string column, if in non-strict load mode(for both insert stmt and stream load),
-            // truncate the string to schema len.
+            // For string column, when this is a non-strict stream/routine/broker/mysql load
+            // (i.e. !is_insert && !is_strict_mode), truncate the string to the schema len.
+            // Insert statements never reach here with _enable_truncate_overlong_string set,
+            // because their truncation is handled by FE BindSink (substring injection).
             // After truncation, still need to check if byte len of each row exceed the schema len,
             // because currently the schema len is defined in bytes, and substring works by unit of chars.
             // This is a workaround for now, need to improve it after better support of multi-byte chars.
-            if (type_str && !state->enable_insert_strict()) {
+            if (type_str && truncate_str) {
                 ColumnsWithTypeAndName argument_template;
                 auto input_type = remove_nullable(orig_type);
                 auto pos_type = DataTypeFactory::instance().create_data_type(
