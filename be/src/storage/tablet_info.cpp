@@ -142,7 +142,10 @@ Status OlapTableSchemaParam::init(const POlapTableSchemaParam& pschema) {
         }
     }
     _is_strict_mode = pschema.is_strict_mode();
-    _is_insert = pschema.is_insert();
+    if (pschema.has_is_insert()) {
+        _is_insert = pschema.is_insert();
+        _is_insert_set = true;
+    }
     if (_unique_key_update_mode == UniqueKeyUpdateModePB::UPDATE_FIXED_COLUMNS) {
         _auto_increment_column = pschema.auto_increment_column();
         if (!_auto_increment_column.empty() && pschema.auto_increment_column_unique_id() == -1) {
@@ -300,6 +303,7 @@ Status OlapTableSchemaParam::init(const TOlapTableSchemaParam& tschema) {
     }
     if (tschema.__isset.is_insert) {
         _is_insert = tschema.is_insert;
+        _is_insert_set = true;
     }
     if (_unique_key_update_mode == UniqueKeyUpdateModePB::UPDATE_FIXED_COLUMNS) {
         _auto_increment_column = tschema.auto_increment_column;
@@ -440,7 +444,11 @@ void OlapTableSchemaParam::to_protobuf(POlapTableSchemaParam* pschema) const {
     }
     pschema->set_partial_update_new_key_policy(_partial_update_new_row_policy);
     pschema->set_is_strict_mode(_is_strict_mode);
-    pschema->set_is_insert(_is_insert);
+    // Only forward is_insert when it was explicitly provided, so a schema param originating
+    // from an old FE keeps the field unset for downstream BEs (rolling-upgrade compatibility).
+    if (_is_insert_set) {
+        pschema->set_is_insert(_is_insert);
+    }
     pschema->set_auto_increment_column(_auto_increment_column);
     pschema->set_auto_increment_column_unique_id(_auto_increment_column_unique_id);
     pschema->set_timestamp_ms(_timestamp_ms);

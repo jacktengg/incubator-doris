@@ -121,6 +121,10 @@ public:
     std::string timezone() const { return _timezone; }
     bool is_strict_mode() const { return _is_strict_mode; }
     bool is_insert() const { return _is_insert; }
+    // Whether FE explicitly provided the is_insert field. False means the schema param came
+    // from an old FE (rolling upgrade) that does not know the field, in which case BE must
+    // fall back to the legacy enable_insert_strict-based truncation gate.
+    bool is_insert_set() const { return _is_insert_set; }
     int32_t sequence_map_col_uid() const { return _sequence_map_col_uid; }
     std::string debug_string() const;
 
@@ -143,6 +147,9 @@ private:
     bool _is_strict_mode = false;
     // True only for insert statements.
     bool _is_insert = false;
+    // Whether FE explicitly set is_insert (false for old-FE schema params, used for
+    // rolling-upgrade compatibility).
+    bool _is_insert_set = false;
     std::string _auto_increment_column;
     int32_t _auto_increment_column_unique_id;
     int64_t _timestamp_ms = 0;

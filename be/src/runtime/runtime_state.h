@@ -245,6 +245,13 @@ public:
                _query_options.enable_insert_value_auto_cast;
     }
 
+    // Only used for rolling-upgrade compatibility: when the schema param comes from an old FE
+    // that does not send TOlapTableSchemaParam.is_insert, BE falls back to this legacy signal
+    // to decide over-length string truncation. See OlapTableBlockConvertor.
+    bool enable_insert_strict() const {
+        return _query_options.__isset.enable_insert_strict && _query_options.enable_insert_strict;
+    }
+
     bool enable_segment_limit_pushdown() const {
         return !_query_options.__isset.enable_segment_limit_pushdown ||
                _query_options.enable_segment_limit_pushdown;

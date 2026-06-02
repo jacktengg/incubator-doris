@@ -228,8 +228,14 @@ Status OlapTableBlockConvertor::_internal_validate_column(RuntimeState* state, B
     // - For stream/routine/broker/mysql load, FE does not plan truncation, so BE truncates
     //   whenever the load is not in strict mode (!_is_strict_mode); in strict mode the
     //   over-length rows are filtered/rejected instead.
+    // - Rolling-upgrade compatibility: when the schema param comes from an old FE that does not
+    //   send is_insert (!_is_insert_set), neither of the above signals can reliably distinguish
+    //   insert from load, so BE reproduces the legacy pre-upgrade behavior: a single gate on
+    //   enable_insert_strict (set by FE for insert/broker load and by BE for stream/routine load).
     bool truncate_str = false;
-    if (_is_insert) {
+    if (!_is_insert_set) {
+        truncate_str = !state->enable_insert_strict();
+    } else if (_is_insert) {
         truncate_str = !state->enable_strict_mode() && state->enable_insert_value_auto_cast();
     } else {
         truncate_str = !_is_strict_mode;

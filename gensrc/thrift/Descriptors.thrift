@@ -355,8 +355,12 @@ struct TOlapTableSchemaParam {
     15: optional i32 sequence_map_col_unique_id = -1
     16: optional TPartialUpdateNewRowPolicy partial_update_new_key_policy
     17: optional TOlapTableIndexSchema row_binlog_index_schema
-    // True only for insert statements.
-    18: optional bool is_insert = false
+    // True only for insert statements. No explicit default value is given on purpose: a thrift
+    // optional field declared with an explicit default gets __isset=true in the generated
+    // constructor, which would make the field appear "present" even when an old FE (rolling
+    // upgrade) never sends it. Leaving it without a default keeps __isset.is_insert a reliable
+    // presence indicator so BE can fall back to the legacy enable_insert_strict gate.
+    18: optional bool is_insert
 }
 
 struct TTabletLocation {

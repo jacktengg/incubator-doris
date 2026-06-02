@@ -82,7 +82,7 @@ std::unique_ptr<VRowDistributionHarness> _build_vrow_distribution_harness(
     h->tablet_finder = std::make_unique<OlapTabletFinder>(h->vpartition.get(),
                                                           OlapTabletFinder::FIND_TABLET_EVERY_ROW);
     h->block_convertor =
-            std::make_unique<OlapTableBlockConvertor>(h->schema->tuple_desc(), false, false);
+            std::make_unique<OlapTableBlockConvertor>(h->schema->tuple_desc(), false, false, false);
 
     h->output_row_desc = std::make_unique<RowDescriptor>(
             ctx.state.desc_tbl(), std::vector<TTupleId> {tablet_sink_tuple_id});

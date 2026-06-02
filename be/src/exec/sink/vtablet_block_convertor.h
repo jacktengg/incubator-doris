@@ -38,8 +38,10 @@ namespace doris {
 
 class OlapTableBlockConvertor {
 public:
-    OlapTableBlockConvertor(TupleDescriptor* output_tuple_desc, bool is_insert, bool is_strict_mode)
+    OlapTableBlockConvertor(TupleDescriptor* output_tuple_desc, bool is_insert_set, bool is_insert,
+                            bool is_strict_mode)
             : _output_tuple_desc(output_tuple_desc),
+              _is_insert_set(is_insert_set),
               _is_insert(is_insert),
               _is_strict_mode(is_strict_mode) {}
 
@@ -96,6 +98,7 @@ private:
 
     TupleDescriptor* _output_tuple_desc = nullptr;
 
+    bool _is_insert_set = false;
     bool _is_insert = false;
     bool _is_strict_mode = false;
 

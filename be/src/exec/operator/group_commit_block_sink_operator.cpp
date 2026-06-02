@@ -47,7 +47,8 @@ Status GroupCommitBlockSinkLocalState::open(RuntimeState* state) {
     _state = state;
 
     _block_convertor = std::make_unique<OlapTableBlockConvertor>(
-            p._output_tuple_desc, p._schema->is_insert(), p._schema->is_strict_mode());
+            p._output_tuple_desc, p._schema->is_insert_set(), p._schema->is_insert(),
+            p._schema->is_strict_mode());
     _block_convertor->init_autoinc_info(p._schema->db_id(), p._schema->table_id(),
                                         _state->batch_size());
 
