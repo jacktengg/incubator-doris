@@ -219,6 +219,15 @@ Status OlapTableBlockConvertor::_internal_validate_column(RuntimeState* state, B
                                const unsigned char* null_map) {
         return !filter_map[row] && (null_map == nullptr || null_map[j] == 0);
     };
+    // Whether over-length string columns should be truncated to the schema length (instead
+    // of being marked invalid and filtered/rejected). The decision depends on the statement
+    // kind, because insert and load have different strictness semantics:
+    // - For insert statements, FE plans the truncation (BindSink injects substring) based on
+    //   enable_strict_cast. BE only truncates as a backstop when the cast is non-strict
+    //   (!enable_strict_mode()) and value auto-cast is enabled, matching FE's condition.
+    // - For stream/routine/broker/mysql load, FE does not plan truncation, so BE truncates
+    //   whenever the load is not in strict mode (!_is_strict_mode); in strict mode the
+    //   over-length rows are filtered/rejected instead.
     bool truncate_str = false;
     if (_is_insert) {
         truncate_str = !state->enable_strict_mode() && state->enable_insert_value_auto_cast();
@@ -259,13 +268,6 @@ Status OlapTableBlockConvertor::_internal_validate_column(RuntimeState* state, B
         }
 
         if (invalid_count) {
-            // For string column, when this is a non-strict stream/routine/broker/mysql load
-            // (i.e. !is_insert && !is_strict_mode), truncate the string to the schema len.
-            // Insert statements never reach here with _enable_truncate_overlong_string set,
-            // because their truncation is handled by FE BindSink (substring injection).
-            // After truncation, still need to check if byte len of each row exceed the schema len,
-            // because currently the schema len is defined in bytes, and substring works by unit of chars.
-            // This is a workaround for now, need to improve it after better support of multi-byte chars.
             if (type_str && truncate_str) {
                 ColumnsWithTypeAndName argument_template;
                 auto input_type = remove_nullable(orig_type);
@@ -306,6 +308,9 @@ Status OlapTableBlockConvertor::_internal_validate_column(RuntimeState* state, B
                 null_map = tmp_column_ptr == nullptr ? nullptr
                                                      : tmp_column_ptr->get_null_map_data().data();
             }
+            // After truncation, still need to check if byte len of each row exceed the schema len,
+            // because currently the schema len is defined in bytes, and substring works by unit of chars.
+            // This is a workaround for now, need to improve it after better support of multi-byte chars.
             for (size_t j = 0; j < row_count; ++j) {
                 auto row = rows ? (*rows)[j] : j;
                 if (need_to_validate(j, row, filter_map, null_map)) {
