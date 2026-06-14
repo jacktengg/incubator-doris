@@ -24,7 +24,11 @@
 #include <memory>
 #include <string>
 
+#include "common/exception.h"
 #include "common/object_pool.h"
+#include "common/status.h"
+#include "core/block/block.h"
+#include "core/block/column_with_type_and_name.h"
 #include "core/data_type/data_type_string.h"
 #include "exprs/vexpr_context.h"
 #include "runtime/descriptors.h"
@@ -385,6 +389,101 @@ TEST_F(VirtualSlotRefTest, MemoryEstimate) {
     VirtualSlotRef virtual_ref(node);
 
     EXPECT_EQ(virtual_ref.estimate_memory(1000), 0); // Should return 0 as per implementation
+}
+
+// prepare(): _slot_id == -1 -> early return OK
+TEST_F(VirtualSlotRefTest, PrepareSlotIdMinusOne) {
+    TExprNode node = create_virtual_slot_ref_node(-1);
+    auto expr = VirtualSlotRef::create_shared(node);
+    auto ctx = std::make_shared<VExprContext>(expr);
+    RowDescriptor row_desc;
+
+    Status st = expr->prepare(_state.get(), row_desc, ctx.get());
+    EXPECT_TRUE(st.ok());
+}
+
+// prepare(): slot_desc == nullptr -> INTERNAL_ERROR
+TEST_F(VirtualSlotRefTest, PrepareSlotDescNull) {
+    // slot id 100 is not registered in the (empty) MockDescriptorTbl1
+    TExprNode node = create_virtual_slot_ref_node(100);
+    auto expr = VirtualSlotRef::create_shared(node);
+    auto ctx = std::make_shared<VExprContext>(expr);
+    RowDescriptor row_desc;
+
+    Status st = expr->prepare(_state.get(), row_desc, ctx.get());
+    EXPECT_FALSE(st.ok());
+    EXPECT_TRUE(st.is<ErrorCode::INTERNAL_ERROR>());
+}
+
+// prepare(): slot has no virtual column expr -> InternalError
+TEST_F(VirtualSlotRefTest, PrepareNoVirtualColumnExpr) {
+    const int slot_id = 11;
+    // Registered slot without a virtual_column_expr (defaults to nullptr).
+    _state->_mock_desc_tbl->add_slot_descriptor(slot_id, /*col_unique_id=*/1, "no_vexpr_col", {});
+
+    TExprNode node = create_virtual_slot_ref_node(slot_id);
+    auto expr = VirtualSlotRef::create_shared(node);
+    auto ctx = std::make_shared<VExprContext>(expr);
+    RowDescriptor row_desc;
+
+    // The error branch dereferences *_column_name, which is still nullptr at that
+    // point in the source; set it to a valid string so the branch can be exercised.
+    std::string col_name = "no_vexpr_col";
+    expr->_column_name = &col_name;
+
+    Status st = expr->prepare(_state.get(), row_desc, ctx.get());
+    EXPECT_FALSE(st.ok());
+    EXPECT_TRUE(st.is<ErrorCode::INTERNAL_ERROR>());
+}
+
+// prepare(): _column_id < 0 -> INTERNAL_ERROR
+TEST_F(VirtualSlotRefTest, PrepareInvalidColumnId) {
+    const int slot_id = 12;
+    _state->_mock_desc_tbl->add_slot_descriptor(slot_id, /*col_unique_id=*/1, "vexpr_col", {});
+    // Attach a (non-null) virtual column expr so the "no virtual column expr" check passes.
+    SlotDescriptor* slot_desc = _state->_mock_desc_tbl->get_slot_descriptor(slot_id);
+    slot_desc->virtual_column_expr = std::make_shared<TExpr>();
+
+    TExprNode node = create_virtual_slot_ref_node(slot_id);
+    auto expr = VirtualSlotRef::create_shared(node);
+    auto ctx = std::make_shared<VExprContext>(expr);
+    // Empty RowDescriptor => get_column_id returns -1.
+    RowDescriptor row_desc;
+
+    Status st = expr->prepare(_state.get(), row_desc, ctx.get());
+    EXPECT_FALSE(st.ok());
+    EXPECT_TRUE(st.is<ErrorCode::INTERNAL_ERROR>());
+}
+
+// execute_column_impl(): _column_id >= block->columns() -> INTERNAL_ERROR
+TEST_F(VirtualSlotRefTest, ExecuteColumnImplColumnIdOutOfRange) {
+    auto* slot_desc = create_slot_descriptor(1, "col_a");
+    VirtualSlotRef vref(slot_desc);
+    vref._column_id = 0;
+    vref._column_name = &slot_desc->col_name();
+
+    Block block; // empty block, columns() == 0
+    ColumnPtr result_column;
+    Status st = vref.execute_column_impl(nullptr, &block, nullptr, 0, result_column);
+    EXPECT_FALSE(st.ok());
+    EXPECT_TRUE(st.is<ErrorCode::INTERNAL_ERROR>());
+}
+
+// execute_column_impl(): column at position is null -> InternalError
+TEST_F(VirtualSlotRefTest, ExecuteColumnImplNullColumn) {
+    auto* slot_desc = create_slot_descriptor(2, "col_b");
+    VirtualSlotRef vref(slot_desc);
+    vref._column_id = 0;
+    vref._column_name = &slot_desc->col_name();
+
+    // Block with one position whose column ptr is null.
+    ColumnWithTypeAndName col_with_null(std::make_shared<DataTypeString>(), "col_b");
+    Block block({col_with_null});
+
+    ColumnPtr result_column;
+    Status st = vref.execute_column_impl(nullptr, &block, nullptr, 0, result_column);
+    EXPECT_FALSE(st.ok());
+    EXPECT_TRUE(st.is<ErrorCode::INTERNAL_ERROR>());
 }
 
 } // namespace doris

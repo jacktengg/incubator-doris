@@ -729,4 +729,176 @@ TEST_F(HybridSetTest, StringValueSet) {
     }
 }
 
+// Directly exercise FixedContainer: insert, check_size throw on mismatched size,
+// find via SIMD path, iterator-based insert and clear.
+TEST_F(HybridSetTest, FixedContainerCheckSize) {
+    FixedContainer<int, 4> fc;
+    fc.insert(1);
+    fc.insert(2);
+    EXPECT_EQ(fc.size(), 2);
+    // size (2) != N (4) -> throws (hybrid_set.h:65-69)
+    EXPECT_THROW(fc.check_size(), doris::Exception);
+
+    fc.insert(3);
+    fc.insert(4);
+    EXPECT_EQ(fc.size(), 4);
+    EXPECT_NO_THROW(fc.check_size());
+    EXPECT_TRUE(fc.find(1));
+    EXPECT_TRUE(fc.find(4));
+    EXPECT_FALSE(fc.find(5));
+
+    // iterator based insert + clear
+    FixedContainer<int, 4> fc2;
+    fc2.insert(fc.begin(), fc.end());
+    EXPECT_EQ(fc2.size(), 4);
+    EXPECT_NO_THROW(fc2.check_size());
+    EXPECT_TRUE(fc2.find(2));
+    fc2.clear();
+    EXPECT_EQ(fc2.size(), 0);
+
+    // check_size throw reached through HybridSet<FixedContainer>::find_batch when the
+    // number of inserted elements does not match N.
+    std::unique_ptr<HybridSetBase> set(create_set<4>(PrimitiveType::TYPE_INT, false));
+    int v = 1;
+    set->insert(&v); // size 1 != 4
+    auto column = ColumnHelper::create_column<DataTypeInt32>({1, 2, 3, 4});
+    auto results = ColumnUInt8::create(4, 0);
+    EXPECT_THROW(set->find_batch(*column, 4, results->get_data()), doris::Exception);
+}
+
+// HybridSet (numeric) null insert path and insert_range_from variants.
+TEST_F(HybridSetTest, NumericInsertNullAndRange) {
+    // null insert sets _contain_null (hybrid_set.h:250-253)
+    std::unique_ptr<HybridSetBase> set(create_set(PrimitiveType::TYPE_INT, true));
+    EXPECT_FALSE(set->contain_null());
+    set->insert((const void*)nullptr);
+    EXPECT_TRUE(set->contain_null());
+    EXPECT_EQ(set->size(), 0);
+    EXPECT_FALSE(set->empty());
+    // insert(void*, size) forwards to insert(data) which also handles nullptr
+    set->insert((void*)nullptr, 0);
+    EXPECT_TRUE(set->contain_null());
+
+    // insert_range_from non-nullable branch (hybrid_set.h:284-289)
+    std::unique_ptr<HybridSetBase> set2(create_set(PrimitiveType::TYPE_INT, true));
+    auto column = ColumnHelper::create_column<DataTypeInt32>({10, 20, 30});
+    set2->insert_range_from(column, 0, column->size());
+    EXPECT_EQ(set2->size(), 3);
+    int probe = 20;
+    EXPECT_TRUE(set2->find(&probe));
+
+    // out-of-bound throw (hybrid_set.h:265-270)
+    EXPECT_THROW(set2->insert_range_from(column, 0, column->size() + 1), doris::Exception);
+
+    // insert_range_from nullable branch incl. _contain_null (hybrid_set.h:271-283)
+    std::unique_ptr<HybridSetBase> set3(create_set(PrimitiveType::TYPE_INT, true));
+    auto inner = ColumnHelper::create_column<DataTypeInt32>({1, 2, 3, 4});
+    auto nullmap = ColumnUInt8::create(4, 0);
+    nullmap->get_data()[1] = 1;
+    nullmap->get_data()[3] = 1;
+    ColumnPtr nullable = ColumnNullable::create(inner->clone(), nullmap->clone());
+    set3->insert_range_from(nullable, 0, nullable->size());
+    EXPECT_EQ(set3->size(), 2);
+    EXPECT_TRUE(set3->contain_null());
+    int one = 1;
+    int two = 2;
+    EXPECT_TRUE(set3->find(&one));
+    EXPECT_FALSE(set3->find(&two));
+}
+
+// HybridSet (numeric) find_batch with a non-null filter argument (hybrid_set.h:352-357).
+TEST_F(HybridSetTest, NumericFindBatchWithFilter) {
+    std::unique_ptr<HybridSetBase> set(create_set<4>(PrimitiveType::TYPE_INT, false));
+    auto column = ColumnHelper::create_column<DataTypeInt32>({1, 2, 3, 4});
+    set->insert_range_from(column, 0, column->size());
+
+    auto results = ColumnUInt8::create(4, 0);
+    std::vector<uint8_t> filter = {1, 0, 1, 0};
+    set->find_batch(*column, column->size(), results->get_data(), filter.data());
+    EXPECT_EQ(results->get_data()[0], 1);
+    EXPECT_EQ(results->get_data()[1], 0); // filtered out, untouched
+    EXPECT_EQ(results->get_data()[2], 1);
+    EXPECT_EQ(results->get_data()[3], 0); // filtered out, untouched
+}
+
+// StringSet: null insert via insert(void*, size), insert_range_from out-of-bound,
+// string64 nullable/non-nullable branches, and find_batch with a filter.
+TEST_F(HybridSetTest, StringSetRangeAndFilter) {
+    std::unique_ptr<HybridSetBase> set(create_set(PrimitiveType::TYPE_VARCHAR, true));
+    auto str_col = ColumnHelper::create_column<DataTypeString>({"ab", "cd", "ef"});
+
+    // out-of-bound throw (hybrid_set.h:457-462)
+    EXPECT_THROW(set->insert_range_from(str_col, 0, str_col->size() + 1), doris::Exception);
+
+    // insert(void*, size) with nullptr -> insert(nullptr) (hybrid_set.h:432-434)
+    set->insert((void*)nullptr, 0);
+    EXPECT_TRUE(set->contain_null());
+
+    // build ColumnString64 via the overflow debug point
+    auto origin_enable_debug_points = config::enable_debug_points;
+    config::enable_debug_points = true;
+    DebugPoints::instance()->add_with_params(CONVERT_COLUMN_IF_OVERFLOW_DEBUG_POINT,
+                                             {{"max_string_size", "1"}});
+    Defer defer([origin_enable_debug_points]() {
+        DebugPoints::instance()->remove(CONVERT_COLUMN_IF_OVERFLOW_DEBUG_POINT);
+        config::enable_debug_points = origin_enable_debug_points;
+    });
+
+    ColumnPtr str64 = str_col->clone()->convert_column_if_overflow();
+    ASSERT_TRUE(str64->is_column_string64());
+
+    // non-nullable string64 branch (hybrid_set.h:476-478)
+    std::unique_ptr<HybridSetBase> set2(create_set(PrimitiveType::TYPE_VARCHAR, true));
+    set2->insert_range_from(str64, 0, str64->size());
+    EXPECT_EQ(set2->size(), 3);
+
+    // nullable string64 branch (hybrid_set.h:466-469)
+    auto nullmap = ColumnUInt8::create(3, 0);
+    nullmap->get_data()[1] = 1;
+    ColumnPtr nullable64 = ColumnNullable::create(str64->clone(), nullmap->clone());
+    std::unique_ptr<HybridSetBase> set3(create_set(PrimitiveType::TYPE_VARCHAR, true));
+    set3->insert_range_from(nullable64, 0, nullable64->size());
+    EXPECT_EQ(set3->size(), 2);
+    EXPECT_TRUE(set3->contain_null());
+
+    // find_batch with non-null filter (hybrid_set.h:552-557)
+    auto results = ColumnUInt8::create(str_col->size(), 0);
+    std::vector<uint8_t> filter = {1, 0, 1};
+    set2->find_batch(*str_col, str_col->size(), results->get_data(), filter.data());
+    EXPECT_EQ(results->get_data()[0], 1);
+    EXPECT_EQ(results->get_data()[1], 0); // filtered out, untouched
+    EXPECT_EQ(results->get_data()[2], 1);
+}
+
+// StringValueSet: out-of-bound throw, non-nullable regular ColumnString insert,
+// find_batch with a filter, and get_digest determinism.
+TEST_F(HybridSetTest, StringValueSetRangeFilterDigest) {
+    std::unique_ptr<HybridSetBase> svs(create_string_value_set(0, true));
+    // keep the backing column alive for the lifetime of the set (StringValueSet stores StringRef)
+    ColumnPtr strs = ColumnHelper::create_column<DataTypeString>({"ab", "cd", "ef"});
+
+    // out-of-bound throw (hybrid_set.h:660-665)
+    EXPECT_THROW(svs->insert_range_from(strs, 0, strs->size() + 1), doris::Exception);
+
+    // non-nullable regular ColumnString insert (hybrid_set.h:682-685)
+    svs->insert_fixed_len(strs, 0);
+    EXPECT_EQ(svs->size(), 3);
+
+    StringRef cd("cd");
+    EXPECT_TRUE(svs->find((const void*)&cd));
+
+    // find_batch with non-null filter (hybrid_set.h:755-762)
+    auto results = ColumnUInt8::create(strs->size(), 0);
+    std::vector<uint8_t> filter = {1, 0, 1};
+    svs->find_batch(*strs, strs->size(), results->get_data(), filter.data());
+    EXPECT_EQ(results->get_data()[0], 1);
+    EXPECT_EQ(results->get_data()[1], 0); // filtered out, untouched
+    EXPECT_EQ(results->get_data()[2], 1);
+
+    // get_digest is deterministic (hybrid_set.h:799-808)
+    uint64_t d1 = svs->get_digest(0);
+    uint64_t d2 = svs->get_digest(0);
+    EXPECT_EQ(d1, d2);
+}
+
 } // namespace doris

@@ -359,4 +359,177 @@ TEST_F(CastTimeStampTzTest, from_timestamptz_non_strict_mode_to_datetime) {
     }
 }
 
+TEST_F(CastTimeStampTzTest, from_datetime_strict_mode_to_timestamptz_with_null_map) {
+    CastToImpl<CastModeType::StrictMode, DataTypeDateTimeV2, DataTypeTimeStampTz> cast;
+
+    auto block = ColumnHelper::create_block<DataTypeDateTimeV2>(
+            {make_datetime(0, 0, 0, 12, 12, 12, 123456), make_datetime(2024, 6, 20, 12, 12, 12, 0),
+             make_datetime(1970, 1, 1, 0, 0, 0, 0), make_datetime(2038, 1, 19, 3, 14, 7, 0)});
+
+    block.insert(
+            ColumnWithTypeAndName {nullptr, std::make_shared<DataTypeTimeStampTz>(), "result"});
+
+    auto null_map_col = ColumnUInt8::create(block.rows(), 0);
+    null_map_col->get_data()[0] = 1;
+
+    auto st = cast.execute_impl(&context, block, arguments, result, block.rows(),
+                                null_map_col->get_data().data());
+
+    EXPECT_TRUE(st.ok()) << st.to_string();
+
+    const auto& col_res =
+            assert_cast<const ColumnTimeStampTz&>(*block.get_by_position(result).column);
+
+    EXPECT_EQ(TimestampTzValue {col_res.get_element(1)}.to_string(time_zone),
+              "2024-06-20 12:12:12.000000+08:00");
+    EXPECT_EQ(TimestampTzValue {col_res.get_element(2)}.to_string(time_zone),
+              "1970-01-01 00:00:00.000000+08:00");
+    EXPECT_EQ(TimestampTzValue {col_res.get_element(3)}.to_string(time_zone),
+              "2038-01-19 03:14:07.000000+08:00");
+}
+
+TEST_F(CastTimeStampTzTest, from_timestamptz_strict_mode_to_timestamptz) {
+    CastToImpl<CastModeType::StrictMode, DataTypeTimeStampTz, DataTypeTimeStampTz> cast;
+
+    // success cast: to_scale >= from_scale, value is preserved
+    {
+        auto block = ColumnHelper::create_block<DataTypeTimeStampTz>(
+                {make_timestamptz(2024, 6, 20, 12, 12, 12, 123456),
+                 make_timestamptz(2024, 6, 20, 4, 12, 12, 0),
+                 make_timestamptz(1970, 1, 1, 0, 0, 0, 0),
+                 make_timestamptz(2038, 1, 19, 3, 14, 7, 0)});
+
+        block.insert(
+                ColumnWithTypeAndName {nullptr, std::make_shared<DataTypeTimeStampTz>(), "result"});
+
+        auto st = cast.execute_impl(&context, block, arguments, result, block.rows());
+
+        EXPECT_TRUE(st.ok()) << st.to_string();
+
+        const auto& col_res =
+                assert_cast<const ColumnTimeStampTz&>(*block.get_by_position(result).column);
+
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(0)}.to_string(time_zone),
+                  "2024-06-20 20:12:12.123456+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(1)}.to_string(time_zone),
+                  "2024-06-20 12:12:12.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(2)}.to_string(time_zone),
+                  "1970-01-01 08:00:00.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(3)}.to_string(time_zone),
+                  "2038-01-19 11:14:07.000000+08:00");
+    }
+
+    // null_map masks a row, the masked row is skipped
+    {
+        auto block = ColumnHelper::create_block<DataTypeTimeStampTz>(
+                {make_timestamptz(2024, 6, 20, 12, 12, 12, 0),
+                 make_timestamptz(2024, 6, 20, 4, 12, 12, 0),
+                 make_timestamptz(1970, 1, 1, 0, 0, 0, 0),
+                 make_timestamptz(2038, 1, 19, 3, 14, 7, 0)});
+
+        block.insert(
+                ColumnWithTypeAndName {nullptr, std::make_shared<DataTypeTimeStampTz>(), "result"});
+
+        auto null_map_col = ColumnUInt8::create(block.rows(), 0);
+        null_map_col->get_data()[0] = 1;
+
+        auto st = cast.execute_impl(&context, block, arguments, result, block.rows(),
+                                    null_map_col->get_data().data());
+
+        EXPECT_TRUE(st.ok()) << st.to_string();
+
+        const auto& col_res =
+                assert_cast<const ColumnTimeStampTz&>(*block.get_by_position(result).column);
+
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(1)}.to_string(time_zone),
+                  "2024-06-20 12:12:12.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(2)}.to_string(time_zone),
+                  "1970-01-01 08:00:00.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(3)}.to_string(time_zone),
+                  "2038-01-19 11:14:07.000000+08:00");
+    }
+
+    // error cast: scale reduction overflows at the maximum datetime
+    {
+        auto block = ColumnHelper::create_block<DataTypeTimeStampTz>(
+                {make_timestamptz(2024, 6, 20, 12, 12, 12, 0),
+                 make_timestamptz(2024, 6, 20, 4, 12, 12, 0),
+                 make_timestamptz(1970, 1, 1, 0, 0, 0, 0),
+                 make_timestamptz(9999, 12, 31, 23, 59, 59, 999999)});
+
+        block.insert(ColumnWithTypeAndName {nullptr, std::make_shared<DataTypeTimeStampTz>(0),
+                                            "result"});
+
+        auto st = cast.execute_impl(&context, block, arguments, result, block.rows());
+
+        EXPECT_FALSE(st.ok()) << st.to_string();
+    }
+}
+
+TEST_F(CastTimeStampTzTest, from_timestamptz_non_strict_mode_to_timestamptz) {
+    CastToImpl<CastModeType::NonStrictMode, DataTypeTimeStampTz, DataTypeTimeStampTz> cast;
+
+    // success cast: to_scale >= from_scale, value is preserved
+    {
+        auto block = ColumnHelper::create_block<DataTypeTimeStampTz>(
+                {make_timestamptz(2024, 6, 20, 12, 12, 12, 123456),
+                 make_timestamptz(2024, 6, 20, 4, 12, 12, 0),
+                 make_timestamptz(1970, 1, 1, 0, 0, 0, 0),
+                 make_timestamptz(2038, 1, 19, 3, 14, 7, 0)});
+
+        block.insert(ColumnWithTypeAndName {
+                nullptr, make_nullable(std::make_shared<DataTypeTimeStampTz>()), "result"});
+
+        auto st = cast.execute_impl(&context, block, arguments, result, block.rows(), nullptr);
+
+        EXPECT_TRUE(st.ok()) << st.to_string();
+
+        const auto& column_nullable =
+                assert_cast<const ColumnNullable&>(*block.get_by_position(result).column);
+
+        const auto& col_res =
+                assert_cast<const ColumnTimeStampTz&>(column_nullable.get_nested_column());
+
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(0)}.to_string(time_zone),
+                  "2024-06-20 20:12:12.123456+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(1)}.to_string(time_zone),
+                  "2024-06-20 12:12:12.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(2)}.to_string(time_zone),
+                  "1970-01-01 08:00:00.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(3)}.to_string(time_zone),
+                  "2038-01-19 11:14:07.000000+08:00");
+    }
+
+    // error cast: scale reduction overflows at the maximum datetime, row marked null
+    {
+        auto block = ColumnHelper::create_block<DataTypeTimeStampTz>(
+                {make_timestamptz(2024, 6, 20, 12, 12, 12, 0),
+                 make_timestamptz(2024, 6, 20, 4, 12, 12, 0),
+                 make_timestamptz(1970, 1, 1, 0, 0, 0, 0),
+                 make_timestamptz(9999, 12, 31, 23, 59, 59, 999999)});
+
+        block.insert(ColumnWithTypeAndName {
+                nullptr, make_nullable(std::make_shared<DataTypeTimeStampTz>(0)), "result"});
+
+        auto st = cast.execute_impl(&context, block, arguments, result, block.rows(), nullptr);
+
+        EXPECT_TRUE(st.ok()) << st.to_string();
+
+        const auto& column_nullable =
+                assert_cast<const ColumnNullable&>(*block.get_by_position(result).column);
+
+        const auto& col_res =
+                assert_cast<const ColumnTimeStampTz&>(column_nullable.get_nested_column());
+        const auto& null_map = column_nullable.get_null_map_data();
+
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(0)}.to_string(time_zone),
+                  "2024-06-20 20:12:12.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(1)}.to_string(time_zone),
+                  "2024-06-20 12:12:12.000000+08:00");
+        EXPECT_EQ(TimestampTzValue {col_res.get_element(2)}.to_string(time_zone),
+                  "1970-01-01 08:00:00.000000+08:00");
+        EXPECT_TRUE(null_map[3]);
+    }
+}
+
 } // namespace doris
