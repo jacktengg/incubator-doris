@@ -33,6 +33,8 @@
 #include "olap/rowset/segment_v2/segment.h"
 #include "olap/rowset/segment_v2/variant/variant_column_reader.h"
 #include "olap/tablet_schema.h"
+#include "vec/common/assert_cast.h"
+#include "vec/data_types/data_type_array.h"
 #include "vec/json/path_in_data.h"
 
 namespace doris::segment_v2 {
@@ -160,6 +162,81 @@ TEST_F(ColumnReaderCacheTest, BasicCacheOperations) {
     readers = _cache->get_available_readers(false);
     EXPECT_EQ(readers.size(), 1);
     EXPECT_EQ(readers[1], reader);
+}
+
+TEST_F(ColumnReaderCacheTest, FillMissingDecimalV3PrecisionFromTabletSchema) {
+    constexpr int32_t col_uid = 10;
+    setup_column_uid_mapping(col_uid, 0);
+    auto& tablet_column = _mock_segment->tablet_schema()->mutable_column_by_uid(col_uid);
+    tablet_column.set_type(FieldType::OLAP_FIELD_TYPE_DECIMAL128I);
+    tablet_column.set_precision(20);
+    tablet_column.set_frac(6);
+
+    ColumnMetaPB col_meta;
+    col_meta.set_type(static_cast<int32_t>(FieldType::OLAP_FIELD_TYPE_DECIMAL128I));
+    col_meta.set_unique_id(col_uid);
+    col_meta.set_encoding(EncodingTypePB::DEFAULT_ENCODING);
+    col_meta.mutable_indexes()->Add()->set_type(ORDINAL_INDEX);
+    ASSERT_FALSE(col_meta.has_precision());
+    ASSERT_FALSE(col_meta.has_frac());
+    setup_segment_footer({col_meta});
+
+    std::shared_ptr<ColumnReader> reader;
+    Status status = _cache->get_column_reader(col_uid, &reader, &_stats);
+    ASSERT_TRUE(status.ok()) << status.to_string();
+    ASSERT_NE(reader, nullptr);
+
+    auto data_type = reader->get_vec_data_type();
+    ASSERT_NE(data_type, nullptr);
+    EXPECT_EQ(data_type->get_primitive_type(), TYPE_DECIMAL128I);
+    EXPECT_EQ(data_type->get_precision(), 20);
+    EXPECT_EQ(data_type->get_scale(), 6);
+}
+
+TEST_F(ColumnReaderCacheTest, FillMissingDecimalV3PrecisionForComplexTypeFromTabletSchema) {
+    constexpr int32_t col_uid = 11;
+    setup_column_uid_mapping(col_uid, 0);
+    auto& tablet_column = _mock_segment->tablet_schema()->mutable_column_by_uid(col_uid);
+    tablet_column.set_type(FieldType::OLAP_FIELD_TYPE_ARRAY);
+    TabletColumn item_column;
+    item_column.set_type(FieldType::OLAP_FIELD_TYPE_DECIMAL64);
+    item_column.set_precision(18);
+    item_column.set_frac(4);
+    tablet_column.add_sub_column(item_column);
+
+    ColumnMetaPB col_meta;
+    col_meta.set_type(static_cast<int32_t>(FieldType::OLAP_FIELD_TYPE_ARRAY));
+    col_meta.set_unique_id(col_uid);
+
+    auto* item_meta = col_meta.add_children_columns();
+    item_meta->set_type(static_cast<int32_t>(FieldType::OLAP_FIELD_TYPE_DECIMAL64));
+    item_meta->set_encoding(EncodingTypePB::DEFAULT_ENCODING);
+    item_meta->set_num_rows(1000);
+    item_meta->mutable_indexes()->Add()->set_type(ORDINAL_INDEX);
+    ASSERT_FALSE(item_meta->has_precision());
+    ASSERT_FALSE(item_meta->has_frac());
+
+    auto* offset_meta = col_meta.add_children_columns();
+    offset_meta->set_type(static_cast<int32_t>(FieldType::OLAP_FIELD_TYPE_UNSIGNED_BIGINT));
+    offset_meta->set_encoding(EncodingTypePB::DEFAULT_ENCODING);
+    offset_meta->set_num_rows(1000);
+    offset_meta->mutable_indexes()->Add()->set_type(ORDINAL_INDEX);
+    setup_segment_footer({col_meta});
+
+    std::shared_ptr<ColumnReader> reader;
+    Status status = _cache->get_column_reader(col_uid, &reader, &_stats);
+    ASSERT_TRUE(status.ok()) << status.to_string();
+    ASSERT_NE(reader, nullptr);
+
+    auto data_type = reader->get_vec_data_type();
+    ASSERT_NE(data_type, nullptr);
+    EXPECT_EQ(data_type->get_primitive_type(), TYPE_ARRAY);
+    const auto* array_type = assert_cast<const vectorized::DataTypeArray*>(data_type.get());
+    auto nested_type = array_type->get_nested_type();
+    ASSERT_NE(nested_type, nullptr);
+    EXPECT_EQ(nested_type->get_primitive_type(), TYPE_DECIMAL64);
+    EXPECT_EQ(nested_type->get_precision(), 18);
+    EXPECT_EQ(nested_type->get_scale(), 4);
 }
 
 // Test LRU eviction
