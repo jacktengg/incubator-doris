@@ -175,4 +175,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.38.0.0/24
+        - subnet: ${DOCKER_ICEBERG_SUBNET}

@@ -121,4 +121,4 @@ networks:
     name: ${CONTAINER_UID}polaris
     ipam:
       config:
-        - subnet: 168.5.0.0/24
+        - subnet: ${DOCKER_POLARIS_SUBNET}

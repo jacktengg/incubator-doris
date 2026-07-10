@@ -27,6 +27,7 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
 . "${ROOT}/custom_settings.env"
 . "${ROOT}/juicefs-helpers.sh"
 . "${ROOT}/docker-health.sh"
+. "${ROOT}/docker-network-helpers.sh"
 . "${ROOT}/docker-compose/hive/scripts/bootstrap/bootstrap-groups.sh"
 
 usage() {
@@ -208,6 +209,11 @@ fast|refresh|rebuild)
     usage
     ;;
 esac
+
+OCCUPIED_DOCKER_CIDRS_OUTPUT="$(docker_network_collect_occupied_cidrs)"
+mapfile -t OCCUPIED_DOCKER_CIDRS <<<"${OCCUPIED_DOCKER_CIDRS_OUTPUT}"
+configure_thirdparty_docker_subnets "${OCCUPIED_DOCKER_CIDRS[@]}"
+echo "Docker subnet block: ${THIRDPARTY_DOCKER_SUBNET_BLOCK}"
 
 OLD_IFS="${IFS}"
 IFS=','
@@ -585,12 +591,18 @@ render_uid_template() {
 compose_cmd() {
     local compose_file="$1"
     local env_file="$2"
+    local variable
+    local -a subnet_env=()
     shift 2
 
+    for variable in "${THIRDPARTY_DOCKER_SUBNET_VARIABLES[@]}"; do
+        subnet_env+=("${variable}=${!variable}")
+    done
+
     if [[ -n "${env_file}" ]]; then
-        sudo docker compose -f "${compose_file}" --env-file "${env_file}" "$@"
+        sudo env "${subnet_env[@]}" docker compose -f "${compose_file}" --env-file "${env_file}" "$@"
     else
-        sudo docker compose -f "${compose_file}" "$@"
+        sudo env "${subnet_env[@]}" docker compose -f "${compose_file}" "$@"
     fi
 }
 

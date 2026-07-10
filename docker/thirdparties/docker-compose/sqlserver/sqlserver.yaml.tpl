@@ -68,4 +68,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.42.0.0/24
+        - subnet: ${DOCKER_SQLSERVER_SUBNET}

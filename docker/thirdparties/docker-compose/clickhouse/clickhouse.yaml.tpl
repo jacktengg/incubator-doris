@@ -46,4 +46,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.35.0.0/24
+        - subnet: ${DOCKER_CLICKHOUSE_SUBNET}

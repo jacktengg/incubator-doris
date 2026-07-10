@@ -62,3 +62,5 @@ networks:
     driver: bridge
     ipam:
       driver: default
+      config:
+        - subnet: ${DOCKER_LAKESOUL_SUBNET}

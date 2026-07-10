@@ -42,4 +42,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.32.0.0/24
+        - subnet: ${DOCKER_OCEANBASE_SUBNET}

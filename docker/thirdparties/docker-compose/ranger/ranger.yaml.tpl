@@ -84,4 +84,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.45.0.0/24
+        - subnet: ${DOCKER_RANGER_SUBNET}

@@ -21,7 +21,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.3.0.0/24
+        - subnet: ${DOCKER_HUDI_SUBNET}
 
 services:
   ${CONTAINER_UID}hudi-minio:

@@ -45,7 +45,7 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.40.0.0/24
+        - subnet: ${DOCKER_ORACLE_SUBNET}
 
 # login in container
 # sqlplus system/oracle@127.0.0.1:1521

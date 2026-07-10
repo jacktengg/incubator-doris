@@ -68,4 +68,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.41.0.0/24
+        - subnet: ${DOCKER_POSTGRESQL_SUBNET}

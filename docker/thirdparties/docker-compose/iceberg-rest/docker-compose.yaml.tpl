@@ -232,4 +232,4 @@ networks:
     driver: bridge
     ipam:
       config:
-        - subnet: 168.4.0.0/24
+        - subnet: ${DOCKER_ICEBERG_REST_SUBNET}

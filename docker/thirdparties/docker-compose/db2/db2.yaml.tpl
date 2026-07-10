@@ -45,4 +45,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.50.0.0/24
+        - subnet: ${DOCKER_DB2_SUBNET}

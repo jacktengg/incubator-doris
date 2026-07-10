@@ -45,4 +45,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 168.39.0.0/24
+        - subnet: ${DOCKER_MARIADB_SUBNET}
