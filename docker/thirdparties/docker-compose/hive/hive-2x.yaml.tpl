@@ -27,10 +27,10 @@ services:
       - ./hadoop-hive-2x.env
     container_name: ${CONTAINER_UID}hadoop2-namenode
     expose:
-      - "50070"
+      - "${NAMENODE_HTTP_PORT}"
       - "${FS_PORT}"
     healthcheck:
-      test: [ "CMD", "curl", "http://localhost:50070/" ]
+      test: [ "CMD", "curl", "http://localhost:${NAMENODE_HTTP_PORT}/" ]
       interval: 5s
       timeout: 120s
       retries: 120
@@ -47,12 +47,12 @@ services:
     env_file:
       - ./hadoop-hive-2x.env
     environment:
-      SERVICE_PRECONDITION: "${IP_HOST}:50070"
+      SERVICE_PRECONDITION: "${IP_HOST}:${NAMENODE_HTTP_PORT}"
     container_name: ${CONTAINER_UID}hadoop2-datanode
     expose:
-      - "50075"
+      - "${DATANODE_HTTP_PORT}"
     healthcheck:
-      test: [ "CMD", "curl", "http://localhost:50075" ]
+      test: [ "CMD", "curl", "http://localhost:${DATANODE_HTTP_PORT}" ]
       interval: 5s
       timeout: 60s
       retries: 120
@@ -98,7 +98,7 @@ services:
       - ./hadoop-hive-2x.env
     command: /bin/bash /mnt/scripts/start-hive-metastore.sh
     environment:
-      SERVICE_PRECONDITION: "${IP_HOST}:50070 ${IP_HOST}:50075 ${IP_HOST}:${PG_PORT}"
+      SERVICE_PRECONDITION: "${IP_HOST}:${NAMENODE_HTTP_PORT} ${IP_HOST}:${DATANODE_HTTP_PORT} ${IP_HOST}:${PG_PORT}"
       HMS_PORT: "${HMS_PORT}"
     container_name: ${CONTAINER_UID}hive2-metastore
     expose:

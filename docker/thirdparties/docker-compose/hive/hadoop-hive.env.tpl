@@ -42,6 +42,10 @@ CORE_CONF_hadoop_proxyuser_hue_groups=*
 HDFS_CONF_dfs_webhdfs_enabled=true
 HDFS_CONF_dfs_permissions_enabled=false
 HDFS_CONF_dfs_namenode_datanode_registration_ip___hostname___check=false
+HDFS_CONF_dfs_namenode_http___address=0.0.0.0:${NAMENODE_HTTP_PORT}
+HDFS_CONF_dfs_datanode_address=0.0.0.0:${DATANODE_DATA_PORT}
+HDFS_CONF_dfs_datanode_http_address=0.0.0.0:${DATANODE_HTTP_PORT}
+HDFS_CONF_dfs_datanode_ipc_address=0.0.0.0:${DATANODE_IPC_PORT}
 
 YARN_CONF_yarn_log___aggregation___enable=true
 YARN_CONF_yarn_resourcemanager_recovery_enabled=true

@@ -27,10 +27,10 @@ services:
       - ./hadoop-hive-3x.env
     container_name: ${CONTAINER_UID}hadoop3-namenode
     expose:
-      - "9870"
+      - "${NAMENODE_HTTP_PORT}"
       - "${FS_PORT}"
     healthcheck:
-      test: [ "CMD", "curl", "http://localhost:9870/" ]
+      test: [ "CMD", "curl", "http://localhost:${NAMENODE_HTTP_PORT}/" ]
       interval: 5s
       timeout: 120s
       retries: 120
@@ -47,12 +47,12 @@ services:
     env_file:
       - ./hadoop-hive-3x.env
     environment:
-      SERVICE_PRECONDITION: "${IP_HOST}:9870"
+      SERVICE_PRECONDITION: "${IP_HOST}:${NAMENODE_HTTP_PORT}"
     container_name: ${CONTAINER_UID}hadoop3-datanode
     expose:
-      - "9864"
+      - "${DATANODE_HTTP_PORT}"
     healthcheck:
-      test: [ "CMD", "curl", "http://localhost:9864" ]
+      test: [ "CMD", "curl", "http://localhost:${DATANODE_HTTP_PORT}" ]
       interval: 5s
       timeout: 60s
       retries: 120
@@ -100,7 +100,7 @@ services:
       - ./hadoop-hive-3x.env
     command: /bin/bash /mnt/scripts/start-hive-metastore.sh
     environment:
-      SERVICE_PRECONDITION: "${IP_HOST}:9870 ${IP_HOST}:9864 ${IP_HOST}:${PG_PORT}"
+      SERVICE_PRECONDITION: "${IP_HOST}:${NAMENODE_HTTP_PORT} ${IP_HOST}:${DATANODE_HTTP_PORT} ${IP_HOST}:${PG_PORT}"
       HMS_PORT: "${HMS_PORT}"
     container_name: ${CONTAINER_UID}hive3-metastore
     expose:

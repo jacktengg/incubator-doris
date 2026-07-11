@@ -168,6 +168,7 @@ if [[ "${CONTAINER_UID}"x == "doris--"x ]]; then
     echo "Must set CONTAINER_UID to a unique name in custom_settings.env"
     exit 1
 fi
+export CONTAINER_UID
 
 if [[ -z "${HIVE_HOST_ALIAS:-}" ]]; then
     export HIVE_HOST_ALIAS="hadoop-master-${HIVE_SHARED_ID}"
@@ -461,8 +462,8 @@ ensure_juicefs_meta_database() {
         fi
 
         pg_candidates=(
-            "hive3-metastore-postgresql"
-            "hive2-metastore-postgresql"
+            "${CONTAINER_UID}hive3-metastore-postgresql"
+            "${CONTAINER_UID}hive2-metastore-postgresql"
             "${CONTAINER_UID}postgres"
             "postgres"
         )
@@ -1058,7 +1059,7 @@ start_hive3() {
 
 hive_volume_prefix_for() {
     local hive_version="$1"
-    echo "${HIVE_SHARED_ID}-${hive_version}"
+    echo "${CONTAINER_UID}${hive_version}"
 }
 
 HIVE_VOLUME_SUFFIXES=(namenode datanode pgdata state)
@@ -1225,9 +1226,35 @@ hive_settings_env_for() {
     echo "${ROOT}/docker-compose/hive/hive-${hive_version#hive}x_settings.env"
 }
 
+configure_hive_hadoop_ports() {
+    local hive_version="$1"
+    local port_offset
+
+    case "${hive_version}" in
+    hive2)
+        port_offset=$((FS_PORT - 8020))
+        export NAMENODE_HTTP_PORT=$((50070 + port_offset))
+        export DATANODE_DATA_PORT=$((50010 + port_offset))
+        export DATANODE_HTTP_PORT=$((50075 + port_offset))
+        export DATANODE_IPC_PORT=$((50020 + port_offset))
+        ;;
+    hive3)
+        port_offset=$((FS_PORT - 8320))
+        export NAMENODE_HTTP_PORT=$((9870 + port_offset))
+        export DATANODE_DATA_PORT=$((9866 + port_offset))
+        export DATANODE_HTTP_PORT=$((9864 + port_offset))
+        export DATANODE_IPC_PORT=$((9867 + port_offset))
+        ;;
+    *)
+        echo "Unsupported hive version: ${hive_version}" >&2
+        return 1
+        ;;
+    esac
+}
+
 hive_metastore_container_for() {
     local hive_version="$1"
-    echo "${hive_version}-metastore"
+    docker_hive_container_name "${CONTAINER_UID}" "${hive_version}-metastore"
 }
 
 ensure_hosts_alias() {
@@ -1341,6 +1368,7 @@ start_hive_stack() {
     echo "${hive_version} selected bootstrap files: ${HIVE_BOOTSTRAP_GROUPS}"
 
     . "$(hive_settings_env_for "${hive_version}")"
+    configure_hive_hadoop_ports "${hive_version}"
     volume_prefix="$(hive_volume_prefix_for "${hive_version}")"
     export HIVE_VOLUME_PREFIX="${volume_prefix}"
     log_hive_volumes "${hive_version}" "${volume_prefix}"
