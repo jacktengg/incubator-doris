@@ -20,21 +20,24 @@ version: '3'
 services:
   doris--oracle_11:
     image: oracleinanutshell/oracle-xe-11g:latest
+    command: [ "/bin/bash", "-c", "/usr/local/bin/doris-oracle-startup.sh && tail -f /dev/null" ]
     restart: always
     ports:
       - ${DOCKER_ORACLE_EXTERNAL_PORT}:1521
     privileged: true
     healthcheck:
-      test: [ "CMD", "bash", "-c", "echo 'SELECT 1 FROM doris_test.deadline;' | ORACLE_HOME=/u01/app/oracle/product/11.2.0/xe /u01/app/oracle/product/11.2.0/xe/bin/sqlplus -s DORIS_TEST/123456@localhost" ]
+      test: [ "CMD", "bash", "-c", "printf 'WHENEVER SQLERROR EXIT SQL.SQLCODE\nSELECT 1 FROM doris_test.deadline;\nEXIT SUCCESS;\n' | ORACLE_HOME=/u01/app/oracle/product/11.2.0/xe /u01/app/oracle/product/11.2.0/xe/bin/sqlplus -L -s DORIS_TEST/123456@//localhost:1521/XE" ]
       interval: 20s
       timeout: 60s
       retries: 120
     volumes:
       - ./init:/docker-entrypoint-initdb.d
+      - ./startup.sh:/usr/local/bin/doris-oracle-startup.sh:ro
     environment:
       - ORACLE_ALLOW_REMOTE=true
       - ORACLE_ENABLE_XDB=true
       - DBCA_TOTAL_MEMORY=2048
+      - ORACLE_CPU_COUNT=2
       - IMPORT_FROM_VOLUME=true
       - TZ=Asia/Shanghai
     networks:
