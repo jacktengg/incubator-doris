@@ -25,6 +25,10 @@ services:
       MODE: slim
       OB_MEMORY_LIMIT: 5G
       TZ: Asia/Shanghai
+    ulimits:
+      nofile:
+        soft: 65536
+        hard: 65536
     ports:
       - ${DOCKER_OCEANBASE_EXTERNAL_PORT}:2881
     healthcheck:
