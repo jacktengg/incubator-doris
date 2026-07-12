@@ -1257,6 +1257,42 @@ hive_metastore_container_for() {
     docker_hive_container_name "${CONTAINER_UID}" "${hive_version}-metastore"
 }
 
+normalize_hive_metastore_hdfs_locations() {
+    local hive_version="$1"
+    local default_fs_port
+    local metastore_postgresql_container
+    local old_uri
+    local new_uri
+
+    case "${hive_version}" in
+    hive2)
+        default_fs_port=8020
+        ;;
+    hive3)
+        default_fs_port=8320
+        ;;
+    *)
+        echo "Unsupported hive version: ${hive_version}" >&2
+        return 1
+        ;;
+    esac
+
+    old_uri="hdfs://hadoop-master-${HIVE_SHARED_ID}:${default_fs_port}"
+    new_uri="hdfs://${HIVE_HOST_ALIAS}:${FS_PORT}"
+    if [[ "${old_uri}" == "${new_uri}" ]]; then
+        return 0
+    fi
+
+    metastore_postgresql_container="$(docker_hive_container_name \
+        "${CONTAINER_UID}" "${hive_version}-metastore-postgresql")"
+    echo "[${hive_version}] normalize metastore HDFS locations: ${old_uri} -> ${new_uri}"
+    sudo docker exec -i "${metastore_postgresql_container}" \
+        psql -U hive -d metastore \
+        -v "old_uri=${old_uri}" \
+        -v "new_uri=${new_uri}" \
+        <"${ROOT}/docker-compose/hive/scripts/normalize-metastore-hdfs-locations.sql"
+}
+
 ensure_hosts_alias() {
     local alias_name="$1"
     local alias_ip="$2"
@@ -1411,6 +1447,8 @@ start_hive_stack() {
         hive_compose_cmd "${hive_version}" up --build --remove-orphans -d --wait
         echo "[$(date '+%H:%M:%S')] [${hive_version}] compose up done took=$(( $(date +%s) - _t_up ))s"
     fi
+
+    normalize_hive_metastore_hdfs_locations "${hive_version}"
 
     local _t_data
     _t_data=$(date +%s)
