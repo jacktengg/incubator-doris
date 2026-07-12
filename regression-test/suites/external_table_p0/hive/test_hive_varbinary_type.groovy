@@ -56,12 +56,14 @@ suite("test_hive_varbinary_type", "p0,external") {
         qt_select5 """ select * from test_hive_binary_edge_cases order by id; """
 
         // write orc
+        sql "truncate table test_hive_binary_orc_write_no_mapping; "
         qt_select6 """ insert into test_hive_binary_orc_write_no_mapping select * from test_hive_binary_orc; """
         qt_select7 """ insert into test_hive_binary_orc_write_no_mapping values(6,X"ABAB",X"ABAB"); """
         qt_select8 """ insert into test_hive_binary_orc_write_no_mapping values(NULL,NULL,NULL); """
         qt_select9 """ select * from test_hive_binary_orc_write_no_mapping order by id; """
 
         // write parquet
+        sql "truncate table test_hive_binary_parquet_write_no_mapping; "
         qt_select10 """ insert into test_hive_binary_parquet_write_no_mapping select * from test_hive_binary_parquet; """
         qt_select11 """ insert into test_hive_binary_parquet_write_no_mapping values(6,X"ABAB",X"ABAB"); """
         qt_select12 """ insert into test_hive_binary_parquet_write_no_mapping values(NULL,NULL,NULL); """
@@ -77,12 +79,14 @@ suite("test_hive_varbinary_type", "p0,external") {
         qt_select18 """ select * from test_hive_binary_edge_cases order by id; """
 
         // write orc
+        sql "truncate table test_hive_binary_orc_write_with_mapping; "
         qt_select19 """ insert into test_hive_binary_orc_write_with_mapping select * from test_hive_binary_orc; """
         qt_select20 """ insert into test_hive_binary_orc_write_with_mapping values(6,X"ABAB",X"ABAB"); """
         qt_select21 """ insert into test_hive_binary_orc_write_with_mapping values(NULL,NULL,NULL); """
         qt_select22 """ select * from test_hive_binary_orc_write_with_mapping order by id; """
 
         // write parquet
+        sql "truncate table test_hive_binary_parquet_write_with_mapping; "
         qt_select23 """ insert into test_hive_binary_parquet_write_with_mapping select * from test_hive_binary_parquet; """
         qt_select24 """ insert into test_hive_binary_parquet_write_with_mapping values(6,X"ABAB",X"ABAB"); """
         qt_select25 """ insert into test_hive_binary_parquet_write_with_mapping values(NULL,NULL,NULL); """

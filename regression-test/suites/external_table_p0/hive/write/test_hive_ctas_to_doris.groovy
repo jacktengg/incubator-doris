@@ -82,6 +82,7 @@ suite("test_hive_ctas_to_doris", "p0,external") {
                 assertTrue(ex.getMessage().contains("Insert has filtered data in strict mode"))
             }
 
+            sql """ drop table if exists internal.${db_name}.${hive_tb}_5 """
             sql """ create table internal.${db_name}.${hive_tb}_5 (id,str1,str3,str2) auto partition by list (str2)() properties("replication_num" = "1") as select id, str1, str2, str3 from ${catalog}.${db_name}.${hive_tb} """
             def results = sql"""show partitions from internal.${db_name}.${hive_tb}_5"""
             for (def result : results) {
