@@ -450,6 +450,36 @@ public class ComputeSignatureHelperTest {
     }
 
     @Test
+    void testNanoDateTimeV2PrecisionPromotion() {
+        FunctionSignature signature = FunctionSignature.ret(DateV2Type.INSTANCE)
+                .args(DateTimeV2Type.SYSTEM_DEFAULT);
+        List<Expression> arguments = Lists.newArrayList(
+                new DateTimeV2Literal(DateTimeV2Type.of(9), "2020-02-02 00:00:00.123456789"));
+
+        signature = ComputeSignatureHelper.computePrecision(
+                new FakeComputeSignature(), signature, arguments);
+
+        Assertions.assertEquals(DateTimeV2Type.of(9), signature.getArgType(0));
+        Assertions.assertEquals(DateV2Type.INSTANCE, signature.returnType);
+    }
+
+    @Test
+    void testMixedNanoDateTimeV2AndTimeV2PrecisionPromotion() {
+        FunctionSignature signature = FunctionSignature.ret(DateTimeV2Type.SYSTEM_DEFAULT)
+                .args(DateTimeV2Type.SYSTEM_DEFAULT, TimeV2Type.SYSTEM_DEFAULT);
+        List<Expression> arguments = Lists.newArrayList(
+                new DateTimeV2Literal(DateTimeV2Type.of(9), "2020-02-02 00:00:00.123456789"),
+                new TimeV2Literal("12:34:56.123456"));
+
+        signature = ComputeSignatureHelper.computePrecision(
+                new FakeComputeSignature(), signature, arguments);
+
+        Assertions.assertEquals(DateTimeV2Type.of(9), signature.getArgType(0));
+        Assertions.assertEquals(TimeV2Type.of(6), signature.getArgType(1));
+        Assertions.assertEquals(DateTimeV2Type.of(9), signature.returnType);
+    }
+
+    @Test
     void testNestedTimeV2PrecisionPromotion() {
         FunctionSignature signature = FunctionSignature.ret(ArrayType.of(TimeV2Type.SYSTEM_DEFAULT)).args(
                         ArrayType.of(TimeV2Type.SYSTEM_DEFAULT),

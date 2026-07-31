@@ -388,8 +388,9 @@ public class TypeCoercionUtils {
                 replaceSpecifiedType(
                     replaceSpecifiedType(dataType, DateTimeV2Type.class,
                         DateTimeV2Type.of(targetScale)),
-                        TimeV2Type.class, TimeV2Type.of(targetScale)),
-                    TimeStampTzType.class, TimeStampTzType.of(targetScale));
+                        TimeV2Type.class, TimeV2Type.of(Math.min(targetScale, TimeV2Type.MAX_SCALE))),
+                    TimeStampTzType.class,
+                    TimeStampTzType.of(Math.min(targetScale, TimeStampTzType.MAX_SCALE)));
     }
 
     /**
@@ -953,12 +954,14 @@ public class TypeCoercionUtils {
                 return Optional.of(DateTimeV2Type.SYSTEM_DEFAULT);
             } else if (rightType instanceof DecimalV2Type) {
                 DecimalV2Type decimalV2Type = (DecimalV2Type) rightType;
-                return Optional.of(DateTimeV2Type.of(Math.min(DateTimeV2Type.MAX_SCALE, decimalV2Type.getScale())));
+                return Optional.of(DateTimeV2Type.of(Math.min(DateTimeV2Type.MAX_MICROSECOND_SCALE,
+                        decimalV2Type.getScale())));
             } else if (rightType instanceof DecimalV3Type) {
                 DecimalV3Type decimalV3Type = (DecimalV3Type) rightType;
-                return Optional.of(DateTimeV2Type.of(Math.min(DateTimeV2Type.MAX_SCALE, decimalV3Type.getScale())));
+                return Optional.of(DateTimeV2Type.of(Math.min(DateTimeV2Type.MAX_MICROSECOND_SCALE,
+                        decimalV3Type.getScale())));
             } else {
-                return Optional.of(DateTimeV2Type.MAX);
+                return Optional.of(DateTimeV2Type.MAX_MICROSECOND);
             }
         } else if (rightType.isDateLikeType()) {
             if (rightType instanceof DateTimeType) {
@@ -972,9 +975,9 @@ public class TypeCoercionUtils {
             }
         } else if (rightType instanceof TimeV2Type) {
             TimeV2Type timeV2Type = (TimeV2Type) rightType;
-            return Optional.of(DateTimeV2Type.of(Math.min(DateTimeV2Type.MAX_SCALE, timeV2Type.getScale())));
+            return Optional.of(DateTimeV2Type.of(timeV2Type.getScale()));
         } else if (rightType.isStringLikeType()) {
-            return Optional.of(DateTimeV2Type.MAX);
+            return Optional.of(DateTimeV2Type.MAX_MICROSECOND);
         }
         return Optional.empty();
     }
@@ -989,14 +992,15 @@ public class TypeCoercionUtils {
                 return Optional.of(leftType);
             } else if (rightType instanceof DecimalV2Type) {
                 DecimalV2Type decimalV2Type = (DecimalV2Type) rightType;
-                return Optional.of(DateTimeV2Type.of(Math.min(DateTimeV2Type.MAX_SCALE,
-                        Math.max(leftType.getScale(), decimalV2Type.getScale()))));
+                return Optional.of(DateTimeV2Type.forTypeWithMinimumScale(leftType,
+                        Math.min(DateTimeV2Type.MAX_MICROSECOND_SCALE, decimalV2Type.getScale())));
             } else if (rightType instanceof DecimalV3Type) {
                 DecimalV3Type decimalV3Type = (DecimalV3Type) rightType;
-                return Optional.of(DateTimeV2Type.of(Math.min(DateTimeV2Type.MAX_SCALE,
-                        Math.max(leftType.getScale(), decimalV3Type.getScale()))));
+                return Optional.of(DateTimeV2Type.forTypeWithMinimumScale(leftType,
+                        Math.min(DateTimeV2Type.MAX_MICROSECOND_SCALE, decimalV3Type.getScale())));
             } else {
-                return Optional.of(DateTimeV2Type.MAX);
+                return Optional.of(DateTimeV2Type.forTypeWithMinimumScale(
+                        leftType, DateTimeV2Type.MAX_MICROSECOND_SCALE));
             }
         } else if (rightType.isDateLikeType()) {
             if (rightType instanceof DateTimeV2Type) {
@@ -1012,7 +1016,8 @@ public class TypeCoercionUtils {
             TimeV2Type timeV2Type = (TimeV2Type) rightType;
             return Optional.of(DateTimeV2Type.of(Math.max(leftType.getScale(), timeV2Type.getScale())));
         } else if (rightType.isStringLikeType()) {
-            return Optional.of(DateTimeV2Type.MAX);
+            return Optional.of(DateTimeV2Type.forTypeWithMinimumScale(
+                    leftType, DateTimeV2Type.MAX_MICROSECOND_SCALE));
         }
         return Optional.empty();
     }
@@ -1042,7 +1047,7 @@ public class TypeCoercionUtils {
             TimeV2Type timeV2Type = (TimeV2Type) rightType;
             return Optional.of(TimeV2Type.of(Math.max(leftType.getScale(), timeV2Type.getScale())));
         } else if (rightType.isStringLikeType()) {
-            return Optional.of(DateTimeV2Type.MAX);
+            return Optional.of(DateTimeV2Type.MAX_MICROSECOND);
         }
         return Optional.empty();
     }
@@ -1760,14 +1765,16 @@ public class TypeCoercionUtils {
                         || rightType.isDateV2Type() || rightType.isDateTimeType()) {
                     return Optional.of(leftType);
                 } else {
-                    return Optional.of(DateTimeV2Type.MAX);
+                    return Optional.of(DateTimeV2Type.forTypeWithMinimumScale(
+                            leftType, DateTimeV2Type.MAX_MICROSECOND_SCALE));
                 }
             } else if (rightType.isDateTimeV2Type()) {
                 if (leftType instanceof IntegralType || leftType.isDateType()
                         || leftType.isDateV2Type() || leftType.isDateTimeType()) {
                     return Optional.of(rightType);
                 } else {
-                    return Optional.of(DateTimeV2Type.MAX);
+                    return Optional.of(DateTimeV2Type.forTypeWithMinimumScale(
+                            rightType, DateTimeV2Type.MAX_MICROSECOND_SCALE));
                 }
             } else if (leftType.isDateV2Type()) {
                 if (rightType instanceof IntegralType || rightType.isDateType() || rightType.isDateV2Type()) {
@@ -1775,7 +1782,7 @@ public class TypeCoercionUtils {
                 } else if (rightType.isDateTimeType() || rightType.isStringLikeType() || rightType.isHllType()) {
                     return Optional.of(DateTimeV2Type.SYSTEM_DEFAULT);
                 } else {
-                    return Optional.of(DateTimeV2Type.MAX);
+                    return Optional.of(DateTimeV2Type.MAX_MICROSECOND);
                 }
             } else if (rightType.isDateV2Type()) {
                 if (leftType instanceof IntegralType || leftType.isDateType() || leftType.isDateV2Type()) {
@@ -1783,7 +1790,7 @@ public class TypeCoercionUtils {
                 } else if (leftType.isDateTimeType() || leftType.isStringLikeType() || leftType.isHllType()) {
                     return Optional.of(DateTimeV2Type.SYSTEM_DEFAULT);
                 } else {
-                    return Optional.of(DateTimeV2Type.MAX);
+                    return Optional.of(DateTimeV2Type.MAX_MICROSECOND);
                 }
             } else {
                 return Optional.of(DateTimeType.INSTANCE);

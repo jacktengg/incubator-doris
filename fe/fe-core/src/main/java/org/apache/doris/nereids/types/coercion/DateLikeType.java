@@ -63,10 +63,10 @@ public abstract class DateLikeType extends PrimitiveType implements RangeScalabl
      */
     public DateLiteral fromString(String s) {
         if (this instanceof DateType) {
-            DateTimeV2Literal l = new DateTimeV2Literal(DateTimeV2Type.MAX, s);
+            DateTimeV2Literal l = new DateTimeV2Literal(DateTimeV2Type.MAX_MICROSECOND, s);
             return new DateLiteral(l.getYear(), l.getMonth(), l.getDay());
         } else if (this instanceof DateV2Type) {
-            DateTimeV2Literal l = new DateTimeV2Literal(DateTimeV2Type.MAX, s);
+            DateTimeV2Literal l = new DateTimeV2Literal(DateTimeV2Type.MAX_MICROSECOND, s);
             return new DateV2Literal(l.getYear(), l.getMonth(), l.getDay());
         } else if (this instanceof DateTimeType) {
             return new DateTimeLiteral(s);

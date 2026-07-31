@@ -331,7 +331,8 @@ class FoldConstantTest extends ExpressionRewriteTestHelper {
         MilliSecondsAdd millisecondsAdd = new MilliSecondsAdd(
                         DateTimeV2Literal.fromJavaDateType(LocalDateTime.of(1, 1, 1, 1, 1, 1)), new BigIntLiteral(1));
         rewritten = executor.rewrite(millisecondsAdd, context);
-        Assertions.assertEquals(new DateTimeV2Literal(DateTimeV2Type.MAX, "0001-01-01 01:01:01.001000"), rewritten);
+        Assertions.assertEquals(
+                new DateTimeV2Literal(DateTimeV2Type.of(6), "0001-01-01 01:01:01.001000"), rewritten);
         // fail to fold, because the result is out of range
         millisecondsAdd = new MilliSecondsAdd(
                         DateTimeV2Literal.fromJavaDateType(LocalDateTime.of(9999, 12, 31, 23, 59, 59)),
@@ -1384,6 +1385,9 @@ class FoldConstantTest extends ExpressionRewriteTestHelper {
         ).toSql());
         Assertions.assertEquals(answer[answerIdx++], DateTimeExtractAndTransform.unixTimestamp(
                         new DateTimeV2Literal("2001-12-21 12:34:53")
+        ).toSql());
+        Assertions.assertEquals("1008909293.123456789", DateTimeExtractAndTransform.unixTimestamp(
+                new DateTimeV2Literal(DateTimeV2Type.of(9), "2001-12-21 12:34:53.123456789")
         ).toSql());
         Assertions.assertEquals(answer[answerIdx], DateTimeExtractAndTransform.unixTimestamp(
                 new VarcharLiteral("2001-12-21"),

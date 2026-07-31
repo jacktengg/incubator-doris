@@ -51,6 +51,7 @@ bool check_tablet_schema(const doris::TabletSchemaCloudPB& schema,
     auto transform = [](std::string_view type) -> std::string_view {
         if (type == "DECIMALV2") return "DECIMAL";
         if (type == "BITMAP") return "OBJECT";
+        if (type == "DATETIMEV2_NANO") return "DATETIMEV2";
         return type;
     };
     if (saved_schema.column_size() != schema.column_size()) {

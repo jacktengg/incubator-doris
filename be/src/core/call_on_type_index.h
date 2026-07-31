@@ -37,6 +37,7 @@ struct TypePair {
 class DataTypeDate;
 class DataTypeDateV2;
 class DataTypeDateTimeV2;
+class DataTypeDateTimeV2Nano;
 class DataTypeDateTime;
 class DataTypeIPv4;
 class DataTypeIPv6;
@@ -83,6 +84,8 @@ bool call_on_index_and_data_type(PrimitiveType number, F&& f) {
         return f(TypePair<DataTypeDateV2, T>());
     case PrimitiveType::TYPE_DATETIMEV2:
         return f(TypePair<DataTypeDateTimeV2, T>());
+    case PrimitiveType::TYPE_DATETIMEV2_NANO:
+        return f(TypePair<DataTypeDateTimeV2Nano, T>());
     case PrimitiveType::TYPE_DATETIME:
         return f(TypePair<DataTypeDateTime, T>());
     case PrimitiveType::TYPE_TIMEV2:
@@ -236,6 +239,8 @@ bool dispatch_type_base(PrimitiveType number, F&& f) {
             return f(DispatchDataType<TYPE_DATEV2>());
         case PrimitiveType::TYPE_DATETIMEV2:
             return f(DispatchDataType<TYPE_DATETIMEV2>());
+        case PrimitiveType::TYPE_DATETIMEV2_NANO:
+            return f(DispatchDataType<TYPE_DATETIMEV2_NANO>());
         case PrimitiveType::TYPE_DATETIME:
             return f(DispatchDataType<TYPE_DATETIME>());
         case PrimitiveType::TYPE_TIMEV2:

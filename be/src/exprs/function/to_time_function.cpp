@@ -72,6 +72,24 @@ using FunctionCenturyV2 =
         FunctionDateOrDateTimeToSomething<DataTypeInt16, ToCenturyImpl<TYPE_DATEV2>>;
 using FunctionDateTimeV2Century =
         FunctionDateOrDateTimeToSomething<DataTypeInt16, ToCenturyImpl<TYPE_DATETIMEV2>>;
+
+#define DATETIMEV2_NANO_TO_TIME_FUNCTION(NAME, RESULT_TYPE, IMPL) \
+    using FunctionDateTimeV2Nano##NAME =                          \
+            FunctionDateOrDateTimeToSomething<RESULT_TYPE, IMPL<TYPE_DATETIMEV2_NANO>>
+
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Year, DataTypeInt16, ToYearImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Quarter, DataTypeInt8, ToQuarterImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Month, DataTypeInt8, ToMonthImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Day, DataTypeInt8, ToDayImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Week, DataTypeInt8, ToWeekOneArgImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Hour, DataTypeInt8, ToHourImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Minute, DataTypeInt8, ToMinuteImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Second, DataTypeInt8, ToSecondImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(MicroSecond, DataTypeInt32, ToMicroSecondImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(ToDate, DataTypeDateV2, ToDateImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Date, DataTypeDateV2, DateImpl);
+DATETIMEV2_NANO_TO_TIME_FUNCTION(Century, DataTypeInt16, ToCenturyImpl);
+
 void register_function_to_time_function(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionTimeStampV2>();
     factory.register_function<FunctionSecondV2>();
@@ -100,6 +118,18 @@ void register_function_to_time_function(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionCenturyV2>();
     factory.register_function<FunctionDateTimeV2Century>();
     factory.register_function<FunctionToSeconds>();
+    factory.register_function<FunctionDateTimeV2NanoYear>();
+    factory.register_function<FunctionDateTimeV2NanoQuarter>();
+    factory.register_function<FunctionDateTimeV2NanoMonth>();
+    factory.register_function<FunctionDateTimeV2NanoDay>();
+    factory.register_function<FunctionDateTimeV2NanoWeek>();
+    factory.register_function<FunctionDateTimeV2NanoHour>();
+    factory.register_function<FunctionDateTimeV2NanoMinute>();
+    factory.register_function<FunctionDateTimeV2NanoSecond>();
+    factory.register_function<FunctionDateTimeV2NanoMicroSecond>();
+    factory.register_function<FunctionDateTimeV2NanoToDate>();
+    factory.register_function<FunctionDateTimeV2NanoDate>();
+    factory.register_function<FunctionDateTimeV2NanoCentury>();
     factory.register_alias("date", "datev2");
     factory.register_alias("to_date", "to_datev2");
 }

@@ -48,9 +48,9 @@ public class StrToDate extends ScalarFunction
 
     // not final signatures. see computeSignature()
     public static final List<FunctionSignature> SIGNATURES = ImmutableList.of(
-            FunctionSignature.ret(DateTimeV2Type.MAX).args(VarcharType.SYSTEM_DEFAULT,
+            FunctionSignature.ret(DateTimeV2Type.MAX_MICROSECOND).args(VarcharType.SYSTEM_DEFAULT,
                     VarcharType.SYSTEM_DEFAULT),
-            FunctionSignature.ret(DateTimeV2Type.MAX).args(StringType.INSTANCE, StringType.INSTANCE)
+            FunctionSignature.ret(DateTimeV2Type.MAX_MICROSECOND).args(StringType.INSTANCE, StringType.INSTANCE)
     );
 
     /**
@@ -99,13 +99,13 @@ public class StrToDate extends ScalarFunction
                 //FIXME: Here will pass different scale to BE with same input types. Need to be fixed.
                 returnType = DateTimeV2Type.SYSTEM_DEFAULT;
                 if (DateLiteral.hasMicroSecondPart(formatLiteral.getStringValue())) {
-                    returnType = DateTimeV2Type.MAX;
+                    returnType = DateTimeV2Type.MAX_MICROSECOND;
                 }
             } else {
                 returnType = DateV2Type.INSTANCE;
             }
         } else {
-            returnType = DateTimeV2Type.MAX;
+            returnType = DateTimeV2Type.MAX_MICROSECOND;
         }
         return signature.withReturnType(returnType);
     }

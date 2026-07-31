@@ -267,6 +267,17 @@ TEST(VTimestampFunctionsTest, unix_timestamp_test) {
                 check_function<DataTypeDecimal64, true>(func_name, input_types, data_set, 6, 18));
     }
 
+    {
+        InputTypeSet input_types = {{PrimitiveType::TYPE_DATETIMEV2, 9}};
+        DataSet data_set = {
+                {{std::string("1970-01-01 08:00:00.123456789")}, DECIMAL128V3(0, 123456789, 9)},
+                {{std::string("2022-05-24 12:34:56.789123456")},
+                 DECIMAL128V3(1653366896, 789123456, 9)},
+        };
+        static_cast<void>(
+                check_function<DataTypeDecimal128, true>(func_name, input_types, data_set, 9, 21));
+    }
+
     // test out of range
     {
         InputTypeSet input_types = {{PrimitiveType::TYPE_DATETIMEV2, 6}};
@@ -1449,6 +1460,22 @@ TEST(VTimestampFunctionsTest, dayname_test) {
 
 TEST(VTimestampFunctionsTest, datetrunc_test) {
     std::string func_name = "date_trunc";
+    {
+        InputTypeSet input_types = {AnyType {PrimitiveType::TYPE_DATETIMEV2_NANO, 9},
+                                    Consted {PrimitiveType::TYPE_VARCHAR}};
+        DataSet data_set = {{{std::string("2023-10-17 12:34:56.123456789"), std::string("day")},
+                             std::string("2023-10-17 00:00:00.000000000")}};
+        static_cast<void>(
+                check_function<DataTypeDateTimeV2Nano, true>(func_name, input_types, data_set, 9));
+    }
+    {
+        InputTypeSet input_types = {Consted {PrimitiveType::TYPE_VARCHAR},
+                                    AnyType {PrimitiveType::TYPE_DATETIMEV2_NANO, 9}};
+        DataSet data_set = {{{std::string("day"), std::string("2023-10-17 12:34:56.123456789")},
+                             std::string("2023-10-17 00:00:00.000000000")}};
+        static_cast<void>(
+                check_function<DataTypeDateTimeV2Nano, true>(func_name, input_types, data_set, 9));
+    }
     {
         InputTypeSet input_types = {PrimitiveType::TYPE_DATETIMEV2,
                                     Consted {PrimitiveType::TYPE_VARCHAR}};

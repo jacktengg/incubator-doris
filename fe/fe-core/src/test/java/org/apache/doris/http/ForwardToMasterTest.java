@@ -50,13 +50,14 @@ public class ForwardToMasterTest extends DorisHttpTestCase {
                 JSONObject object = (JSONObject) JSONValue.parse(respStr);
 
                 JSONObject data = (JSONObject) object.get("data");
-                JSONArray columnNames = (JSONArray) data.get("columnNames");
-                JSONArray rows = (JSONArray) data.get("rows");
+                JSONArray columnNames = (JSONArray) ((JSONObject) data.get("columnNames"))
+                        .get("columnNames");
+                JSONArray rows = (JSONArray) ((JSONObject) data.get("rows")).get("rows");
+                int rowSize = columnNames.size();
                 int index = columnNames.indexOf("HeartbeatPort");
                 int existsbe = 0;
-                for (int i = 0; i < rows.size(); i++) {
-                    JSONArray row = (JSONArray) rows.get(i);
-                    if (port.equals(row.get(index).toString())) {
+                for (int i = 0; i < rows.size(); i += rowSize) {
+                    if (port.equals(rows.get(i + index).toString())) {
                         existsbe++;
                     }
                 }
@@ -100,13 +101,14 @@ public class ForwardToMasterTest extends DorisHttpTestCase {
 
                 JSONObject object = (JSONObject) JSONValue.parse(respStr);
                 JSONObject data = (JSONObject) object.get("data");
-                JSONArray columnNames = (JSONArray) data.get("columnNames");
-                JSONArray rows = (JSONArray) data.get("rows");
+                JSONArray columnNames = (JSONArray) ((JSONObject) data.get("columnNames"))
+                        .get("columnNames");
+                JSONArray rows = (JSONArray) ((JSONObject) data.get("rows")).get("rows");
+                int rowSize = columnNames.size();
                 int index = columnNames.indexOf("HeartbeatPort");
                 int existsbe = 0;
-                for (int i = 0; i < rows.size(); i++) {
-                    JSONArray row = (JSONArray) rows.get(i);
-                    if (port.equals(row.get(index).toString())) {
+                for (int i = 0; i < rows.size(); i += rowSize) {
+                    if (port.equals(rows.get(i + index).toString())) {
                         existsbe++;
                     }
                 }
@@ -151,13 +153,14 @@ public class ForwardToMasterTest extends DorisHttpTestCase {
                 JSONObject object = (JSONObject) JSONValue.parse(respStr);
 
                 JSONObject data = (JSONObject) object.get("data");
-                JSONArray columnNames = (JSONArray) data.get("columnNames");
-                JSONArray rows = (JSONArray) data.get("rows");
+                JSONArray columnNames = (JSONArray) ((JSONObject) data.get("columnNames"))
+                        .get("columnNames");
+                JSONArray rows = (JSONArray) ((JSONObject) data.get("rows")).get("rows");
+                int rowSize = columnNames.size();
                 int index = columnNames.indexOf("HeartbeatPort");
                 int existsbe = 0;
-                for (int i = 0; i < rows.size(); i++) {
-                    JSONArray row = (JSONArray) rows.get(i);
-                    if (port.equals(row.get(index).toString())) {
+                for (int i = 0; i < rows.size(); i += rowSize) {
+                    if (port.equals(rows.get(i + index).toString())) {
                         existsbe++;
                     }
                 }

@@ -51,6 +51,17 @@ using FunctionDateTimeV2YearWeek =
 using FunctionDateTimeV2WeekDay =
         FunctionDateOrDateTimeToSomething<DataTypeInt8, WeekDayImpl<TYPE_DATETIMEV2>>;
 
+#define DATETIMEV2_NANO_TIME_OF_FUNCTION(NAME, RESULT_TYPE, IMPL) \
+    using FunctionDateTimeV2Nano##NAME =                          \
+            FunctionDateOrDateTimeToSomething<RESULT_TYPE, IMPL<TYPE_DATETIMEV2_NANO>>
+
+DATETIMEV2_NANO_TIME_OF_FUNCTION(WeekOfYear, DataTypeInt8, WeekOfYearImpl);
+DATETIMEV2_NANO_TIME_OF_FUNCTION(DayOfYear, DataTypeInt16, DayOfYearImpl);
+DATETIMEV2_NANO_TIME_OF_FUNCTION(DayOfWeek, DataTypeInt8, DayOfWeekImpl);
+DATETIMEV2_NANO_TIME_OF_FUNCTION(DayOfMonth, DataTypeInt8, DayOfMonthImpl);
+DATETIMEV2_NANO_TIME_OF_FUNCTION(YearWeek, DataTypeInt32, ToYearWeekOneArgImpl);
+DATETIMEV2_NANO_TIME_OF_FUNCTION(WeekDay, DataTypeInt8, WeekDayImpl);
+
 void register_function_time_of_function(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionDayOfWeekV2>();
     factory.register_function<FunctionDayOfMonthV2>();
@@ -64,5 +75,11 @@ void register_function_time_of_function(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionDateTimeV2DayOfMonth>();
     factory.register_function<FunctionDateTimeV2YearWeek>();
     factory.register_function<FunctionDateTimeV2WeekDay>();
+    factory.register_function<FunctionDateTimeV2NanoWeekOfYear>();
+    factory.register_function<FunctionDateTimeV2NanoDayOfYear>();
+    factory.register_function<FunctionDateTimeV2NanoDayOfWeek>();
+    factory.register_function<FunctionDateTimeV2NanoDayOfMonth>();
+    factory.register_function<FunctionDateTimeV2NanoYearWeek>();
+    factory.register_function<FunctionDateTimeV2NanoWeekDay>();
 }
 } // namespace doris

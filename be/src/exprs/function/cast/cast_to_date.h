@@ -43,7 +43,8 @@
 
 namespace doris {
 template <CastModeType CastMode, typename FromDataType, typename ToDataType>
-    requires(IsStringType<FromDataType> && IsDatelikeTypes<ToDataType>)
+    requires(IsStringType<FromDataType> &&
+             (IsDatelikeTypes<ToDataType> || std::is_same_v<ToDataType, DataTypeDateTimeV2Nano>))
 class CastToImpl<CastMode, FromDataType, ToDataType> : public CastToBase {
 public:
     Status execute_impl(FunctionContext* context, Block& block, const ColumnNumbers& arguments,

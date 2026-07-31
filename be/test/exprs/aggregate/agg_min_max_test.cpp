@@ -20,6 +20,7 @@
 #include <gtest/gtest-test-part.h>
 #include <stddef.h>
 
+#include <limits>
 #include <memory>
 #include <string>
 #include <vector>
@@ -133,6 +134,41 @@ TEST_P(AggMinMaxTest, min_max_decimal_test) {
     for (size_t i = 0; i != agg_test_batch_size; ++i) {
         EXPECT_EQ(i, result.get_element(i).value());
     }
+}
+
+TEST_P(AggMinMaxTest, min_max_datetimev2_nano_test) {
+    Arena arena;
+    const std::string min_max_type = GetParam();
+    const std::vector<int64_t> epoch_nanos = {0, -1, std::numeric_limits<int64_t>::max(),
+                                              std::numeric_limits<int64_t>::min(), 1};
+
+    auto data_type = std::make_shared<DataTypeDateTimeV2Nano>(9);
+    auto column = ColumnDateTimeV2Nano::create();
+    for (const int64_t value : epoch_nanos) {
+        column->insert_value(DateTimeV2NanoValue(value));
+    }
+
+    AggregateFunctionSimpleFactory factory;
+    register_aggregate_function_minmax(factory);
+    DataTypes data_types = {data_type};
+    auto agg_function = factory.get(min_max_type, data_types, data_type, false, -1);
+    ASSERT_NE(agg_function, nullptr);
+
+    std::unique_ptr<char[]> memory(new char[agg_function->size_of_data()]);
+    AggregateDataPtr place = memory.get();
+    agg_function->create(place);
+
+    const IColumn* columns[1] = {column.get()};
+    for (size_t row = 0; row < epoch_nanos.size(); ++row) {
+        agg_function->add(place, columns, row, arena);
+    }
+
+    auto result = ColumnDateTimeV2Nano::create();
+    agg_function->insert_result_into(place, *result);
+    const int64_t expected = min_max_type == "min" ? std::numeric_limits<int64_t>::min()
+                                                   : std::numeric_limits<int64_t>::max();
+    EXPECT_EQ(result->get_element(0).epoch_nanos(), expected);
+    agg_function->destroy(place);
 }
 
 TEST_P(AggMinMaxTest, min_max_string_test) {

@@ -695,6 +695,8 @@ public class TypeCoercionMatrixTest {
         testProcessComparisonPredicate(DateTimeV2Type.of(4), CharType.createCharType(5), DateTimeV2Type.of(6));
         testProcessComparisonPredicate(DateTimeV2Type.of(4), VarcharType.createVarcharType(5), DateTimeV2Type.of(6));
         testProcessComparisonPredicate(DateTimeV2Type.of(4), StringType.INSTANCE, DateTimeV2Type.of(6));
+        testProcessComparisonPredicate(DateTimeV2Type.of(9), DecimalV2Type.SYSTEM_DEFAULT, DateTimeV2Type.of(9));
+        testProcessComparisonPredicate(DateTimeV2Type.of(9), StringType.INSTANCE, DateTimeV2Type.of(9));
         testProcessComparisonPredicate(DateTimeV2Type.of(4), ArrayType.of(StringType.INSTANCE), null);
         testProcessComparisonPredicate(DateTimeV2Type.of(4), MapType.of(StringType.INSTANCE, StringType.INSTANCE), null);
         testProcessComparisonPredicate(DateTimeV2Type.of(4), new StructType(ImmutableList.of(new StructField("c1", StringType.INSTANCE, true, ""))), null);

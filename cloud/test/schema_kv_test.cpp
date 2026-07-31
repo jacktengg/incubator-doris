@@ -335,6 +335,49 @@ TEST(DetachSchemaKVTest, PutSchemaKvTest) {
         ASSERT_EQ(document_get(txn.get(), versioned_key, &saved_schema), TxnErrorCode::TXN_OK);
         EXPECT_EQ(saved_schema.schema_version(), schema_version);
     }
+
+    {
+        // FE persists DATETIMEV2(7-9) as DATETIMEV2 with its scale, while BE uses the
+        // DATETIMEV2_NANO physical type internally and writes that type into rowset schemas.
+        // Both names describe the same logical tablet schema.
+        constexpr int64_t datetimev2_nano_index_id = 14222;
+        constexpr int64_t datetimev2_nano_schema_version = 0;
+        key = meta_schema_key(
+                {instance_id, datetimev2_nano_index_id, datetimev2_nano_schema_version});
+        versioned_key = versioned::meta_schema_key(
+                {instance_id, datetimev2_nano_index_id, datetimev2_nano_schema_version});
+
+        doris::TabletSchemaCloudPB datetimev2_schema;
+        datetimev2_schema.set_schema_version(datetimev2_nano_schema_version);
+        auto* column = datetimev2_schema.add_column();
+        column->set_unique_id(1);
+        column->set_type("DATETIMEV2");
+        column->set_precision(18);
+        column->set_frac(9);
+
+        for (const char* type : {"DATETIMEV2", "DATETIMEV2_NANO"}) {
+            datetimev2_schema.mutable_column(0)->set_type(type);
+            ASSERT_EQ(meta_service->txn_kv()->create_txn(&txn), TxnErrorCode::TXN_OK);
+            put_schema_kv(code, msg, txn.get(), key, datetimev2_schema);
+            ASSERT_EQ(code, MetaServiceCode::OK);
+            put_versioned_schema_kv(code, msg, txn.get(), versioned_key, datetimev2_schema);
+            ASSERT_EQ(code, MetaServiceCode::OK);
+            ASSERT_EQ(txn->commit(), TxnErrorCode::TXN_OK);
+        }
+
+        ASSERT_EQ(meta_service->txn_kv()->create_txn(&txn), TxnErrorCode::TXN_OK);
+        ValueBuf buf;
+        ASSERT_EQ(cloud::blob_get(txn.get(), key, &buf), TxnErrorCode::TXN_OK);
+        doris::TabletSchemaCloudPB saved_schema;
+        ASSERT_TRUE(buf.to_pb(&saved_schema));
+        ASSERT_EQ(saved_schema.column_size(), 1);
+        EXPECT_EQ(saved_schema.column(0).type(), "DATETIMEV2");
+
+        saved_schema.Clear();
+        ASSERT_EQ(document_get(txn.get(), versioned_key, &saved_schema), TxnErrorCode::TXN_OK);
+        ASSERT_EQ(saved_schema.column_size(), 1);
+        EXPECT_EQ(saved_schema.column(0).type(), "DATETIMEV2");
+    }
 }
 
 static void begin_txn(MetaServiceProxy* meta_service, int64_t db_id, const std::string& label,

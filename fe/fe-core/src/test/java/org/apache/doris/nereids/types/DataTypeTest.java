@@ -75,6 +75,27 @@ public class DataTypeTest {
     }
 
     @Test
+    void testTimeV2PromotionKeepsMicrosecondPrecision() {
+        Assertions.assertEquals(
+                ImmutableList.of(DateTimeV2Type.MAX_MICROSECOND, StringType.INSTANCE),
+                TimeV2Type.of(6).getAllPromotions());
+    }
+
+    @Test
+    void testImplicitDateTimeV2PrecisionKeepsMicrosecondCompatibility() {
+        Assertions.assertEquals(DateTimeV2Type.MAX_MICROSECOND,
+                DateTimeV2Type.forType(StringType.INSTANCE));
+        Assertions.assertEquals(DateTimeV2Type.MAX_MICROSECOND,
+                DateTimeV2Type.forType(DecimalV3Type.createDecimalV3Type(18, 9)));
+        Assertions.assertEquals(DateTimeV2Type.MAX_MICROSECOND,
+                DateTimeV2Type.forTypeFromString("1st Jun 2007 09:45:30"));
+        Assertions.assertEquals(DateTimeV2Type.MAX,
+                DateTimeV2Type.forType(DateTimeV2Type.MAX));
+        Assertions.assertEquals(DateTimeV2Type.MAX,
+                DateTimeV2Type.forTypeFromString("2024-01-01 00:00:00.123456789"));
+    }
+
+    @Test
     void testConvertFromString() {
         // boolean
         Assertions.assertEquals(BooleanType.INSTANCE, DataType.convertFromString("boolean"));
