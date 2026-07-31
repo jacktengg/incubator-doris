@@ -156,6 +156,7 @@ public class ColumnToProtobuf {
             case DATETIME:
                 return 8;
             case DATETIMEV2:
+            case TIMESTAMP_NS:
             case TIMESTAMPTZ:
                 return 8;
             case FLOAT:

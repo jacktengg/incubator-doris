@@ -1899,6 +1899,7 @@ primitiveColType
     | type=DATEV1
     | type=DATETIMEV1
     | type=TIMESTAMPTZ
+    | type=TIMESTAMP_NS
     | type=BITMAP
     | type=QUANTILE_STATE
     | type=HLL
@@ -2363,6 +2364,7 @@ nonReserved
     | TIME
     | TIMESTAMP
     | TIMESTAMPTZ
+    | TIMESTAMP_NS
     | TRANSACTION
     | TREE
     | TRIGGERS
