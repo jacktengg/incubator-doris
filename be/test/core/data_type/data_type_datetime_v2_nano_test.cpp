@@ -19,18 +19,27 @@
 #include <cctz/time_zone.h>
 #include <gtest/gtest.h>
 
+#include <array>
+#include <cstring>
 #include <limits>
 #include <memory>
+#include <orc/Vector.hh>
 #include <string>
 #include <vector>
 
 #include "core/assert_cast.h"
+#include "core/column/column_const.h"
 #include "core/column/column_nullable.h"
 #include "core/column/column_string.h"
 #include "core/data_type/data_type_date_or_datetime_v2.h"
 #include "core/data_type_serde/data_type_datetimev2_nano_serde.h"
 #include "core/data_type_serde/data_type_serde.h"
+#include "core/string_buffer.hpp"
 #include "core/value/vdatetime_value.h"
+#include "util/jsonb_utils.h"
+#include "util/jsonb_writer.h"
+#include "util/mysql_row_buffer.h"
+#include "util/slice.h"
 #include "util/timezone_utils.h"
 
 namespace doris {
@@ -330,6 +339,375 @@ TEST(DataTypeDateTimeV2NanoTest, DecodedTimestampUnitsAndValidation) {
         view.values = reinterpret_cast<const uint8_t*>(&overflow);
         EXPECT_FALSE(serde->read_column_from_decoded_values(*column, view).ok());
     }
+}
+
+TEST(DataTypeDateTimeV2NanoTest, DataTypeLiteralFieldAndCivilCasts) {
+    const DataTypeDateTimeV2Nano type7(7);
+    const DataTypeDateTimeV2Nano type9(9);
+    const DataTypeDateTimeV2 legacy6(6);
+
+    EXPECT_TRUE(type9.equals(DataTypeDateTimeV2Nano(9)));
+    EXPECT_FALSE(type9.equals(type7));
+    EXPECT_FALSE(type9.equals(legacy6));
+    EXPECT_TRUE(type9.equals_ignore_precision(type7));
+    EXPECT_TRUE(type9.equals_ignore_precision(legacy6));
+
+    TExprNode node;
+    node.date_literal.value = "2024-02-29 12:34:56.123456789";
+    const Field field = type9.get_field(node);
+    EXPECT_EQ(field.get<TYPE_DATETIMEV2_NANO>().to_string(9), "2024-02-29 12:34:56.123456789");
+    node.date_literal.value = "not-a-datetime";
+    EXPECT_THROW(type9.get_field(node), Exception);
+
+    auto column = type9.create_column();
+    column->insert(field);
+    const auto field_with_type = type9.get_field_with_data_type(*column, 0);
+    EXPECT_EQ(field_with_type.field, field);
+    EXPECT_EQ(field_with_type.base_scalar_type_id, TYPE_DATETIMEV2_NANO);
+    EXPECT_EQ(field_with_type.precision, -1);
+    EXPECT_EQ(field_with_type.scale, 9);
+
+    DateV2Value<DateV2ValueType> date;
+    date.unchecked_set_time(2024, 2, 29, 0, 0, 0, 0);
+    DateTimeV2NanoValue nano_from_date;
+    DataTypeDateV2::cast_to_date_time_v2(date, nano_from_date);
+    EXPECT_EQ(nano_from_date.to_string(9), "2024-02-29 00:00:00.000000000");
+
+    VecDateTimeValue date_v1;
+    VecDateTimeValue datetime_v1;
+    DateV2Value<DateV2ValueType> date_v2;
+    DataTypeDateTimeV2::cast_to_date(field.get<TYPE_DATETIMEV2_NANO>(), date_v1);
+    DataTypeDateTimeV2::cast_to_date_time(field.get<TYPE_DATETIMEV2_NANO>(), datetime_v1);
+    DataTypeDateTimeV2::cast_to_date_v2(field.get<TYPE_DATETIMEV2_NANO>(), date_v2);
+    char date_v1_text[64] = {};
+    char datetime_v1_text[64] = {};
+    date_v1.to_string(date_v1_text);
+    datetime_v1.to_string(datetime_v1_text);
+    EXPECT_STREQ(date_v1_text, "2024-02-29");
+    EXPECT_STREQ(datetime_v1_text, "2024-02-29 12:34:56");
+    EXPECT_EQ(date_v2.to_string(), "2024-02-29");
+}
+
+TEST(DataTypeDateTimeV2NanoTest, CalendarHelpersArithmeticAndHash) {
+    int64_t raw = 0;
+    ASSERT_TRUE(parse_datetimev2_nano(StringRef("2024-02-29 12:34:56.123456789"), 9, &raw).ok());
+    DateTimeV2NanoValue value(raw);
+
+    EXPECT_EQ(value.quarter(), 1);
+    EXPECT_GT(value.daynr(), 0);
+    EXPECT_GT(value.year_of_week(), 0);
+    EXPECT_GT(value.week(0), 0);
+    EXPECT_GT(value.year_week(0), 0);
+    EXPECT_EQ(value.day_of_year(), 60);
+    EXPECT_GT(value.day_of_week(), 0);
+    EXPECT_LT(value.weekday(), 7);
+    EXPECT_EQ(value.time_part_to_seconds(), 12 * 3600 + 34 * 60 + 56);
+    EXPECT_EQ(value.time_part_to_microsecond(), (12 * 3600 + 34 * 60 + 56) * 1000000LL + 123456);
+    EXPECT_TRUE(value.is_valid_date());
+
+    static const char* const day_names[] = {"Monday", "Tuesday",  "Wednesday", "Thursday",
+                                            "Friday", "Saturday", "Sunday"};
+    static const char* const month_names[] = {
+            "",     "January", "February",  "March",   "April",    "May",     "June",
+            "July", "August",  "September", "October", "November", "December"};
+    EXPECT_STREQ(value.day_name_with_locale(day_names), "Thursday");
+    EXPECT_STREQ(value.month_name_with_locale(month_names), "February");
+
+    char formatted[64] = {};
+    constexpr char format[] = "%Y-%m-%d %H:%i:%s.%f";
+    ASSERT_TRUE(value.to_format_string_conservative(format, std::strlen(format), formatted,
+                                                    sizeof(formatted)));
+    EXPECT_STREQ(formatted, "2024-02-29 12:34:56.123456");
+
+    char text[40] = {};
+    const char* end = value.to_string(text, 9);
+    EXPECT_STREQ(text, "2024-02-29 12:34:56.123456789");
+    EXPECT_EQ(end, text + std::strlen(text) + 1);
+
+    DateTimeV2NanoValue adjusted = value;
+    adjusted += 2;
+    EXPECT_EQ(adjusted.epoch_nanos(), value.epoch_nanos() + 2000000000LL);
+    adjusted -= 3;
+    EXPECT_EQ(adjusted.epoch_nanos(), value.epoch_nanos() - 1000000000LL);
+    EXPECT_EQ(value.hash(17), value.hash(17));
+    EXPECT_EQ(std::hash<DateTimeV2NanoValue> {}(value), std::hash<int64_t> {}(value.epoch_nanos()));
+
+    int64_t earlier_raw = 0;
+    int64_t later_raw = 0;
+    ASSERT_TRUE(parse_datetimev2_nano(StringRef("2020-01-31 12:00:00.900000009"), 9, &earlier_raw)
+                        .ok());
+    ASSERT_TRUE(
+            parse_datetimev2_nano(StringRef("2022-03-31 11:00:00.100000001"), 9, &later_raw).ok());
+    const DateTimeV2NanoValue earlier(earlier_raw);
+    const DateTimeV2NanoValue later(later_raw);
+
+    EXPECT_EQ(datetime_diff<TimeUnit::YEAR>(earlier, later), 2);
+    EXPECT_EQ(datetime_diff<TimeUnit::YEAR>(later, earlier), -2);
+    EXPECT_EQ(datetime_diff<TimeUnit::MONTH>(earlier, later), 25);
+    EXPECT_EQ(datetime_diff<TimeUnit::MONTH>(later, earlier), -25);
+    EXPECT_EQ(datetime_diff<TimeUnit::QUARTER>(earlier, later), 8);
+    EXPECT_EQ(datetime_diff<TimeUnit::WEEK>(earlier, later), 112);
+    EXPECT_EQ(datetime_diff<TimeUnit::DAY>(earlier, later), 789);
+    EXPECT_EQ(datetime_diff<TimeUnit::DAY>(later, earlier), -789);
+    EXPECT_EQ(earlier.date_diff_in_days(later), -790);
+    EXPECT_EQ(later.date_diff_in_days_round_to_zero_by_time(earlier), 789);
+    EXPECT_EQ(earlier.date_diff_in_days_round_to_zero_by_time(later), -789);
+    EXPECT_EQ(later.datetime_diff_in_seconds_round_to_zero_by_ms(earlier),
+              -earlier.datetime_diff_in_seconds_round_to_zero_by_ms(later));
+
+    const auto legacy = later.to_datetime();
+    EXPECT_EQ(earlier.time_part_diff_in_ms(legacy), 3600800000LL);
+    EXPECT_EQ(earlier.datetime_diff_in_microseconds(legacy),
+              earlier.datetime_diff_in_seconds(legacy) * 1000000LL +
+                      earlier.time_part_diff_in_ms(legacy) % 1000000LL);
+
+    DateTimeV2NanoValue truncated = value;
+    ASSERT_TRUE(truncated.datetime_trunc<TimeUnit::DAY>());
+    EXPECT_EQ(truncated.to_string(9), "2024-02-29 00:00:00.000000000");
+}
+
+TEST(DataTypeDateTimeV2NanoTest, SerDeStrictBatchJsonJsonbMysqlAndBinaryField) {
+    const DataTypeDateTimeV2Nano type(9);
+    const auto serde = type.get_serde();
+    DataTypeSerDe::FormatOptions options;
+    options.field_delim = ";";
+
+    auto strings = ColumnString::create();
+    strings->insert_data("1970-01-01 00:00:00.000000001", 29);
+    strings->insert_data("ignored-invalid-value", 21);
+    strings->insert_data("2024-02-29 12:34:56.123456789", 29);
+    NullMap null_map = {0, 1, 0};
+    auto strict_result = type.create_column();
+    ASSERT_TRUE(
+            serde->from_string_strict_mode_batch(*strings, *strict_result, options, null_map.data())
+                    .ok());
+    const auto& strict_data = assert_cast<const ColumnDateTimeV2Nano&>(*strict_result).get_data();
+    EXPECT_EQ(strict_data[0].epoch_nanos(), 1);
+    EXPECT_EQ(strict_data[2].to_string(9), "2024-02-29 12:34:56.123456789");
+
+    auto invalid_strings = ColumnString::create();
+    invalid_strings->insert_data("invalid", 7);
+    auto invalid_result = type.create_column();
+    EXPECT_FALSE(serde->from_string_strict_mode_batch(*invalid_strings, *invalid_result, options,
+                                                      nullptr)
+                         .ok());
+
+    auto source = type.create_column();
+    for (const std::string input :
+         {"1970-01-01 00:00:00.000000001", "2024-02-29 12:34:56.123456789"}) {
+        StringRef ref(input);
+        ASSERT_TRUE(serde->from_string_strict_mode(ref, *source, options).ok());
+    }
+
+    auto serialized = ColumnString::create();
+    VectorBufferWriter writer(*serialized);
+    ASSERT_TRUE(serde->serialize_column_to_json(*source, 0, source->size(), writer, options).ok());
+    writer.commit();
+    EXPECT_EQ(serialized->get_data_at(0).to_string(),
+              "1970-01-01 00:00:00.000000001;2024-02-29 12:34:56.123456789");
+
+    std::vector<std::string> json_values = {"1970-01-01 00:00:00.000000001",
+                                            "2024-02-29 12:34:56.123456789"};
+    std::vector<Slice> slices;
+    for (auto& json_value : json_values) {
+        slices.emplace_back(json_value.data(), json_value.size());
+    }
+    auto json_result = type.create_column();
+    uint64_t num_deserialized = 0;
+    ASSERT_TRUE(serde->deserialize_column_from_json_vector(*json_result, slices, &num_deserialized,
+                                                           options)
+                        .ok());
+    EXPECT_EQ(num_deserialized, json_values.size());
+    EXPECT_EQ(assert_cast<const ColumnDateTimeV2Nano&>(*json_result).get_data(),
+              assert_cast<const ColumnDateTimeV2Nano&>(*source).get_data());
+
+    const auto nested_serde = type.get_serde(2);
+    auto nested_json = ColumnString::create();
+    VectorBufferWriter nested_writer(*nested_json);
+    ASSERT_TRUE(nested_serde->serialize_one_cell_to_json(*source, 1, nested_writer, options).ok());
+    nested_writer.commit();
+    EXPECT_EQ(nested_json->get_data_at(0).to_string(), "\"2024-02-29 12:34:56.123456789\"");
+    auto nested_result = type.create_column();
+    std::string quoted = nested_json->get_data_at(0).to_string();
+    Slice quoted_slice(quoted.data(), quoted.size());
+    ASSERT_TRUE(nested_serde->deserialize_one_cell_from_json(*nested_result, quoted_slice, options)
+                        .ok());
+    EXPECT_EQ(assert_cast<const ColumnDateTimeV2Nano&>(*nested_result).get_element(0),
+              assert_cast<const ColumnDateTimeV2Nano&>(*source).get_element(1));
+
+    auto one_value = source->clone_resized(1);
+    auto const_column = ColumnConst::create(std::move(one_value), 2);
+    auto const_json = ColumnString::create();
+    VectorBufferWriter const_writer(*const_json);
+    ASSERT_TRUE(serde->serialize_one_cell_to_json(*const_column, 1, const_writer, options).ok());
+    const_writer.commit();
+    EXPECT_EQ(const_json->get_data_at(0).to_string(), "1970-01-01 00:00:00.000000001");
+
+    JsonbWriter jsonb_writer;
+    ASSERT_TRUE(serde->serialize_column_to_jsonb(*source, 1, jsonb_writer).ok());
+    EXPECT_EQ(JsonbToJson::jsonb_to_json_string(jsonb_writer.getOutput()->getBuffer(),
+                                                jsonb_writer.getOutput()->getSize()),
+              "\"2024-02-29 12:34:56.123456789\"");
+
+    MysqlRowBinaryBuffer mysql_buffer;
+    ASSERT_TRUE(serde->write_column_to_mysql_binary(*source, mysql_buffer, 1, false, options).ok());
+    ASSERT_EQ(static_cast<uint8_t>(mysql_buffer.buf()[0]), 29);
+    EXPECT_EQ(std::string(mysql_buffer.buf() + 1, 29), "2024-02-29 12:34:56.123456789");
+
+    ColumnString::Chars binary;
+    serde->write_one_cell_to_binary(*source, binary, 1);
+    Field binary_field;
+    FieldInfo info;
+    const uint8_t* end =
+            DataTypeSerDe::deserialize_binary_to_field(binary.data(), binary_field, info);
+    EXPECT_EQ(end, binary.data() + binary.size());
+    EXPECT_EQ(info.scalar_type_id, TYPE_DATETIMEV2_NANO);
+    EXPECT_EQ(info.scale, 9);
+    EXPECT_EQ(binary_field.get<TYPE_DATETIMEV2_NANO>().to_string(9),
+              "2024-02-29 12:34:56.123456789");
+}
+
+TEST(DataTypeDateTimeV2NanoTest, SerDeArrowUnitsNullTimezoneAndErrors) {
+    TimezoneUtils::load_timezones_to_cache();
+    cctz::time_zone shanghai;
+    ASSERT_TRUE(TimezoneUtils::find_cctz_time_zone("Asia/Shanghai", shanghai));
+
+    const DataTypeDateTimeV2Nano type(9);
+    const auto serde = type.get_serde();
+    auto source = type.create_column();
+    DataTypeSerDe::FormatOptions options;
+    for (const std::string input :
+         {"1970-01-01 08:00:01.000000000", "1970-01-01 08:00:02.000000000"}) {
+        StringRef ref(input);
+        ASSERT_TRUE(serde->from_string(ref, *source, options).ok());
+    }
+    const NullMap null_map = {0, 1};
+
+    const std::array<std::pair<arrow::TimeUnit::type, int64_t>, 4> units = {
+            std::pair {arrow::TimeUnit::SECOND, 1LL},
+            std::pair {arrow::TimeUnit::MILLI, 1000LL},
+            std::pair {arrow::TimeUnit::MICRO, 1000000LL},
+            std::pair {arrow::TimeUnit::NANO, 1000000000LL},
+    };
+    for (const auto& [unit, multiplier] : units) {
+        arrow::TimestampBuilder builder(arrow::timestamp(unit, "Asia/Shanghai"),
+                                        arrow::default_memory_pool());
+        ASSERT_TRUE(serde->write_column_to_arrow(*source, &null_map, &builder, 0, source->size(),
+                                                 shanghai)
+                            .ok());
+        std::shared_ptr<arrow::Array> array;
+        ASSERT_TRUE(builder.Finish(&array).ok());
+        const auto& timestamps = assert_cast<const arrow::TimestampArray&>(*array);
+        EXPECT_EQ(timestamps.Value(0), multiplier);
+        EXPECT_TRUE(timestamps.IsNull(1));
+
+        auto result = type.create_column();
+        ASSERT_TRUE(serde->read_column_from_arrow(*result, array.get(), 0, 1, shanghai).ok());
+        EXPECT_EQ(assert_cast<const ColumnDateTimeV2Nano&>(*result).get_element(0),
+                  assert_cast<const ColumnDateTimeV2Nano&>(*source).get_element(0));
+    }
+
+    arrow::Int64Builder wrong_builder;
+    ASSERT_TRUE(wrong_builder.Append(1).ok());
+    std::shared_ptr<arrow::Array> wrong_array;
+    ASSERT_TRUE(wrong_builder.Finish(&wrong_array).ok());
+    auto wrong_result = type.create_column();
+    EXPECT_FALSE(
+            serde->read_column_from_arrow(*wrong_result, wrong_array.get(), 0, 1, shanghai).ok());
+
+    for (const auto unit :
+         {arrow::TimeUnit::SECOND, arrow::TimeUnit::MILLI, arrow::TimeUnit::MICRO}) {
+        arrow::TimestampBuilder overflow_builder(arrow::timestamp(unit),
+                                                 arrow::default_memory_pool());
+        ASSERT_TRUE(overflow_builder.Append(std::numeric_limits<int64_t>::max()).ok());
+        std::shared_ptr<arrow::Array> overflow_array;
+        ASSERT_TRUE(overflow_builder.Finish(&overflow_array).ok());
+        auto overflow_result = type.create_column();
+        EXPECT_FALSE(serde->read_column_from_arrow(*overflow_result, overflow_array.get(), 0, 1,
+                                                   cctz::utc_time_zone())
+                             .ok());
+    }
+
+    arrow::TimestampBuilder boundary_builder(
+            arrow::timestamp(arrow::TimeUnit::NANO, "Asia/Shanghai"), arrow::default_memory_pool());
+    ASSERT_TRUE(boundary_builder.Append(std::numeric_limits<int64_t>::max()).ok());
+    std::shared_ptr<arrow::Array> boundary_array;
+    ASSERT_TRUE(boundary_builder.Finish(&boundary_array).ok());
+    auto boundary_result = type.create_column();
+    EXPECT_FALSE(
+            serde->read_column_from_arrow(*boundary_result, boundary_array.get(), 0, 1, shanghai)
+                    .ok());
+
+    auto minimum = type.create_column();
+    assert_cast<ColumnDateTimeV2Nano&>(*minimum).insert_value(
+            DateTimeV2NanoValue(std::numeric_limits<int64_t>::min()));
+    arrow::TimestampBuilder minimum_builder(
+            arrow::timestamp(arrow::TimeUnit::NANO, "Asia/Shanghai"), arrow::default_memory_pool());
+    EXPECT_FALSE(
+            serde->write_column_to_arrow(*minimum, nullptr, &minimum_builder, 0, 1, shanghai).ok());
+}
+
+TEST(DataTypeDateTimeV2NanoTest, SerDeDecodedNullTimezoneAndOrc) {
+    TimezoneUtils::load_timezones_to_cache();
+    cctz::time_zone shanghai;
+    ASSERT_TRUE(TimezoneUtils::find_cctz_time_zone("Asia/Shanghai", shanghai));
+
+    const DataTypeDateTimeV2Nano type(9);
+    const auto serde = type.get_serde();
+    const int64_t values[] = {0, 1};
+    const NullMap null_map = {0, 1};
+    DecodedColumnView view;
+    view.value_kind = DecodedValueKind::INT64;
+    view.time_unit = DecodedTimeUnit::NANOS;
+    view.row_count = 2;
+    view.values = reinterpret_cast<const uint8_t*>(values);
+    view.null_map = null_map.data();
+    view.timestamp_is_adjusted_to_utc = true;
+    view.timezone = &shanghai;
+    auto decoded = type.create_column();
+    ASSERT_TRUE(serde->read_column_from_decoded_values(*decoded, view).ok());
+    const auto& decoded_data = assert_cast<const ColumnDateTimeV2Nano&>(*decoded).get_data();
+    EXPECT_EQ(decoded_data[0].to_string(9), "1970-01-01 08:00:00.000000000");
+    EXPECT_EQ(decoded_data[1].epoch_nanos(), 0);
+
+    view.value_kind = DecodedValueKind::INT32;
+    auto invalid_kind = type.create_column();
+    EXPECT_FALSE(serde->read_column_from_decoded_values(*invalid_kind, view).ok());
+
+    auto source = type.create_column();
+    int64_t source_raw = 0;
+    ASSERT_TRUE(
+            parse_datetimev2_nano(StringRef("1970-01-01 08:00:01.123456789"), 9, &source_raw).ok());
+    assert_cast<ColumnDateTimeV2Nano&>(*source).insert_value(DateTimeV2NanoValue(source_raw));
+    assert_cast<ColumnDateTimeV2Nano&>(*source).insert_value(DateTimeV2NanoValue(0));
+
+    Arena arena;
+    DataTypeSerDe::FormatOptions options;
+    orc::TimestampVectorBatch batch(2, *orc::getDefaultPool());
+    batch.resize(2);
+    batch.notNull[0] = 1;
+    batch.notNull[1] = 0;
+    batch.hasNulls = true;
+    ASSERT_TRUE(serde->write_column_to_orc("Asia/Shanghai", *source, nullptr, &batch, 0, 2, arena,
+                                           options)
+                        .ok());
+    EXPECT_EQ(batch.numElements, 2);
+    EXPECT_EQ(batch.data[0], 1);
+    EXPECT_EQ(batch.nanoseconds[0], 123456789);
+    EXPECT_EQ(batch.data[1], 0);
+    EXPECT_FALSE(serde->write_column_to_orc("invalid/timezone", *source, nullptr, &batch, 0, 2,
+                                            arena, options)
+                         .ok());
+
+    auto minimum = type.create_column();
+    assert_cast<ColumnDateTimeV2Nano&>(*minimum).insert_value(
+            DateTimeV2NanoValue(std::numeric_limits<int64_t>::min()));
+    orc::TimestampVectorBatch minimum_batch(1, *orc::getDefaultPool());
+    minimum_batch.resize(1);
+    minimum_batch.notNull[0] = 1;
+    EXPECT_FALSE(serde->write_column_to_orc("Asia/Shanghai", *minimum, nullptr, &minimum_batch, 0,
+                                            1, arena, options)
+                         .ok());
 }
 
 } // namespace doris
