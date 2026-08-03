@@ -56,7 +56,6 @@ import java.time.temporal.TemporalAccessor;
 import java.time.temporal.WeekFields;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 import java.util.stream.Collectors;
@@ -891,10 +890,15 @@ public class DateLiteral extends LiteralExpr {
 
     @Override
     public int hashCode() {
-        if (isDateType()) {
-            return Objects.hash(year, month, day);
+        // do not invoke the super.hashCode(), just use the return value of getLongValue()
+        // a DateV2 DateLiteral obj may be equal to a Date DateLiteral
+        // if the return value of getLongValue() is the same
+        int legacyHash = Long.hashCode(getLongValue());
+        long nanos = getNanosecond();
+        if (nanos % 1000 == 0) {
+            return legacyHash;
         }
-        return Objects.hash(year, month, day, hour, minute, second, getNanosecond());
+        return 31 * legacyHash + Long.hashCode(nanos);
     }
 
     // parse the date string value in 'value' by 'format' pattern.
