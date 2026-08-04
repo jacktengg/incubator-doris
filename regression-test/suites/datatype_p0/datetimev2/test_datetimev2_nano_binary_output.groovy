@@ -15,6 +15,11 @@
 // specific language governing permissions and limitations
 // under the License.
 
+import com.mysql.cj.jdbc.ServerPreparedStatement
+
+import java.sql.PreparedStatement
+import java.sql.Types
+
 suite("test_datetimev2_nano_binary_output") {
     def user = context.config.jdbcUser
     def password = context.config.jdbcPassword
@@ -46,8 +51,13 @@ suite("test_datetimev2_nano_binary_output") {
     String url = getServerPrepareJdbcUrl(
             context.config.jdbcUrl, "regression_test_datatype_p0_datetimev2")
     connect(user, password, url) {
-        order_qt_binary_protocol """
-            select id, dt from test_datetimev2_nano_binary_output order by id
-        """
+        PreparedStatement stmt = prepareStatement("""
+            select id, dt from test_datetimev2_nano_binary_output where id >= ? order by id
+        """)
+        assertEquals(ServerPreparedStatement, stmt.class)
+        assertEquals(Types.CHAR, stmt.metaData.getColumnType(2))
+        stmt.setInt(1, 1)
+        qe_binary_protocol stmt
+        stmt.close()
     }
 }

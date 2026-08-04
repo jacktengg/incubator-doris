@@ -17,19 +17,57 @@
 
 package org.apache.doris.mysql;
 
+import org.apache.doris.catalog.MysqlColType;
 import org.apache.doris.catalog.ScalarType;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 public class MysqlSerializerDateTimeTest {
+    private static int skipLenEncodedString(byte[] buffer, int offset) {
+        return offset + 1 + (buffer[offset] & 0xFF);
+    }
+
+    private static int fieldMetadataOffset(byte[] buffer) {
+        int offset = 0;
+        for (int i = 0; i < 6; i++) {
+            offset = skipLenEncodedString(buffer, offset);
+        }
+        return offset + 1;
+    }
+
     @Test
     public void testDatetimeV2NanoMetadata() {
-        MysqlSerializer serializer = MysqlSerializer.newInstance();
         for (int scale = 7; scale <= 9; scale++) {
+            MysqlSerializer serializer = MysqlSerializer.newInstance();
             ScalarType type = ScalarType.createDatetimeV2Type(scale);
             Assertions.assertEquals(20 + scale, serializer.getMysqlTypeLength(type));
+            Assertions.assertEquals(0, serializer.getMysqlDecimals(type));
+
+            serializer.writeField("dt", type);
+            byte[] field = serializer.toArray();
+            int metadataOffset = fieldMetadataOffset(field);
+            int mysqlTypeOffset = metadataOffset + 2 + 4;
+            Assertions.assertEquals(MysqlColType.MYSQL_TYPE_STRING.getCode(),
+                    field[mysqlTypeOffset] & 0xFF);
+            int decimalsOffset = mysqlTypeOffset + 1 + 2;
+            Assertions.assertEquals(0, field[decimalsOffset] & 0xFF);
+        }
+    }
+
+    @Test
+    public void testDatetimeV2MicrosecondMetadata() {
+        for (int scale = 0; scale <= 6; scale++) {
+            MysqlSerializer serializer = MysqlSerializer.newInstance();
+            ScalarType type = ScalarType.createDatetimeV2Type(scale);
             Assertions.assertEquals(scale, serializer.getMysqlDecimals(type));
+
+            serializer.writeField("dt", type);
+            byte[] field = serializer.toArray();
+            int metadataOffset = fieldMetadataOffset(field);
+            int mysqlTypeOffset = metadataOffset + 2 + 4;
+            Assertions.assertEquals(MysqlColType.MYSQL_TYPE_DATETIME.getCode(),
+                    field[mysqlTypeOffset] & 0xFF);
         }
     }
 }

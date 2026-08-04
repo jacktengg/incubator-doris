@@ -62,6 +62,7 @@ Status utc_epoch_nanos_to_local_epoch_nanos(int64_t source, const cctz::time_zon
     return Status::OK();
 }
 
+/*
 Status local_epoch_nanos_to_utc_epoch_nanos(int64_t source, const cctz::time_zone& timezone,
                                             int64_t* result) {
     const DateTimeV2NanoValue source_value(source);
@@ -79,6 +80,7 @@ Status local_epoch_nanos_to_utc_epoch_nanos(int64_t source, const cctz::time_zon
     *result = static_cast<int64_t>(epoch_nanos);
     return Status::OK();
 }
+*/
 
 } // namespace
 
@@ -244,6 +246,9 @@ Status DataTypeDateTimeV2NanoSerDe::write_column_to_arrow(const IColumn& column,
                                                           arrow::ArrayBuilder* array_builder,
                                                           int64_t start, int64_t end,
                                                           const cctz::time_zone& ctz) const {
+    return Status::NotSupported("DataTypeDateTimeV2NanoSerDe::write_column_to_arrow");
+    // TODO: support write_column_to_arrow
+    /*
     const auto& data = assert_cast<const ColumnDateTimeV2Nano&>(column).get_data();
     auto& builder = assert_cast<arrow::TimestampBuilder&>(*array_builder);
     const auto timestamp_type = std::static_pointer_cast<arrow::TimestampType>(builder.type());
@@ -273,12 +278,16 @@ Status DataTypeDateTimeV2NanoSerDe::write_column_to_arrow(const IColumn& column,
         RETURN_IF_ERROR(checkArrowStatus(builder.Append(value), column, builder));
     }
     return Status::OK();
+    */
 }
 
 Status DataTypeDateTimeV2NanoSerDe::read_column_from_arrow(IColumn& column,
                                                            const arrow::Array* arrow_array,
                                                            int64_t start, int64_t end,
                                                            const cctz::time_zone& ctz) const {
+    return Status::NotSupported("DataTypeDateTimeV2NanoSerDe::read_column_from_arrow");
+    // TODO:
+    /*
     if (arrow_array->type_id() != arrow::Type::TIMESTAMP) {
         return Status::InvalidArgument("Expected Arrow timestamp, got {}", arrow_array->type_id());
     }
@@ -317,6 +326,7 @@ Status DataTypeDateTimeV2NanoSerDe::read_column_from_arrow(IColumn& column,
         data.push_back(DateTimeV2NanoValue(nanos));
     }
     return Status::OK();
+    */
 }
 
 Status DataTypeDateTimeV2NanoSerDe::read_column_from_decoded_values(
@@ -382,6 +392,9 @@ Status DataTypeDateTimeV2NanoSerDe::write_column_to_orc(const std::string& timez
                                                         orc::ColumnVectorBatch* orc_col_batch,
                                                         int64_t start, int64_t end, Arena& arena,
                                                         const FormatOptions& options) const {
+    return Status::NotSupported("DataTypeDateTimeV2NanoSerDe::write_column_to_orc");
+    // TODO: support write_column_to_orc
+    /*
     const auto& data = assert_cast<const ColumnDateTimeV2Nano&>(column).get_data();
     auto& batch = assert_cast<orc::TimestampVectorBatch&>(*orc_col_batch);
     cctz::time_zone parsed_timezone;
@@ -400,6 +413,7 @@ Status DataTypeDateTimeV2NanoSerDe::write_column_to_orc(const std::string& timez
     }
     batch.numElements = end - start;
     return Status::OK();
+    */
 }
 
 void DataTypeDateTimeV2NanoSerDe::write_one_cell_to_binary(const IColumn& src_column,

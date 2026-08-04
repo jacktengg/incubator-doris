@@ -254,13 +254,14 @@ public class DateLiteral extends Literal implements ComparableLiteral {
             sb.append(":00");
         }
 
-        // Parse fractional seconds. Java's NANO_OF_SECOND supports up to 9 digits.
+        // Keep one more digit than Java's NANO_OF_SECOND supports. The tenth digit is the guard
+        // digit used when a DATETIMEV2(9) literal is rounded.
         int j = i;
         if (partNumber == 6 && i < s.length() && s.charAt(i) == '.') {
             sb.append(s.charAt(i));
             i += 1;
             while (i < s.length() && Character.isDigit(s.charAt(i))) {
-                if (i - j <= DateTimeV2Type.MAX_SCALE) {
+                if (i - j <= DateTimeV2Type.MAX_SCALE + 1) {
                     sb.append(s.charAt(i));
                 }
                 i += 1;
@@ -328,6 +329,7 @@ public class DateLiteral extends Literal implements ComparableLiteral {
             }
             if (!containsPunctuation) {
                 s = normalizeBasic(s);
+                s = truncateFractionalSecondForJavaParser(s);
                 // mysql reject "20200219 010101" "200219 010101", can't use ' ' spilt basic date time.
 
                 if (!s.contains("T")) {
@@ -343,6 +345,7 @@ public class DateLiteral extends Literal implements ComparableLiteral {
                 return normalizeResult.cast();
             }
             s = normalizeResult.get();
+            s = truncateFractionalSecondForJavaParser(s);
 
             if (!s.contains(" ")) {
                 dateTime = DateTimeFormatterUtils.ZONE_DATE_FORMATTER.parse(s);
@@ -361,6 +364,40 @@ public class DateLiteral extends Literal implements ComparableLiteral {
         } catch (Exception ex) {
             return Result.err(() -> new AnalysisException("date/datetime literal [" + originalString + "] is invalid"));
         }
+    }
+
+    /**
+     * Remove the DATETIMEV2(9) rounding guard digit before parsing with Java's date-time formatter.
+     * Normalization keeps ten fractional digits so that the tenth digit can be used for scale-9
+     * rounding, while {@link ChronoField#NANO_OF_SECOND} accepts at most nine digits. The guard
+     * digit remains available in the original input and is applied after parsing.
+     */
+    private static String truncateFractionalSecondForJavaParser(String s) {
+        int dot = s.lastIndexOf('.');
+        if (dot < 0) {
+            return s;
+        }
+        int fractionEnd = dot + 1;
+        while (fractionEnd < s.length() && Character.isDigit(s.charAt(fractionEnd))) {
+            fractionEnd++;
+        }
+        int retainedEnd = Math.min(dot + DateTimeV2Type.MAX_SCALE + 1, fractionEnd);
+        if (retainedEnd == fractionEnd) {
+            return s;
+        }
+        return s.substring(0, retainedEnd) + s.substring(fractionEnd);
+    }
+
+    protected static int getNanoSecondGuardDigit(String s) {
+        int dot = s.lastIndexOf('.');
+        if (dot < 0) {
+            return -1;
+        }
+        int guardIndex = dot + DateTimeV2Type.MAX_SCALE + 1;
+        if (guardIndex >= s.length() || !Character.isDigit(s.charAt(guardIndex))) {
+            return -1;
+        }
+        return s.charAt(guardIndex) - '0';
     }
 
     protected void init(String s) throws AnalysisException {

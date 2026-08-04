@@ -176,6 +176,17 @@ public class DateTimeLiteral extends DateLiteral {
 
         long nanoSecond = DateUtils.getOrDefault(temporal, ChronoField.NANO_OF_SECOND);
         DateTimeV2Type dateTimeV2Type = isV2 ? DateTimeV2Type.forTypeFromString(s) : null;
+        if (isV2 && dateTimeV2Type.getScale() == DateTimeV2Type.MAX_SCALE) {
+            LocalDateTime roundedDateTime = roundNanoSecondWithGuard(
+                    year, month, day, hour, minute, second, nanoSecond, s);
+            year = roundedDateTime.getYear();
+            month = roundedDateTime.getMonthValue();
+            day = roundedDateTime.getDayOfMonth();
+            hour = roundedDateTime.getHour();
+            minute = roundedDateTime.getMinute();
+            second = roundedDateTime.getSecond();
+            nanoSecond = roundedDateTime.getNano();
+        }
         long microSecond = nanoSecond / 100L;
         // Microseconds have 7 digits.
         long sevenDigit = microSecond % 10;
@@ -259,6 +270,18 @@ public class DateTimeLiteral extends DateLiteral {
         }
 
         nanoSecond = DateUtils.getOrDefault(temporal, ChronoField.NANO_OF_SECOND);
+        if (dataType instanceof DateTimeV2Type
+                && ((DateTimeV2Type) dataType).getScale() == DateTimeV2Type.MAX_SCALE) {
+            LocalDateTime roundedDateTime = roundNanoSecondWithGuard(
+                    year, month, day, hour, minute, second, nanoSecond, s);
+            year = roundedDateTime.getYear();
+            month = roundedDateTime.getMonthValue();
+            day = roundedDateTime.getDayOfMonth();
+            hour = roundedDateTime.getHour();
+            minute = roundedDateTime.getMinute();
+            second = roundedDateTime.getSecond();
+            nanoSecond = roundedDateTime.getNano();
+        }
         if (dataType instanceof DateTimeV2Type && ((DateTimeV2Type) dataType).getScale() > 6) {
             microSecond = nanoSecond / 1000;
         } else {
@@ -283,6 +306,16 @@ public class DateTimeLiteral extends DateLiteral {
         if (checkRange(year, month, day) || checkDate(year, month, day)) {
             throw new AnalysisException("datetime literal [" + s + "] is out of range");
         }
+    }
+
+    private static LocalDateTime roundNanoSecondWithGuard(long year, long month, long day, long hour,
+            long minute, long second, long nanoSecond, String s) {
+        LocalDateTime dateTime = LocalDateTime.of((int) year, (int) month, (int) day,
+                (int) hour, (int) minute, (int) second, (int) nanoSecond);
+        if (getNanoSecondGuardDigit(s) >= 5) {
+            dateTime = dateTime.plusNanos(1);
+        }
+        return dateTime;
     }
 
     // When performing addition or subtraction with MicroSeconds, the precision must be set to 6 to display it

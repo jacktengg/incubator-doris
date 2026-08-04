@@ -552,6 +552,7 @@ Status decode_timestamp_orc_values(IColumn& nested_column, const OrcDecodedColum
     return Status::OK();
 }
 
+/*
 Status decode_datetimev2_nano_orc_values(const DataTypeSerDe& serde, IColumn& nested_column,
                                          const OrcDecodedColumnView& orc_view,
                                          const cctz::time_zone& timezone) {
@@ -586,6 +587,7 @@ Status decode_datetimev2_nano_orc_values(const DataTypeSerDe& serde, IColumn& ne
     view.values = reinterpret_cast<const uint8_t*>(timestamp_nanos.data());
     return read_decoded_values(serde, nested_column, &view);
 }
+*/
 
 Status decode_timestamp_tz_orc_values(IColumn& nested_column,
                                       const OrcDecodedColumnView& orc_view) {
@@ -949,6 +951,9 @@ Status DataTypeDateTimeV2SerDe::read_column_from_orc(IColumn& column,
 
 Status DataTypeDateTimeV2NanoSerDe::read_column_from_orc(IColumn& column,
                                                          const OrcDecodedColumnView& view) const {
+    return Status::NotSupported("DataTypeDateTimeV2NanoSerDe::read_column_from_orc");
+    // TODO: support read_column_from_orc
+    /*
     DORIS_CHECK(view.file_type != nullptr);
     DORIS_CHECK(view.batch != nullptr);
     const auto kind = view.file_type->getKind();
@@ -958,6 +963,7 @@ Status DataTypeDateTimeV2NanoSerDe::read_column_from_orc(IColumn& column,
         return Status::OK();
     }
     return decode_datetimev2_nano_orc_values(*this, column, view, *view.timezone);
+    */
 }
 
 Status DataTypeTimeStampTzSerDe::read_column_from_orc(IColumn& column,

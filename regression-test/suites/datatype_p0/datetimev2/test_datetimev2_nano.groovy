@@ -356,6 +356,9 @@ suite("test_datetimev2_nano") {
             cast('1970-01-01 00:00:00.123456789' as datetimev2(7)),
             cast('1970-01-01 00:00:00.123456789' as datetimev2(8)),
             cast('1970-01-01 00:00:00.123456789' as datetimev2(9)),
+            cast('1970-01-01 00:00:00.1234567894' as datetimev2(9)),
+            cast('1970-01-01 00:00:00.1234567895' as datetimev2(9)),
+            cast('1970-01-01 00:00:00.9999999995' as datetimev2(9)),
             cast('2262-04-11 23:47:16.854775807' as datetimev2(9))
     """
     sql "set debug_skip_fold_constant = true"
@@ -365,6 +368,9 @@ suite("test_datetimev2_nano") {
             cast('1970-01-01 00:00:00.123456789' as datetimev2(7)),
             cast('1970-01-01 00:00:00.123456789' as datetimev2(8)),
             cast('1970-01-01 00:00:00.123456789' as datetimev2(9)),
+            cast('1970-01-01 00:00:00.1234567894' as datetimev2(9)),
+            cast('1970-01-01 00:00:00.1234567895' as datetimev2(9)),
+            cast('1970-01-01 00:00:00.9999999995' as datetimev2(9)),
             cast('2262-04-11 23:47:16.854775807' as datetimev2(9))
     """
     sql "set debug_skip_fold_constant = false"

@@ -18,6 +18,7 @@
 package org.apache.doris.mysql;
 
 import org.apache.doris.catalog.Column;
+import org.apache.doris.catalog.MysqlColType;
 import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.Type;
 
@@ -32,6 +33,7 @@ import java.nio.ByteBuffer;
 // used for serialize memory data to byte stream of MySQL protocol
 public class MysqlSerializer {
     private static final Logger LOG = LogManager.getLogger(MysqlSerializer.class);
+    private static final int MAX_MYSQL_DATETIME_SCALE = 6;
     private ByteArrayOutputStream out;
     private MysqlCapability capability;
 
@@ -187,7 +189,7 @@ public class MysqlSerializer {
         // Column length: four byte integer
         writeInt4(getMysqlTypeLength(type));
         // Column type: one byte integer
-        writeInt1(type.getPrimitiveType().toMysqlType().getCode());
+        writeInt1(getMysqlResultType(type).getCode());
         // Flags: two byte integer
         writeInt2(getMysqlFlags(type));
         // Decimals: one byte integer
@@ -216,7 +218,7 @@ public class MysqlSerializer {
         // TODO(zhaochun): fix Column length: four byte integer
         writeInt4(getMysqlTypeLength(column.getType()));
         // Column type: one byte integer
-        writeInt1(column.getDataType().toMysqlType().getCode());
+        writeInt1(getMysqlResultType(column.getType()).getCode());
         // Flags: two byte integer
         writeInt2(getMysqlFlags(column.getType()));
         // Decimals: one byte integer
@@ -251,7 +253,7 @@ public class MysqlSerializer {
         // Column length: four byte integer
         writeInt4(getMysqlTypeLength(type));
         // Column type: one byte integer
-        writeInt1(type.getPrimitiveType().toMysqlType().getCode());
+        writeInt1(getMysqlResultType(type).getCode());
         // Flags: two byte integer
         writeInt2(getMysqlFlags(type));
         // Decimals: one byte integer
@@ -333,6 +335,9 @@ public class MysqlSerializer {
 
     // this is used for decimal scale
     public int getMysqlDecimals(Type type) {
+        if (isDatetimeV2Nano(type)) {
+            return 0;
+        }
         switch (type.getPrimitiveType()) {
             case DECIMALV2:
             case DECIMAL32:
@@ -348,6 +353,18 @@ public class MysqlSerializer {
             default:
                 return 0;
         }
+    }
+
+    private MysqlColType getMysqlResultType(Type type) {
+        // MySQL's binary temporal value contains at most microseconds. DATETIMEV2(7..9) is
+        // serialized by BE as a length-encoded string so the metadata must advertise a string too.
+        return isDatetimeV2Nano(type) ? MysqlColType.MYSQL_TYPE_STRING
+                : type.getPrimitiveType().toMysqlType();
+    }
+
+    private boolean isDatetimeV2Nano(Type type) {
+        return type.isDatetimeV2()
+                && ((ScalarType) type).getScalarScale() > MAX_MYSQL_DATETIME_SCALE;
     }
 
     // see https://github.com/mysql/mysql-server/blob/trunk/include/mysql_com.h#L161

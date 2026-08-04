@@ -497,6 +497,29 @@ class DateTimeLiteralTest {
     }
 
     @Test
+    void testDateTimeV2NanoGuardDigitRounding() {
+        DateTimeV2Literal literal = new DateTimeV2Literal(
+                DateTimeV2Type.of(9), "1970-01-01 00:00:00.1234567894");
+        Assertions.assertEquals("1970-01-01 00:00:00.123456789", literal.getStringValue());
+
+        literal = new DateTimeV2Literal(
+                DateTimeV2Type.of(9), "1970-01-01 00:00:00.1234567895");
+        Assertions.assertEquals("1970-01-01 00:00:00.123456790", literal.getStringValue());
+
+        literal = new DateTimeV2Literal(
+                DateTimeV2Type.of(9), "1970-01-01 00:00:00.9999999995");
+        Assertions.assertEquals("1970-01-01 00:00:01.000000000", literal.getStringValue());
+
+        literal = new DateTimeV2Literal(
+                DateTimeV2Type.of(8), "1970-01-01 00:00:00.1234567845");
+        Assertions.assertEquals("1970-01-01 00:00:00.12345678", literal.getStringValue());
+
+        DateTimeLiteral parsed = DateTimeLiteral.parseDateTimeLiteral(
+                "1970-01-01 00:00:00.9999999995", true).get();
+        Assertions.assertEquals("1970-01-01 00:00:01.000000000", parsed.getStringValue());
+    }
+
+    @Test
     void testRoundFloor() {
         DateTimeV2Literal literal;
         literal = new DateTimeV2Literal(DateTimeV2Type.of(6), 2000, 2, 2, 2, 2, 2, 222222);
