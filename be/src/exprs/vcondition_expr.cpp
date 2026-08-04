@@ -578,10 +578,10 @@ void insert_result_data(MutableColumnPtr& result_column, ColumnPtr& argument_col
                     column_raw_data[row].to_date_int_val() *
                             uint64_t(!(null_map_data[row] | filled_flag[row])));
         } else if constexpr (std::is_same_v<ColumnType, ColumnDateTimeV2Nano>) {
-            result_raw_data[row] = DateTimeV2NanoValue(
-                    result_raw_data[row].epoch_nanos() +
-                    column_raw_data[row].epoch_nanos() *
-                            int64_t(!(null_map_data[row] | filled_flag[row])));
+            result_raw_data[row] =
+                    DateTimeV2NanoValue(result_raw_data[row].epoch_nanos() +
+                                        column_raw_data[row].epoch_nanos() *
+                                                int64_t(!(null_map_data[row] | filled_flag[row])));
         } else if constexpr (std::is_same_v<ColumnType, ColumnTimeStampTz>) {
             result_raw_data[row] = binary_cast<uint64_t, TimestampTzValue>(
                     result_raw_data[row].to_date_int_val() +

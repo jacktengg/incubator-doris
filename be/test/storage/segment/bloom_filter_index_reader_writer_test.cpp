@@ -483,12 +483,24 @@ TEST_F(BloomFilterIndexReaderWriterTest, test_datetimev2_nano) {
         values[i] = -1'000'000'000 + static_cast<int64_t>(i);
     }
 
-    const std::string file_name = "bloom_filter_datetimev2_nano";
-    int64_t not_exist_value = -1'000'000'001;
-    auto st = test_bloom_filter_index_reader_writer_template<
-            FieldType::OLAP_FIELD_TYPE_DATETIMEV2_NANO>(file_name, values.data(), num, 1,
-                                                        &not_exist_value);
-    EXPECT_TRUE(st.ok());
+    {
+        const std::string file_name = "bloom_filter_datetimev2_nano";
+        int64_t not_exist_value = -1'000'000'001;
+        auto st = test_bloom_filter_index_reader_writer_template<
+                FieldType::OLAP_FIELD_TYPE_DATETIMEV2_NANO>(file_name, values.data(), num, 1,
+                                                            &not_exist_value);
+        EXPECT_TRUE(st.ok());
+    }
+    // Primary key bloom filters consume encoded Slice keys rather than raw column values.
+    {
+        const std::string file_name = "bloom_filter_datetimev2_nano_pk";
+        int64_t not_exist_value = -1'000'000'001;
+        auto st = test_bloom_filter_index_reader_writer_template<
+                FieldType::OLAP_FIELD_TYPE_DATETIMEV2_NANO>(file_name, values.data(), num, 1,
+                                                            &not_exist_value, false, true);
+        EXPECT_FALSE(st.ok());
+        EXPECT_EQ(st.code(), TStatusCode::NOT_IMPLEMENTED_ERROR);
+    }
 }
 
 TEST_F(BloomFilterIndexReaderWriterTest, test_timestamptz) {
