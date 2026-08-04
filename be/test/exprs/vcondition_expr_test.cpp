@@ -369,7 +369,11 @@ TEST_F(VConditionExprCoalesceTest, DateTimeV2Nano) {
     auto nested0 = ColumnDateTimeV2Nano::create();
     nested0->insert_value(DateTimeV2NanoValue(11));
     nested0->insert_value(DateTimeV2NanoValue(0));
+    nested0->insert_value(DateTimeV2NanoValue(-17));
+    nested0->insert_value(DateTimeV2NanoValue(0));
     auto null_map0 = ColumnUInt8::create();
+    null_map0->insert_value(0);
+    null_map0->insert_value(1);
     null_map0->insert_value(0);
     null_map0->insert_value(1);
     ColumnPtr col0 = ColumnNullable::create(std::move(nested0), std::move(null_map0));
@@ -377,6 +381,8 @@ TEST_F(VConditionExprCoalesceTest, DateTimeV2Nano) {
     auto col1 = ColumnDateTimeV2Nano::create();
     col1->insert_value(DateTimeV2NanoValue(99));
     col1->insert_value(DateTimeV2NanoValue(22));
+    col1->insert_value(DateTimeV2NanoValue(std::numeric_limits<int64_t>::max()));
+    col1->insert_value(DateTimeV2NanoValue(std::numeric_limits<int64_t>::min()));
 
     coalesce_expr->add_child(
             std::make_shared<MockChildVExpr>(col0, std::make_shared<DataTypeNullable>(nano_type)));
@@ -385,9 +391,9 @@ TEST_F(VConditionExprCoalesceTest, DateTimeV2Nano) {
     VExprContext context(coalesce_expr);
     ColumnPtr result;
     auto st = coalesce_expr->execute_column_impl(&context, /*block=*/nullptr,
-                                                 /*selector=*/nullptr, /*count=*/2, result);
+                                                 /*selector=*/nullptr, /*count=*/4, result);
     ASSERT_TRUE(st.ok()) << st.to_string();
-    ASSERT_EQ(result->size(), 2);
+    ASSERT_EQ(result->size(), 4);
 
     const auto& nullable = assert_cast<const ColumnNullable&>(*result);
     const auto& values =
@@ -396,6 +402,10 @@ TEST_F(VConditionExprCoalesceTest, DateTimeV2Nano) {
     EXPECT_EQ(values[0].epoch_nanos(), 11);
     EXPECT_FALSE(nullable.is_null_at(1));
     EXPECT_EQ(values[1].epoch_nanos(), 22);
+    EXPECT_FALSE(nullable.is_null_at(2));
+    EXPECT_EQ(values[2].epoch_nanos(), -17);
+    EXPECT_FALSE(nullable.is_null_at(3));
+    EXPECT_EQ(values[3].epoch_nanos(), std::numeric_limits<int64_t>::min());
 }
 
 } // namespace doris
