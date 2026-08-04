@@ -19,6 +19,7 @@ package org.apache.doris.nereids.util;
 
 import org.apache.doris.nereids.exceptions.AnalysisException;
 import org.apache.doris.nereids.trees.expressions.literal.DateTimeV2Literal;
+import org.apache.doris.nereids.types.DateTimeV2Type;
 import org.apache.doris.qe.ConnectContext;
 
 import com.google.common.collect.ImmutableSet;
@@ -387,6 +388,34 @@ public class DateUtils {
 
     public static int getOrDefault(final TemporalAccessor accessor, final ChronoField field) {
         return accessor.isSupported(field) ? accessor.get(field) : /* default value */ 0;
+    }
+
+    /**
+     * Remove the DATETIMEV2(9) rounding guard digit before parsing because Java accepts at most
+     * nine fractional-second digits. The guard remains available in the original string and can
+     * be retrieved by {@link #getNanosecondGuardDigit(String)} during target-scale rounding.
+     */
+    public static String truncateFractionalSecondForJavaParser(String s) {
+        int dot = s.lastIndexOf('.');
+        if (dot < 0) {
+            return s;
+        }
+        int fractionEnd = dot + 1;
+        while (fractionEnd < s.length() && Character.isDigit(s.charAt(fractionEnd))) {
+            fractionEnd++;
+        }
+        int retainedEnd = Math.min(dot + DateTimeV2Type.MAX_SCALE + 1, fractionEnd);
+        return retainedEnd == fractionEnd ? s : s.substring(0, retainedEnd) + s.substring(fractionEnd);
+    }
+
+    /** Return the DATETIMEV2(9) rounding guard digit, or -1 when the input has none. */
+    public static int getNanosecondGuardDigit(String s) {
+        int dot = s.lastIndexOf('.');
+        int guardIndex = dot + DateTimeV2Type.MAX_SCALE + 1;
+        if (dot < 0 || guardIndex >= s.length() || !Character.isDigit(s.charAt(guardIndex))) {
+            return -1;
+        }
+        return s.charAt(guardIndex) - '0';
     }
 
     /**

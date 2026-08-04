@@ -312,7 +312,7 @@ public class DateTimeLiteral extends DateLiteral {
             long minute, long second, long nanoSecond, String s) {
         LocalDateTime dateTime = LocalDateTime.of((int) year, (int) month, (int) day,
                 (int) hour, (int) minute, (int) second, (int) nanoSecond);
-        if (getNanoSecondGuardDigit(s) >= 5) {
+        if (DateUtils.getNanosecondGuardDigit(s) >= 5) {
             dateTime = dateTime.plusNanos(1);
         }
         return dateTime;

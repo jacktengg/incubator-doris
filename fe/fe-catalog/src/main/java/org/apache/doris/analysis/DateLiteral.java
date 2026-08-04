@@ -346,12 +346,21 @@ public class DateLiteral extends LiteralExpr {
                 return year == 0 && month == 1 && day == 1;
             case DATETIME:
                 return year == 0 && month == 1 && day == 1 && hour == 0 &&  minute == 0 && second == 0;
-            case DATETIMEV2:
-            case TIMESTAMPTZ:
+            case DATETIMEV2: {
+                int scale = ((ScalarType) getType()).getScalarScale();
+                if (scale > 6) {
+                    return getTimeFormatter().equals(getNanoBoundary(scale, false));
+                }
+                return year == 0 && month == 1 && day == 1
+                        && hour == 0 &&  minute == 0 && second == 0
+                        && getNanosecond() / NANO_SCALE_FACTORS[scale] == 0;
+            }
+            case TIMESTAMPTZ: {
                 int scale = ((ScalarType) getType()).getScalarScale();
                 return year == 0 && month == 1 && day == 1
                         && hour == 0 &&  minute == 0 && second == 0
                         && getNanosecond() / NANO_SCALE_FACTORS[scale] == 0;
+            }
             default:
                 return false;
         }
@@ -1457,6 +1466,19 @@ public class DateLiteral extends LiteralExpr {
     }
 
     private void setNanoBoundary(int scale, boolean isMax) {
+        LocalDateTime value = getNanoBoundary(scale, isMax);
+        long nanos = value.getNano();
+        year = value.getYear();
+        month = value.getMonthValue();
+        day = value.getDayOfMonth();
+        hour = value.getHour();
+        minute = value.getMinute();
+        second = value.getSecond();
+        nanosecond = nanos;
+        microsecond = nanos / 1000;
+    }
+
+    private static LocalDateTime getNanoBoundary(int scale, boolean isMax) {
         LocalDateTime value = isMax ? MAX_DATETIMEV2_NANO : MIN_DATETIMEV2_NANO;
         long factor = NANO_SCALE_FACTORS[scale];
         long nanos = value.getNano();
@@ -1469,14 +1491,7 @@ public class DateLiteral extends LiteralExpr {
                 nanos = 0;
             }
         }
-        year = value.getYear();
-        month = value.getMonthValue();
-        day = value.getDayOfMonth();
-        hour = value.getHour();
-        minute = value.getMinute();
-        second = value.getSecond();
-        nanosecond = nanos;
-        microsecond = nanos / 1000;
+        return value.withNano((int) nanos);
     }
 
     private long epochNanoseconds() {

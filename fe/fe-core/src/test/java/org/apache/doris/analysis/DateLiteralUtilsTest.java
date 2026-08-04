@@ -228,6 +228,38 @@ public class DateLiteralUtilsTest {
     }
 
     @Test
+    public void testExplicitDatetimeV2ScaleRounding() throws AnalysisException {
+        DateLiteral rounded7 = DateLiteralUtils.createDateLiteral(
+                "2023-06-15 14:30:45.12345675", ScalarType.createDatetimeV2Type(7));
+        DateLiteral canonical7 = DateLiteralUtils.createDateLiteral(
+                "2023-06-15 14:30:45.1234568", ScalarType.createDatetimeV2Type(7));
+        Assertions.assertEquals("2023-06-15 14:30:45.1234568", rounded7.getStringValue());
+        Assertions.assertEquals(123456800, rounded7.getNanosecond());
+        Assertions.assertEquals(canonical7, rounded7);
+        Assertions.assertEquals(canonical7.hashCode(), rounded7.hashCode());
+
+        DateLiteral rounded8 = DateLiteralUtils.createDateLiteral(
+                "2023-06-15 14:30:45.123456785", ScalarType.createDatetimeV2Type(8));
+        Assertions.assertEquals("2023-06-15 14:30:45.12345679", rounded8.getStringValue());
+        Assertions.assertEquals(123456790, rounded8.getNanosecond());
+
+        DateLiteral rounded9 = DateLiteralUtils.createDateLiteral(
+                "2023-06-15 14:30:45.1234567895", ScalarType.createDatetimeV2Type(9));
+        Assertions.assertEquals("2023-06-15 14:30:45.123456790", rounded9.getStringValue());
+        Assertions.assertEquals(123456790, rounded9.getNanosecond());
+
+        DateLiteral carry7 = DateLiteralUtils.createDateLiteral(
+                "2023-06-15 14:30:45.99999995", ScalarType.createDatetimeV2Type(7));
+        DateLiteral carry8 = DateLiteralUtils.createDateLiteral(
+                "2023-06-15 14:30:45.999999995", ScalarType.createDatetimeV2Type(8));
+        DateLiteral carry9 = DateLiteralUtils.createDateLiteral(
+                "2023-06-15 14:30:45.9999999995", ScalarType.createDatetimeV2Type(9));
+        Assertions.assertEquals("2023-06-15 14:30:46.0000000", carry7.getStringValue());
+        Assertions.assertEquals("2023-06-15 14:30:46.00000000", carry8.getStringValue());
+        Assertions.assertEquals("2023-06-15 14:30:46.000000000", carry9.getStringValue());
+    }
+
+    @Test
     public void testDatetimeV2NanoTypeInference() throws AnalysisException {
         DateLiteral upgraded = DateLiteralUtils.createDateLiteral(
                 "2023-06-15 14:30:45.123456789", Type.DATETIME);
@@ -286,8 +318,6 @@ public class DateLiteralUtilsTest {
 
     @Test
     public void testInvalidDatetimeV2Nanoseconds() {
-        Assertions.assertThrows(AnalysisException.class, () -> DateLiteralUtils.createDateLiteral(
-                "2023-06-15 14:30:45.1234567890", ScalarType.createDatetimeV2Type(9)));
         Assertions.assertThrows(AnalysisException.class, () -> DateLiteralUtils.createDateLiteral(
                 "2023-02-29 14:30:45.123456789", ScalarType.createDatetimeV2Type(9)));
         Assertions.assertThrows(AnalysisException.class, () -> DateLiteralUtils.createDateLiteral(

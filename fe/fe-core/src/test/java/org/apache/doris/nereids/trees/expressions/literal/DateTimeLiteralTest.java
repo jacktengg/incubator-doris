@@ -802,4 +802,20 @@ class DateTimeLiteralTest {
         Assertions.assertThrows(CastException.class,
                 () -> yearNineNineNineNine.uncheckedCastTo(DateTimeV2Type.of(9)));
     }
+
+    @Test
+    void testDateTimeV2EpochNanoBoundariesByScale() {
+        Assertions.assertEquals("1677-09-21 00:12:43.1452242",
+                DateTimeV2Literal.getMinEpochNanoValue(DateTimeV2Type.of(7)).getStringValue());
+        Assertions.assertEquals("1677-09-21 00:12:43.14522420",
+                DateTimeV2Literal.getMinEpochNanoValue(DateTimeV2Type.of(8)).getStringValue());
+        Assertions.assertEquals("1677-09-21 00:12:43.145224192",
+                DateTimeV2Literal.getMinEpochNanoValue(DateTimeV2Type.of(9)).getStringValue());
+        Assertions.assertEquals("2262-04-11 23:47:16.8547758",
+                DateTimeV2Literal.getMaxEpochNanoValue(DateTimeV2Type.of(7)).getStringValue());
+        Assertions.assertEquals("2262-04-11 23:47:16.85477580",
+                DateTimeV2Literal.getMaxEpochNanoValue(DateTimeV2Type.of(8)).getStringValue());
+        Assertions.assertEquals("2262-04-11 23:47:16.854775807",
+                DateTimeV2Literal.getMaxEpochNanoValue(DateTimeV2Type.of(9)).getStringValue());
+    }
 }

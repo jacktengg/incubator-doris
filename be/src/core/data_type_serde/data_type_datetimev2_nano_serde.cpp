@@ -21,6 +21,7 @@
 #include <arrow/builder.h>
 #include <cctz/time_zone.h>
 
+#include <algorithm>
 #include <cctype>
 #include <limits>
 #include <orc/Vector.hh>
@@ -90,9 +91,9 @@ Status parse_datetimev2_nano(StringRef str, int scale, int64_t* epoch_nanos,
     DORIS_CHECK_LE(scale, 9);
 
     std::string input(str.data, str.size);
+    const size_t dot = input.rfind('.');
     size_t fraction_begin = std::string::npos;
     size_t fraction_end = std::string::npos;
-    const size_t dot = input.rfind('.');
     if (dot != std::string::npos && dot + 1 < input.size() &&
         std::isdigit(static_cast<unsigned char>(input[dot + 1]))) {
         fraction_begin = dot + 1;
@@ -122,23 +123,30 @@ Status parse_datetimev2_nano(StringRef str, int scale, int64_t* epoch_nanos,
         nanos += quantum;
     }
 
-    std::string base = input;
+    // Keep the fractional token in place so that the legacy parser validates its position and all
+    // trailing syntax. Zeroing the digits prevents its scale-0 rounding from changing the second;
+    // the nanosecond rounding above remains the only source of fractional rounding.
     if (fraction_begin != std::string::npos) {
-        base.erase(dot, fraction_end - dot);
+        std::fill(input.begin() + fraction_begin, input.begin() + fraction_end, '0');
     }
-    const StringRef base_ref(base.data(), base.size());
+    const StringRef input_ref(input.data(), input.size());
     DateV2Value<DateTimeV2ValueType> datetime;
     CastParameters params {.status = Status::OK(), .is_strict = true};
     CastToDatetimeV2::from_string_strict_mode<DatelikeParseMode::STRICT>(
-            base_ref, datetime, local_time_zone, 0, params);
+            input_ref, datetime, local_time_zone, 0, params);
     if (!params.status.ok()) {
+        if (dot != std::string::npos) {
+            return Status::InvalidArgument("Invalid DATETIMEV2({}) value '{}'", scale,
+                                           std::string(str.data, str.size));
+        }
         return params.status;
     }
 
     if (nanos == DateTimeV2NanoValue::NANOS_PER_SECOND) {
         if (!datetime.date_add_interval<TimeUnit::SECOND>(
                     TimeInterval {TimeUnit::SECOND, 1, false})) {
-            return Status::InvalidArgument("DATETIMEV2 value overflows while rounding '{}'", input);
+            return Status::InvalidArgument("DATETIMEV2 value overflows while rounding '{}'",
+                                           std::string(str.data, str.size));
         }
         nanos = 0;
     }
@@ -146,7 +154,8 @@ Status parse_datetimev2_nano(StringRef str, int scale, int64_t* epoch_nanos,
     DateTimeV2NanoValue value;
     if (!value.from_datetime(datetime, static_cast<uint16_t>(nanos % NANOS_PER_MICROSECOND))) {
         return Status::InvalidArgument(
-                "DATETIMEV2({}) value '{}' is outside [{}, {}]", scale, input,
+                "DATETIMEV2({}) value '{}' is outside [{}, {}]", scale,
+                std::string(str.data, str.size),
                 DateTimeV2NanoValue(std::numeric_limits<int64_t>::min()).to_string(scale),
                 DateTimeV2NanoValue(std::numeric_limits<int64_t>::max()).to_string(scale));
     }

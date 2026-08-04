@@ -293,6 +293,30 @@ public class PartitionKeyTest {
     }
 
     @Test
+    public void testDateTimeV2NanoMinValue() throws Exception {
+        assertDateTimeV2NanoMinValue(
+                7, "1677-09-21 00:12:43.1452242", "1677-09-21 00:12:43.1452243");
+        assertDateTimeV2NanoMinValue(
+                8, "1677-09-21 00:12:43.14522420", "1677-09-21 00:12:43.14522421");
+        assertDateTimeV2NanoMinValue(
+                9, "1677-09-21 00:12:43.145224192", "1677-09-21 00:12:43.145224193");
+    }
+
+    private void assertDateTimeV2NanoMinValue(int scale, String minValue, String nextValue) throws Exception {
+        Column column = new Column("datetimev2_nano", ScalarType.createDatetimeV2Type(scale));
+        PartitionKey infinityMin = PartitionKey.createInfinityPartitionKey(Arrays.asList(column), false);
+        PartitionKey literalMin = PartitionKey.createPartitionKey(
+                Arrays.asList(new PartitionValue(minValue)), Arrays.asList(column));
+        PartitionKey literalNext = PartitionKey.createPartitionKey(
+                Arrays.asList(new PartitionValue(nextValue)), Arrays.asList(column));
+
+        Assert.assertTrue(infinityMin.isMinValue());
+        Assert.assertTrue(literalMin.isMinValue());
+        Assert.assertEquals(infinityMin, literalMin);
+        Assert.assertFalse(literalNext.isMinValue());
+    }
+
+    @Test
     public void testTimestampTzPartitionKeyKeepsExplicitOffset() throws Exception {
         boolean originalRunningUnitTest = FeConstants.runningUnitTest;
         FeConstants.runningUnitTest = true;

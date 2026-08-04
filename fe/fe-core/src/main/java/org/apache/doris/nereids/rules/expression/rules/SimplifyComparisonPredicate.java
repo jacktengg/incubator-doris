@@ -213,6 +213,13 @@ public class SimplifyComparisonPredicate implements ExpressionPatternRuleFactory
         int toScale = leftType instanceof DateTimeV2Type ? ((DateTimeV2Type) leftType).getScale() : 0;
         DateTimeV2Type rightType = right.getDataType();
         if (toScale < rightType.getScale()) {
+            if (leftType instanceof DateTimeV2Type && toScale > 6
+                    && right.compareTo(DateTimeV2Literal.getMinEpochNanoValue((DateTimeV2Type) leftType)) < 0) {
+                // The Int64 epoch-nanosecond lower bound is not aligned to scale 7 or 8.
+                // Flooring a finer literal can therefore create a value below the target type's
+                // minimum, while every non-null value of the target type is greater than it.
+                return simplifyDateComparisonOutsideRange(comparisonPredicate, left, true);
+            }
             if (comparisonPredicate instanceof EqualTo) {
                 long originValue = right.getNanoSecond();
                 right = right.roundFloor(toScale);
@@ -294,13 +301,39 @@ public class SimplifyComparisonPredicate implements ExpressionPatternRuleFactory
             for (int i = 0; i < ((DateTimeV2Type) leftType).getScale(); i++) {
                 upperFraction = 10 * upperFraction + 9;
             }
-            int scale = ((DateTimeV2Type) leftType).getScale();
+            DateTimeV2Type dateTimeV2Type = (DateTimeV2Type) leftType;
+            int scale = dateTimeV2Type.getScale();
+            // DateTimeV2Literal accepts a 6-digit microsecond value for legacy scales, but a
+            // 9-digit nanosecond value for nano scales.
             int fractionalWidth = scale > 6 ? 9 : 6;
             upperFraction *= (long) Math.pow(10, fractionalWidth - scale);
-            lowBound = new DateTimeV2Literal((DateTimeV2Type) leftType,
-                    right.getYear(), right.getMonth(), right.getDay(), 0, 0, 0, 0);
-            upBound = new DateTimeV2Literal((DateTimeV2Type) leftType,
-                    right.getYear(), right.getMonth(), right.getDay(), 23, 59, 59, upperFraction);
+            if (scale > 6) {
+                // The signed Int64 epoch-nanosecond range starts and ends in the middle of its
+                // boundary dates. Clamp the rewritten whole-day interval to the exact min/max on
+                // those dates, and simplify dates completely outside the range without constructing
+                // an invalid midnight or end-of-day literal.
+                DateTimeV2Literal minValue = DateTimeV2Literal.getMinEpochNanoValue(dateTimeV2Type);
+                DateTimeV2Literal maxValue = DateTimeV2Literal.getMaxEpochNanoValue(dateTimeV2Type);
+                DateV2Literal minDate = new DateV2Literal(
+                        minValue.getYear(), minValue.getMonth(), minValue.getDay());
+                DateV2Literal maxDate = new DateV2Literal(
+                        maxValue.getYear(), maxValue.getMonth(), maxValue.getDay());
+                int compareToMin = right.compareTo(minDate);
+                int compareToMax = right.compareTo(maxDate);
+                if (compareToMin < 0 || compareToMax > 0) {
+                    return simplifyDateComparisonOutsideRange(
+                            comparisonPredicate, left, compareToMin < 0);
+                }
+                lowBound = compareToMin == 0 ? minValue : new DateTimeV2Literal(dateTimeV2Type,
+                        right.getYear(), right.getMonth(), right.getDay(), 0, 0, 0, 0);
+                upBound = compareToMax == 0 ? maxValue : new DateTimeV2Literal(dateTimeV2Type,
+                        right.getYear(), right.getMonth(), right.getDay(), 23, 59, 59, upperFraction);
+            } else {
+                lowBound = new DateTimeV2Literal(dateTimeV2Type,
+                        right.getYear(), right.getMonth(), right.getDay(), 0, 0, 0, 0);
+                upBound = new DateTimeV2Literal(dateTimeV2Type,
+                        right.getYear(), right.getMonth(), right.getDay(), 23, 59, 59, upperFraction);
+            }
         }
 
         if (comparisonPredicate instanceof GreaterThanEqual || comparisonPredicate instanceof LessThan) {
@@ -321,6 +354,32 @@ public class SimplifyComparisonPredicate implements ExpressionPatternRuleFactory
         }
 
         return comparisonPredicate;
+    }
+
+    /**
+     * Simplify a date/datetime comparison whose right literal is outside the range representable by
+     * the left expression. For every non-null left value, the result is constant and depends only on
+     * the comparison direction and whether the literal is below the minimum or above the maximum.
+     * Null-safe equality is always false; other predicates return true-or-null or false-or-null to
+     * preserve SQL three-valued logic when the left expression is nullable.
+     *
+     * @param comparisonPredicate comparison to simplify
+     * @param left left expression whose type defines the representable range
+     * @param rightBeforeMin true if the right literal is below that range; false if it is above
+     * @return the constant-equivalent expression with the original NULL semantics
+     */
+    private static Expression simplifyDateComparisonOutsideRange(
+            ComparisonPredicate comparisonPredicate, Expression left, boolean rightBeforeMin) {
+        if (comparisonPredicate instanceof NullSafeEqual) {
+            return BooleanLiteral.FALSE;
+        }
+        if (comparisonPredicate instanceof EqualTo) {
+            return ExpressionUtils.falseOrNull(left);
+        }
+        boolean alwaysTrue = rightBeforeMin
+                ? comparisonPredicate instanceof GreaterThan || comparisonPredicate instanceof GreaterThanEqual
+                : comparisonPredicate instanceof LessThan || comparisonPredicate instanceof LessThanEqual;
+        return alwaysTrue ? ExpressionUtils.trueOrNull(left) : ExpressionUtils.falseOrNull(left);
     }
 
     // process cast(date as datetime/date) cmp datetime/date

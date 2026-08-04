@@ -375,6 +375,43 @@ suite("test_datetimev2_nano") {
     """
     sql "set debug_skip_fold_constant = false"
 
+    sql "drop table if exists test_datetimev2_nano_cast_input"
+    sql """
+        create table test_datetimev2_nano_cast_input (
+            id int,
+            value varchar(64)
+        )
+        duplicate key(id)
+        distributed by hash(id) buckets 1
+        properties("replication_num" = "1")
+    """
+    sql """
+        insert into test_datetimev2_nano_cast_input values
+        (1, '2024-01-01 00:00:00.123456789'),
+        (2, '2024-01-01 00:00:00.123.456')
+    """
+    def originalEnableStrictCast = sql("select @@enable_strict_cast")[0][0]
+    try {
+        sql "set enable_strict_cast = false"
+        order_qt_nonconstant_permissive_cast """
+            select id, cast(value as datetimev2(9))
+            from test_datetimev2_nano_cast_input
+            order by id
+        """
+
+        sql "set enable_strict_cast = true"
+        test {
+            sql """
+                select cast(value as datetimev2(9))
+                from test_datetimev2_nano_cast_input
+                where id = 2
+            """
+            exception "2024-01-01 00:00:00.123.456"
+        }
+    } finally {
+        sql "set enable_strict_cast = ${originalEnableStrictCast}"
+    }
+
     qt_calendar_arithmetic """
         select
             microseconds_add(

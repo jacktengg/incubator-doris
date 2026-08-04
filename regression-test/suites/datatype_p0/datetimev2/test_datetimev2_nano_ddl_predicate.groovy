@@ -52,6 +52,44 @@ suite("test_datetimev2_nano_ddl_predicate") {
         from test_datetimev2_nano_ddl_duplicate
         order by id
     """
+    order_qt_boundary_date_cast_comparisons """
+        select 'min_eq' as comparison_name, id
+        from test_datetimev2_nano_ddl_duplicate
+        where cast(dt9 as datev2) = datev2 '1677-09-21'
+        union all
+        select 'max_eq' as comparison_name, id
+        from test_datetimev2_nano_ddl_duplicate
+        where cast(dt9 as datev2) = datev2 '2262-04-11'
+        order by comparison_name, id
+    """
+    for (def scale : [7, 8]) {
+        "order_qt_nano_lower_bound_scale${scale}_reduction" """
+            select 'eq' as comparison_name, id
+            from test_datetimev2_nano_ddl_duplicate
+            where cast(dt${scale} as datetime(9)) = cast('1677-09-21 00:12:43.145224192' as datetime(9))
+            union all
+            select 'null_safe_eq' as comparison_name, id
+            from test_datetimev2_nano_ddl_duplicate
+            where cast(dt${scale} as datetime(9)) <=> cast('1677-09-21 00:12:43.145224192' as datetime(9))
+            union all
+            select 'gt' as comparison_name, id
+            from test_datetimev2_nano_ddl_duplicate
+            where cast(dt${scale} as datetime(9)) > cast('1677-09-21 00:12:43.145224192' as datetime(9))
+            union all
+            select 'ge' as comparison_name, id
+            from test_datetimev2_nano_ddl_duplicate
+            where cast(dt${scale} as datetime(9)) >= cast('1677-09-21 00:12:43.145224192' as datetime(9))
+            union all
+            select 'lt' as comparison_name, id
+            from test_datetimev2_nano_ddl_duplicate
+            where cast(dt${scale} as datetime(9)) < cast('1677-09-21 00:12:43.145224192' as datetime(9))
+            union all
+            select 'le' as comparison_name, id
+            from test_datetimev2_nano_ddl_duplicate
+            where cast(dt${scale} as datetime(9)) <= cast('1677-09-21 00:12:43.145224192' as datetime(9))
+            order by comparison_name, id
+        """
+    }
 
     sql "drop table if exists test_datetimev2_nano_ddl_aggregate"
     sql """
@@ -215,7 +253,8 @@ suite("test_datetimev2_nano_ddl_predicate") {
         ('1970-01-01 00:00:00.000000000', 3),
         ('1970-01-01 00:00:00.000000001', 4),
         ('1970-01-01 00:00:00.123456789', 5),
-        ('2262-04-11 23:47:16.854775807', 6)
+        ('2262-04-11 23:47:16.854775807', 6),
+        (null, 7)
     """
     explain {
         sql """
@@ -234,6 +273,58 @@ suite("test_datetimev2_nano_ddl_predicate") {
         """
         contains "partitions=1/3 (p_after_epoch)"
     }
+    explain {
+        sql """
+            select *
+            from test_datetimev2_nano_partition_bucket
+            where dt is null
+        """
+        contains "partitions=1/3 (p_before_epoch)"
+    }
+
+    sql "drop table if exists test_datetimev2_nano_list_partition_rounding"
+    sql """
+        create table test_datetimev2_nano_list_partition_rounding (
+            dt7 datetime(7),
+            dt8 datetime(8),
+            dt9 datetime(9),
+            id int
+        )
+        duplicate key(dt7, dt8, dt9)
+        partition by list(dt7, dt8, dt9) (
+            partition p_round values in
+                (('1970-01-01 00:00:00.12345675',
+                  '1970-01-01 00:00:00.123456785',
+                  '1970-01-01 00:00:00.1234567895')),
+            partition p_carry values in
+                (('1970-01-01 00:00:00.99999995',
+                  '1970-01-01 00:00:00.999999995',
+                  '1970-01-01 00:00:00.9999999995'))
+        )
+        distributed by hash(id) buckets 1
+        properties("replication_num" = "1")
+    """
+    sql """
+        insert into test_datetimev2_nano_list_partition_rounding values
+        ('1970-01-01 00:00:00.12345675',
+         '1970-01-01 00:00:00.123456785',
+         '1970-01-01 00:00:00.1234567895', 1),
+        ('1970-01-01 00:00:00.99999995',
+         '1970-01-01 00:00:00.999999995',
+         '1970-01-01 00:00:00.9999999995', 2)
+    """
+    order_qt_list_partition_scale_rounding """
+        select dt7, dt8, dt9, id
+        from test_datetimev2_nano_list_partition_rounding
+        order by id
+    """
+
+    order_qt_nullable_first_range """
+        select id, dt
+        from test_datetimev2_nano_partition_bucket
+        where dt is null
+        order by id
+    """
 
     order_qt_all_storage_predicates """
         select id,

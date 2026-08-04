@@ -608,11 +608,12 @@ bool VOlapTablePartitionParam::_part_contains(VOlapTablePartition* part,
 // insert value into _partition_block's column
 // NOLINTBEGIN(readability-function-size)
 static Status _create_partition_key(const TExprNode& t_expr, BlockRow* part_key, uint16_t pos) {
-    auto column = std::move(*part_key->first->get_by_position(pos).column).mutate();
+    const auto& partition_column = part_key->first->get_by_position(pos);
+    const auto partition_type = remove_nullable(partition_column.type);
+    auto column = std::move(*partition_column.column).mutate();
     switch (t_expr.node_type) {
     case TExprNodeType::DATE_LITERAL: {
-        auto primitive_type =
-                DataTypeFactory::instance().create_data_type(t_expr.type)->get_primitive_type();
+        const auto primitive_type = partition_type->get_primitive_type();
         if (primitive_type == TYPE_DATEV2) {
             DateV2Value<DateV2ValueType> dt;
             CastParameters params;
@@ -626,8 +627,7 @@ static Status _create_partition_key(const TExprNode& t_expr, BlockRow* part_key,
             column->insert_data(reinterpret_cast<const char*>(&dt), 0);
         } else if (primitive_type == TYPE_DATETIMEV2) {
             DateV2Value<DateTimeV2ValueType> dt;
-            const int32_t scale =
-                    t_expr.type.types.empty() ? -1 : t_expr.type.types.front().scalar_type.scale;
+            const int32_t scale = cast_set<int32_t>(partition_type->get_scale());
             CastParameters params;
             if (!CastToDatetimeV2::from_string_strict_mode<DatelikeParseMode::STRICT>(
                         {t_expr.date_literal.value.c_str(), t_expr.date_literal.value.size()}, dt,
@@ -638,8 +638,7 @@ static Status _create_partition_key(const TExprNode& t_expr, BlockRow* part_key,
             }
             column->insert_data(reinterpret_cast<const char*>(&dt), 0);
         } else if (primitive_type == TYPE_DATETIMEV2_NANO) {
-            const int32_t scale =
-                    t_expr.type.types.empty() ? -1 : t_expr.type.types.front().scalar_type.scale;
+            const int32_t scale = cast_set<int32_t>(partition_type->get_scale());
             int64_t epoch_nanos = 0;
             RETURN_IF_ERROR(parse_datetimev2_nano(
                     {t_expr.date_literal.value.data(), t_expr.date_literal.value.size()}, scale,
@@ -649,8 +648,7 @@ static Status _create_partition_key(const TExprNode& t_expr, BlockRow* part_key,
         } else if (primitive_type == TYPE_TIMESTAMPTZ) {
             TimestampTzValue res;
             CastParameters params {.status = Status::OK(), .is_strict = true};
-            const int32_t scale =
-                    t_expr.type.types.empty() ? -1 : t_expr.type.types.front().scalar_type.scale;
+            const int32_t scale = cast_set<int32_t>(partition_type->get_scale());
             if (!CastToTimestampTz::from_string(
                         {t_expr.date_literal.value.c_str(), t_expr.date_literal.value.size()}, res,
                         params, nullptr, scale)) [[unlikely]] {

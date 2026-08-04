@@ -21,6 +21,7 @@ import org.apache.doris.catalog.ScalarType;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.util.TimeUtils;
+import org.apache.doris.nereids.util.DateUtils;
 
 import com.google.common.base.Preconditions;
 
@@ -82,6 +83,12 @@ public class DateLiteralUtils {
                     s = s.substring(0, s.length() - 6);
                 }
                 sourceZone = ZoneId.of(tzString);
+            }
+
+            int nanosecondGuardDigit = -1;
+            if (type != null && type.isDatetimeV2()) {
+                nanosecondGuardDigit = DateUtils.getNanosecondGuardDigit(s);
+                s = DateUtils.truncateFractionalSecondForJavaParser(s);
             }
 
             if (!s.contains("-")) {
@@ -243,6 +250,20 @@ public class DateLiteralUtils {
                 // the original init() behavior (not affected by zone conversion)
             }
 
+            if (type.isDatetimeV2()) {
+                LocalDateTime roundedDateTime = roundFractionalSecond(
+                        year, month, day, hour, minute, second, nanosecond,
+                        ((ScalarType) type).getScalarScale(), nanosecondGuardDigit);
+                year = roundedDateTime.getYear();
+                month = roundedDateTime.getMonthValue();
+                day = roundedDateTime.getDayOfMonth();
+                hour = roundedDateTime.getHour();
+                minute = roundedDateTime.getMinute();
+                second = roundedDateTime.getSecond();
+                nanosecond = roundedDateTime.getNano();
+                microsecond = nanosecond / 1000;
+            }
+
             // Construct DateLiteral using the appropriate constructor based on the determined type
             DateLiteral result;
             if (type.isDate() || type.isDateV2()) {
@@ -267,6 +288,20 @@ public class DateLiteralUtils {
 
     private static int getOrDefault(TemporalAccessor accessor, ChronoField field, int defaultValue) {
         return accessor.isSupported(field) ? accessor.get(field) : defaultValue;
+    }
+
+    private static LocalDateTime roundFractionalSecond(long year, long month, long day, long hour,
+            long minute, long second, long nanosecond, int scale, int nanosecondGuardDigit) {
+        long factor = (long) Math.pow(10, ScalarType.MAX_DATETIMEV2_SCALE - scale);
+        long roundingOffset = scale == ScalarType.MAX_DATETIMEV2_SCALE && nanosecondGuardDigit >= 5
+                ? 1 : factor / 2;
+        long roundedNanosecond = (nanosecond + roundingOffset) / factor * factor;
+        LocalDateTime result = LocalDateTime.of(
+                (int) year, (int) month, (int) day, (int) hour, (int) minute, (int) second);
+        if (roundedNanosecond == 1000000000L) {
+            return result.plusSeconds(1);
+        }
+        return result.withNano((int) roundedNanosecond);
     }
 
     private static boolean haveTimeZoneOffset(String arg) {

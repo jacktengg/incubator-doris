@@ -461,6 +461,63 @@ class SimplifyComparisonPredicateTest extends ExpressionRewriteTestHelper {
     }
 
     @Test
+    void testDateTimeV2NanoBoundaryDateComparison() {
+        executor = new ExpressionRuleExecutor(ImmutableList.of(
+                bottomUp(SimplifyComparisonPredicate.INSTANCE)
+        ));
+
+        Expression datetime9 = new SlotReference("datetime9", DateTimeV2Type.of(9), true);
+        Expression castToDate = new Cast(datetime9, DateV2Type.INSTANCE);
+        DateV2Literal minDate = new DateV2Literal("1677-09-21");
+        DateV2Literal maxDate = new DateV2Literal("2262-04-11");
+        DateTimeV2Literal minValue = DateTimeV2Literal.getMinEpochNanoValue(DateTimeV2Type.of(9));
+        DateTimeV2Literal maxValue = DateTimeV2Literal.getMaxEpochNanoValue(DateTimeV2Type.of(9));
+        DateTimeV2Literal minDayEnd = new DateTimeV2Literal(
+                DateTimeV2Type.of(9), "1677-09-21 23:59:59.999999999");
+        DateTimeV2Literal maxDayStart = new DateTimeV2Literal(
+                DateTimeV2Type.of(9), "2262-04-11 00:00:00.000000000");
+
+        assertRewrite(new EqualTo(castToDate, minDate), new And(
+                new GreaterThanEqual(datetime9, minValue), new LessThanEqual(datetime9, minDayEnd)));
+        assertRewrite(new EqualTo(castToDate, maxDate), new And(
+                new GreaterThanEqual(datetime9, maxDayStart), new LessThanEqual(datetime9, maxValue)));
+        assertRewrite(new GreaterThanEqual(castToDate, minDate), new GreaterThanEqual(datetime9, minValue));
+        assertRewrite(new LessThan(castToDate, minDate), new LessThan(datetime9, minValue));
+        assertRewrite(new GreaterThan(castToDate, maxDate), new GreaterThan(datetime9, maxValue));
+        assertRewrite(new LessThanEqual(castToDate, maxDate), new LessThanEqual(datetime9, maxValue));
+
+        DateV2Literal beforeMinDate = new DateV2Literal("1677-09-20");
+        DateV2Literal afterMaxDate = new DateV2Literal("2262-04-12");
+        assertRewrite(new EqualTo(castToDate, beforeMinDate), ExpressionUtils.falseOrNull(datetime9));
+        assertRewrite(new GreaterThan(castToDate, beforeMinDate), ExpressionUtils.trueOrNull(datetime9));
+        assertRewrite(new EqualTo(castToDate, afterMaxDate), ExpressionUtils.falseOrNull(datetime9));
+        assertRewrite(new LessThan(castToDate, afterMaxDate), ExpressionUtils.trueOrNull(datetime9));
+    }
+
+    @Test
+    void testDateTimeV2NanoLowerBoundScaleReduction() {
+        executor = new ExpressionRuleExecutor(ImmutableList.of(
+                bottomUp(SimplifyComparisonPredicate.INSTANCE)
+        ));
+
+        assertDateTimeV2NanoLowerBoundScaleReduction(7);
+        assertDateTimeV2NanoLowerBoundScaleReduction(8);
+    }
+
+    private void assertDateTimeV2NanoLowerBoundScaleReduction(int scale) {
+        Expression datetime = new SlotReference("datetime" + scale, DateTimeV2Type.of(scale), true);
+        Expression castToNano = new Cast(datetime, DateTimeV2Type.of(9));
+        DateTimeV2Literal nanoMin = DateTimeV2Literal.getMinEpochNanoValue(DateTimeV2Type.of(9));
+
+        assertRewrite(new EqualTo(castToNano, nanoMin), ExpressionUtils.falseOrNull(datetime));
+        assertRewrite(new NullSafeEqual(castToNano, nanoMin), BooleanLiteral.FALSE);
+        assertRewrite(new GreaterThan(castToNano, nanoMin), ExpressionUtils.trueOrNull(datetime));
+        assertRewrite(new GreaterThanEqual(castToNano, nanoMin), ExpressionUtils.trueOrNull(datetime));
+        assertRewrite(new LessThan(castToNano, nanoMin), ExpressionUtils.falseOrNull(datetime));
+        assertRewrite(new LessThanEqual(castToNano, nanoMin), ExpressionUtils.falseOrNull(datetime));
+    }
+
+    @Test
     void testRound() {
         executor = new ExpressionRuleExecutor(ImmutableList.of(
                 bottomUp(

@@ -28,6 +28,8 @@ import org.apache.doris.nereids.types.DateTimeType;
 import org.apache.doris.nereids.types.DateTimeV2Type;
 import org.apache.doris.nereids.types.TimeStampTzType;
 
+import com.google.common.base.Preconditions;
+
 import java.time.LocalDateTime;
 import java.util.Objects;
 
@@ -62,6 +64,31 @@ public class DateTimeV2Literal extends DateTimeLiteral {
                 dateType.getScale() > 6 ? fractionalSecond / 1000 : fractionalSecond);
         nanoSecond = dateType.getScale() > 6 ? fractionalSecond : fractionalSecond * 1000;
         roundMicroSecond(dateType.getScale());
+    }
+
+    /** Return the smallest epoch-nanosecond value representable at the specified scale. */
+    public static DateTimeV2Literal getMinEpochNanoValue(DateTimeV2Type dateType) {
+        Preconditions.checkArgument(dateType.getScale() > 6);
+        long factor = (long) Math.pow(10, DateTimeV2Type.MAX_SCALE - dateType.getScale());
+        LocalDateTime value = MIN_DATETIMEV2_NANO;
+        long nanoSecond = (value.getNano() + factor - 1) / factor * factor;
+        if (nanoSecond == 1000000000L) {
+            value = value.plusSeconds(1);
+            nanoSecond = 0;
+        }
+        return new DateTimeV2Literal(dateType, value.getYear(), value.getMonthValue(), value.getDayOfMonth(),
+                value.getHour(), value.getMinute(), value.getSecond(), nanoSecond);
+    }
+
+    /** Return the largest epoch-nanosecond value representable at the specified scale. */
+    public static DateTimeV2Literal getMaxEpochNanoValue(DateTimeV2Type dateType) {
+        Preconditions.checkArgument(dateType.getScale() > 6);
+        long factor = (long) Math.pow(10, DateTimeV2Type.MAX_SCALE - dateType.getScale());
+        long nanoSecond = MAX_DATETIMEV2_NANO.getNano() / factor * factor;
+        return new DateTimeV2Literal(dateType, MAX_DATETIMEV2_NANO.getYear(),
+                MAX_DATETIMEV2_NANO.getMonthValue(), MAX_DATETIMEV2_NANO.getDayOfMonth(),
+                MAX_DATETIMEV2_NANO.getHour(), MAX_DATETIMEV2_NANO.getMinute(),
+                MAX_DATETIMEV2_NANO.getSecond(), nanoSecond);
     }
 
     /** Date difference rounded toward zero by time part. */
