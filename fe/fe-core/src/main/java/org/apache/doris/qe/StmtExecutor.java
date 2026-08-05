@@ -2010,6 +2010,13 @@ public class StmtExecutor {
                             break;
                         case DATETIME:
                         case DATETIMEV2:
+                            if (col.getType().isDatetimeV2()
+                                    && ((ScalarType) col.getType()).getScalarScale() > 6) {
+                                // MysqlSerializer advertises DATETIMEV2(7..9) as MYSQL_TYPE_STRING because the
+                                // binary temporal layout has no nanosecond field. Match that metadata here.
+                                serializer.writeLenEncodedString(item);
+                                break;
+                            }
                             DateTimeV2Literal datetime = new DateTimeV2Literal(item);
                             long microSecond = datetime.getMicroSecond();
                             // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_com_query_response_text_resultset.html

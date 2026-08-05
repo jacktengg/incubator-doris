@@ -1314,6 +1314,21 @@ class FoldConstantTest extends ExpressionRewriteTestHelper {
                 .secondCeil(new DateTimeV2Literal("2021-01-01 12:12:12.123"), new IntegerLiteral(2))) == 0);
         Assertions.assertTrue(new DateTimeV2Literal("2021-01-01 12:12:12.000000").compareTo((ComparableLiteral) TimeRoundSeries
                 .secondFloor(new DateTimeV2Literal("2021-01-01 12:12:12.123"), new IntegerLiteral(2))) == 0);
+
+        DateTimeV2Literal oneNanosecondAfterBoundary = new DateTimeV2Literal(
+                "2021-01-01 12:12:12.000000001");
+        Assertions.assertEquals(new DateTimeV2Literal(DateTimeV2Type.of(9),
+                        "2021-01-01 12:12:13.000000000"),
+                TimeRoundSeries.secondCeil(oneNanosecondAfterBoundary));
+        Assertions.assertEquals(new DateTimeV2Literal(DateTimeV2Type.of(9),
+                        "2021-01-01 12:12:12.000000000"),
+                TimeRoundSeries.secondFloor(oneNanosecondAfterBoundary));
+        Assertions.assertEquals(new DateTimeV2Literal(DateTimeV2Type.of(9),
+                        "2021-01-01 12:13:00.000000000"),
+                TimeRoundSeries.minuteCeil(oneNanosecondAfterBoundary));
+        Assertions.assertEquals(new DateTimeV2Literal(DateTimeV2Type.of(9),
+                        "2021-01-01 12:12:00.000000000"),
+                TimeRoundSeries.minuteFloor(oneNanosecondAfterBoundary));
     }
 
     @Test

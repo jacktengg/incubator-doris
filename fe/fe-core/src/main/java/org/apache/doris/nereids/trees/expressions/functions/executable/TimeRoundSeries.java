@@ -104,14 +104,16 @@ public class TimeRoundSeries {
                         + (dt.getHour() - start.getHour()) * 60 * 60
                         + (dt.getMinute() - start.getMinute()) * 60
                         + (dt.getSecond() - start.getSecond());
-                trivialPart = dt.getMicroSecond() - start.getMicroSecond();
+                trivialPart = date.getNano() - origin.getNano();
                 break;
             }
             default: {
                 return null;
             }
         }
-        trivialPart = (trivialPart == 0 ? dt.getMicroSecond() - start.getMicroSecond() : trivialPart);
+        // The coarser fields can be equal while the values still differ within the second. Use the full
+        // fractional precision here so DATETIMEV2(7..9) values do not look aligned to a rounding boundary.
+        trivialPart = (trivialPart == 0 ? date.getNano() - origin.getNano() : trivialPart);
         if (getCeil) {
             diff = diff + (trivialPart > 0 ? 1 : 0);
         } else {
