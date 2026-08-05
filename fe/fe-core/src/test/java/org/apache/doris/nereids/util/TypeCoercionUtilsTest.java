@@ -18,6 +18,7 @@
 package org.apache.doris.nereids.util;
 
 import org.apache.doris.nereids.exceptions.AnalysisException;
+import org.apache.doris.nereids.rules.analysis.ExpressionAnalyzer;
 import org.apache.doris.nereids.rules.expression.check.CheckCast;
 import org.apache.doris.nereids.trees.expressions.Add;
 import org.apache.doris.nereids.trees.expressions.Cast;
@@ -27,6 +28,7 @@ import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.GreaterThan;
 import org.apache.doris.nereids.trees.expressions.InPredicate;
 import org.apache.doris.nereids.trees.expressions.Multiply;
+import org.apache.doris.nereids.trees.expressions.Not;
 import org.apache.doris.nereids.trees.expressions.NullSafeEqual;
 import org.apache.doris.nereids.trees.expressions.SlotReference;
 import org.apache.doris.nereids.trees.expressions.Subtract;
@@ -486,6 +488,46 @@ public class TypeCoercionUtilsTest {
         smallIntString = (InPredicate) TypeCoercionUtils.processInPredicate(smallIntString);
         Assertions.assertEquals(DecimalV3Type.createDecimalV3Type(23, 3), smallIntString.getCompareExpr().getDataType());
         Assertions.assertEquals(DecimalV3Type.createDecimalV3Type(23, 3), smallIntString.getOptions().get(0).getDataType());
+    }
+
+    @Test
+    public void testDateStringSubMicrosecondComparisonCoercion() {
+        Expression date = new SlotReference("date", DateV2Type.INSTANCE, true);
+        Expression nanoString = new StringLiteral("2024-01-01 00:00:00.000000001");
+        DateTimeV2Literal nanoLiteral = new DateTimeV2Literal(
+                DateTimeV2Type.of(9), "2024-01-01 00:00:00.000000001");
+        Expression dateAsNano = new Cast(date, DateTimeV2Type.of(9));
+
+        Assertions.assertEquals(new EqualTo(dateAsNano, nanoLiteral),
+                TypeCoercionUtils.processComparisonPredicate(new EqualTo(date, nanoString)));
+        Assertions.assertEquals(new EqualTo(nanoLiteral, dateAsNano),
+                TypeCoercionUtils.processComparisonPredicate(new EqualTo(nanoString, date)));
+    }
+
+    @Test
+    public void testDateStringSubMicrosecondInCoercion() {
+        Expression date = new SlotReference("date", DateV2Type.INSTANCE, true);
+        Expression nanoString = new StringLiteral("2024-01-01 00:00:00.000000001");
+        Expression dateString = new StringLiteral("2024-01-02");
+
+        InPredicate inPredicate = (InPredicate) TypeCoercionUtils.processInPredicate(
+                new InPredicate(date, ImmutableList.of(nanoString, dateString)));
+        assertDateStringNanoInCoercion(inPredicate);
+
+        Not notInPredicate = (Not) ExpressionAnalyzer.FUNCTION_ANALYZER_RULE.rewrite(
+                new Not(new InPredicate(date, ImmutableList.of(dateString, nanoString))), null);
+        assertDateStringNanoInCoercion((InPredicate) notInPredicate.child());
+    }
+
+    private void assertDateStringNanoInCoercion(InPredicate inPredicate) {
+        Assertions.assertEquals(DateTimeV2Type.of(9), inPredicate.getCompareExpr().getDataType());
+        Assertions.assertTrue(inPredicate.getCompareExpr() instanceof Cast);
+        Assertions.assertTrue(inPredicate.getOptions().stream()
+                .allMatch(option -> option.getDataType().equals(DateTimeV2Type.of(9))));
+        Assertions.assertTrue(inPredicate.getOptions().stream()
+                .anyMatch(option -> option instanceof DateTimeV2Literal
+                        && ((DateTimeV2Literal) option).getStringValue()
+                                .equals("2024-01-01 00:00:00.000000001")));
     }
 
     @Test

@@ -399,7 +399,7 @@ public class DateLiteral extends Literal implements ComparableLiteral {
         return DateUtils.getOrDefault(dateTime, ChronoField.HOUR_OF_DAY) != 0
                 || DateUtils.getOrDefault(dateTime, ChronoField.MINUTE_OF_HOUR) != 0
                 || DateUtils.getOrDefault(dateTime, ChronoField.SECOND_OF_MINUTE) != 0
-                || DateUtils.getOrDefault(dateTime, ChronoField.MICRO_OF_SECOND) != 0;
+                || DateUtils.getOrDefault(dateTime, ChronoField.NANO_OF_SECOND) != 0;
     }
 
     @Override

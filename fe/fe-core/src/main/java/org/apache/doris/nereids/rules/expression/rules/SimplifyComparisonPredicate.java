@@ -391,8 +391,7 @@ public class SimplifyComparisonPredicate implements ExpressionPatternRuleFactory
         if (right instanceof DateTimeLiteral) {
             DateTimeLiteral dateTimeLiteral = (DateTimeLiteral) right;
             right = migrateToDateV2(dateTimeLiteral);
-            if (dateTimeLiteral.getHour() != 0 || dateTimeLiteral.getMinute() != 0
-                    || dateTimeLiteral.getSecond() != 0 || dateTimeLiteral.getMicroSecond() != 0) {
+            if (!dateTimeLiteral.isMidnight()) {
                 if (comparisonPredicate instanceof EqualTo) {
                     return ExpressionUtils.falseOrNull(left);
                 } else if (comparisonPredicate instanceof NullSafeEqual) {

@@ -504,6 +504,39 @@ class SimplifyComparisonPredicateTest extends ExpressionRewriteTestHelper {
         assertDateTimeV2NanoLowerBoundScaleReduction(8);
     }
 
+    @Test
+    void testDateToDateTimeV2NanoSubMicrosecondComparison() {
+        executor = new ExpressionRuleExecutor(ImmutableList.of(
+                bottomUp(SimplifyComparisonPredicate.INSTANCE)
+        ));
+
+        Expression date = new SlotReference("date", DateV2Type.INSTANCE, true);
+        Expression castToNano = new Cast(date, DateTimeV2Type.of(9));
+        DateTimeV2Literal nanoAfterMidnight = new DateTimeV2Literal(
+                DateTimeV2Type.of(9), "2024-01-01 00:00:00.000000001");
+        DateV2Literal currentDate = new DateV2Literal("2024-01-01");
+        DateV2Literal nextDate = new DateV2Literal("2024-01-02");
+
+        assertRewrite(new EqualTo(castToNano, nanoAfterMidnight), ExpressionUtils.falseOrNull(date));
+        assertRewrite(new EqualTo(nanoAfterMidnight, castToNano), ExpressionUtils.falseOrNull(date));
+        assertRewrite(new NullSafeEqual(castToNano, nanoAfterMidnight), BooleanLiteral.FALSE);
+        assertRewrite(new NullSafeEqual(nanoAfterMidnight, castToNano), BooleanLiteral.FALSE);
+
+        assertRewrite(new LessThan(castToNano, nanoAfterMidnight), new LessThan(date, nextDate));
+        assertRewrite(new LessThan(nanoAfterMidnight, castToNano), new GreaterThan(date, currentDate));
+        assertRewrite(new LessThanEqual(castToNano, nanoAfterMidnight), new LessThanEqual(date, currentDate));
+        assertRewrite(new LessThanEqual(nanoAfterMidnight, castToNano), new GreaterThanEqual(date, nextDate));
+        assertRewrite(new GreaterThan(castToNano, nanoAfterMidnight), new GreaterThan(date, currentDate));
+        assertRewrite(new GreaterThan(nanoAfterMidnight, castToNano), new LessThan(date, nextDate));
+        assertRewrite(new GreaterThanEqual(castToNano, nanoAfterMidnight), new GreaterThanEqual(date, nextDate));
+        assertRewrite(new GreaterThanEqual(nanoAfterMidnight, castToNano), new LessThanEqual(date, currentDate));
+
+        assertRewrite(new Not(new EqualTo(castToNano, nanoAfterMidnight)),
+                new Not(ExpressionUtils.falseOrNull(date)));
+        assertRewrite(new Not(new EqualTo(nanoAfterMidnight, castToNano)),
+                new Not(ExpressionUtils.falseOrNull(date)));
+    }
+
     private void assertDateTimeV2NanoLowerBoundScaleReduction(int scale) {
         Expression datetime = new SlotReference("datetime" + scale, DateTimeV2Type.of(scale), true);
         Expression castToNano = new Cast(datetime, DateTimeV2Type.of(9));
