@@ -409,8 +409,10 @@ public class PropertyAnalyzer {
                 }
             } else if (key.equalsIgnoreCase(PROPERTIES_STORAGE_COOLDOWN_TIME)) {
                 try {
+                    // Cooldown timestamps are stored in milliseconds, so microsecond parsing preserves
+                    // their fractional part without imposing the narrower DATETIMEV2(7..9) epoch range.
                     DateLiteral dateLiteral = DateLiteralUtils.createDateLiteral(value,
-                            ScalarType.getDefaultDateType(Type.DATETIME));
+                            ScalarType.createDatetimeV2Type(6));
                     cooldownTimestamp = dateLiteral.unixTimestamp(TimeUtils.getTimeZone());
                 } catch (AnalysisException e) {
                     LOG.warn("dateLiteral failed, use max cool down time", e);
