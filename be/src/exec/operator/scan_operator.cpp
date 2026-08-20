@@ -269,9 +269,9 @@ Status ScanLocalState<Derived>::open(RuntimeState* state) {
     return status;
 }
 
-static void init_slot_value_range(
+void ScanLocalStateBase::_init_slot_value_range(
         phmap::flat_hash_map<int, ColumnValueRangeType>& slot_id_to_value_range,
-        SlotDescriptor* slot, const DataTypePtr type_desc) {
+        SlotDescriptor* slot, const DataTypePtr& type_desc) {
     switch (type_desc->get_primitive_type()) {
 #define M(NAME)                                                                        \
     case TYPE_##NAME: {                                                                \
@@ -294,6 +294,7 @@ static void init_slot_value_range(
     M(DATETIME)                  \
     M(DATEV2)                    \
     M(DATETIMEV2)                \
+    M(TIMESTAMP_NS)              \
     M(TIMESTAMPTZ)               \
     M(VARCHAR)                   \
     M(STRING)                    \
@@ -335,7 +336,7 @@ Status ScanLocalState<Derived>::_normalize_conjuncts(RuntimeState* state) {
     std::vector<SlotDescriptor*> slots = p._output_tuple_desc->slots();
 
     for (auto& slot : slots) {
-        init_slot_value_range(_slot_id_to_value_range, slot, slot->type());
+        _init_slot_value_range(_slot_id_to_value_range, slot, slot->type());
         _slot_id_to_predicates.insert(
                 {slot->id(), std::vector<std::shared_ptr<ColumnPredicate>>()});
     }
@@ -343,7 +344,7 @@ Status ScanLocalState<Derived>::_normalize_conjuncts(RuntimeState* state) {
     get_cast_types_for_variants();
     for (const auto& [colname, type] : _cast_types_for_variants) {
         auto* slot = p._slot_id_to_slot_desc[p._colname_to_slot_id[colname]];
-        init_slot_value_range(_slot_id_to_value_range, slot, type);
+        _init_slot_value_range(_slot_id_to_value_range, slot, type);
         _slot_id_to_predicates.insert(
                 {slot->id(), std::vector<std::shared_ptr<ColumnPredicate>>()});
     }
