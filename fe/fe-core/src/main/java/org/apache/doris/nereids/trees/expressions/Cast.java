@@ -23,6 +23,7 @@ import org.apache.doris.nereids.exceptions.UnboundException;
 import org.apache.doris.nereids.trees.expressions.functions.Monotonic;
 import org.apache.doris.nereids.trees.expressions.literal.Literal;
 import org.apache.doris.nereids.trees.expressions.literal.NullLiteral;
+import org.apache.doris.nereids.trees.expressions.literal.TimeStampNsLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.TimestampTzLiteral;
 import org.apache.doris.nereids.trees.expressions.shape.UnaryExpression;
 import org.apache.doris.nereids.trees.expressions.visitor.ExpressionVisitor;
@@ -45,6 +46,7 @@ import com.google.common.collect.ImmutableList;
 
 import java.time.DateTimeException;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
@@ -310,9 +312,16 @@ public class Cast extends Expression implements UnaryExpression, Monotonic {
             return false;
         }
 
-        if (childType instanceof TimeStampTzType && targetType instanceof DateTimeV2Type) {
-            return isTimeStampTzToDateTimeV2Monotonic(
-                    (TimeStampTzType) childType, (DateTimeV2Type) targetType, lower, upper);
+        if (childType instanceof TimeStampTzType
+                && (targetType instanceof DateTimeV2Type || targetType instanceof TimeStampNsType)) {
+            int destinationScale = targetType instanceof DateTimeV2Type
+                    ? ((DateTimeV2Type) targetType).getScale() : TimeStampNsType.SCALE;
+            return isTimeStampTzToLocalDateTimeMonotonic(
+                    (TimeStampTzType) childType, destinationScale, lower, upper);
+        }
+        if (childType instanceof TimeStampNsType && targetType instanceof TimeStampTzType) {
+            return isTimeStampNsToTimeStampTzMonotonic(
+                    (TimeStampTzType) targetType, lower, upper);
         }
         return true;
     }
@@ -329,8 +338,8 @@ public class Cast extends Expression implements UnaryExpression, Monotonic {
         }
     }
 
-    private boolean isTimeStampTzToDateTimeV2Monotonic(
-            TimeStampTzType sourceType, DateTimeV2Type destinationType, Literal lower, Literal upper) {
+    private boolean isTimeStampTzToLocalDateTimeMonotonic(
+            TimeStampTzType sourceType, int destinationScale, Literal lower, Literal upper) {
         ZoneId timeZone;
         try {
             timeZone = TimeUtils.getDorisZoneId();
@@ -342,7 +351,7 @@ public class Cast extends Expression implements UnaryExpression, Monotonic {
         }
         // Scale reduction rounds the UTC value before applying the session timezone. That rounding
         // can move values across a fall-back transition just outside the original partition range.
-        if (destinationType.getScale() < sourceType.getScale()) {
+        if (destinationScale < sourceType.getScale()) {
             return false;
         }
         if (!(lower instanceof TimestampTzLiteral) || !(upper instanceof TimestampTzLiteral)) {
@@ -357,5 +366,36 @@ public class Cast extends Expression implements UnaryExpression, Monotonic {
             return false;
         }
         return !DateUtils.hasFallbackTransitionInInstantRange(timeZone, lowerInstant, upperInstant);
+    }
+
+    private boolean isTimeStampNsToTimeStampTzMonotonic(
+            TimeStampTzType destinationType, Literal lower, Literal upper) {
+        ZoneId timeZone;
+        try {
+            timeZone = TimeUtils.getDorisZoneId();
+        } catch (DateTimeException e) {
+            return false;
+        }
+        if (timeZone.getRules().isFixedOffset()) {
+            return true;
+        }
+        if (!(lower instanceof TimeStampNsLiteral) || !(upper instanceof TimeStampNsLiteral)) {
+            return false;
+        }
+        LocalDateTime lowerDateTime = roundTimeStampNs(
+                (TimeStampNsLiteral) lower, destinationType.getScale());
+        LocalDateTime upperDateTime = roundTimeStampNs(
+                (TimeStampNsLiteral) upper, destinationType.getScale());
+        if (upperDateTime.isBefore(lowerDateTime)) {
+            return false;
+        }
+        return !DateUtils.hasGapTransitionInLocalDateTimeRange(
+                timeZone, lowerDateTime, upperDateTime);
+    }
+
+    private LocalDateTime roundTimeStampNs(TimeStampNsLiteral literal, int scale) {
+        long factor = (long) Math.pow(10, DateUtils.NANOSECOND_SCALE - scale);
+        LocalDateTime dateTime = literal.toJavaDateType().plusNanos(factor / 2);
+        return dateTime.withNano((int) (dateTime.getNano() / factor * factor));
     }
 }

@@ -723,18 +723,14 @@ public class TypeCoercionUtils {
                 }
                 ret = TimestampTzLiteral.fromSessionTimeZone(timeStampTzType, value);
             } else if ((dataType.isDateV2Type() || dataType.isDateType()) && DateTimeChecker.isValidDateTime(value)) {
-                if (hasNonZeroFractionBeyondScale(value, DateTimeV2Type.MAX_SCALE)) {
-                    ret = new TimeStampNsLiteral(value);
+                Result<DateLiteral, AnalysisException> parseResult = DateV2Literal.parseDateLiteral(value, true);
+                if (parseResult.isOk()) {
+                    ret = parseResult.get();
                 } else {
-                    Result<DateLiteral, AnalysisException> parseResult = DateV2Literal.parseDateLiteral(value, true);
-                    if (parseResult.isOk()) {
-                        ret = parseResult.get();
-                    } else {
-                        Result<DateTimeLiteral, AnalysisException> parseResult2
-                                = DateTimeV2Literal.parseDateTimeLiteral(value, true);
-                        if (parseResult2.isOk()) {
-                            ret = parseResult2.get();
-                        }
+                    Result<DateTimeLiteral, AnalysisException> parseResult2
+                            = DateTimeV2Literal.parseDateTimeLiteral(value, true);
+                    if (parseResult2.isOk()) {
+                        ret = parseResult2.get();
                     }
                 }
             } else if (dataType instanceof TimeV2Type && TimeChecker.isValidTime(value)) {
@@ -750,23 +746,6 @@ public class TypeCoercionUtils {
         }
         return Optional.ofNullable(ret);
 
-    }
-
-    private static boolean hasNonZeroFractionBeyondScale(String value, int scale) {
-        int dot = value.lastIndexOf('.');
-        if (dot < 0) {
-            return false;
-        }
-        int fractionEnd = dot + 1;
-        while (fractionEnd < value.length() && Character.isDigit(value.charAt(fractionEnd))) {
-            fractionEnd++;
-        }
-        for (int i = dot + scale + 1; i < fractionEnd; i++) {
-            if (value.charAt(i) != '0') {
-                return true;
-            }
-        }
-        return false;
     }
 
     public static Expression implicitCastInputTypes(Expression expr, List<DataType> expectedInputTypes) {

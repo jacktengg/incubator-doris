@@ -25,6 +25,7 @@ import org.apache.doris.nereids.trees.expressions.functions.PropagateNullable;
 import org.apache.doris.nereids.trees.expressions.literal.DateLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.DateTimeLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.Literal;
+import org.apache.doris.nereids.trees.expressions.literal.TimeStampNsLiteral;
 import org.apache.doris.nereids.trees.expressions.shape.UnaryExpression;
 import org.apache.doris.nereids.trees.expressions.visitor.ExpressionVisitor;
 import org.apache.doris.nereids.types.DateTimeV2Type;
@@ -98,6 +99,14 @@ public class Minute extends ScalarFunction
 
     @Override
     public boolean isMonotonic(Literal lower, Literal upper) {
+        if (lower instanceof TimeStampNsLiteral && upper instanceof TimeStampNsLiteral) {
+            TimeStampNsLiteral lowerDateTime = (TimeStampNsLiteral) lower;
+            TimeStampNsLiteral upperDateTime = (TimeStampNsLiteral) upper;
+            return lowerDateTime.getYear() == upperDateTime.getYear()
+                    && lowerDateTime.getMonth() == upperDateTime.getMonth()
+                    && lowerDateTime.getDay() == upperDateTime.getDay()
+                    && lowerDateTime.getHour() == upperDateTime.getHour();
+        }
         if (lower instanceof DateTimeLiteral && upper instanceof DateTimeLiteral) {
             DateTimeLiteral lowerDateTime = (DateTimeLiteral) lower;
             DateTimeLiteral upperDateTime = (DateTimeLiteral) upper;

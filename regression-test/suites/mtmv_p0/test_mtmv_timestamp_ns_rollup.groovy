@@ -54,7 +54,10 @@ suite("test_mtmv_timestamp_ns_rollup") {
         BUILD DEFERRED REFRESH AUTO ON MANUAL
         PARTITION BY (date_trunc(ts, 'hour'))
         DISTRIBUTED BY HASH(id) BUCKETS 1
-        PROPERTIES ('replication_num' = '1')
+        PROPERTIES (
+            'replication_num' = '1',
+            'partition_sync_limit' = '300000'
+        )
         AS SELECT id, ts FROM test_mtmv_timestamp_ns_rollup_base
     """
 

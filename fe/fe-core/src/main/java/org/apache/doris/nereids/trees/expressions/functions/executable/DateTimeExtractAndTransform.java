@@ -776,13 +776,8 @@ public class DateTimeExtractAndTransform {
         if (second.signum() < 0) {
             throw new AnalysisException("Operation from_unixtime of " + second + " out of range");
         }
-        int nanosecond;
         ZonedDateTime dateTime;
         try {
-            long unroundedEpochSecond = second.setScale(0, RoundingMode.DOWN).longValueExact();
-            nanosecond = second.subtract(BigDecimal.valueOf(unroundedEpochSecond)).movePointRight(9)
-                    .setScale(0, RoundingMode.DOWN).intValueExact();
-
             BigDecimal microsecondRounded = second.setScale(6, RoundingMode.HALF_UP);
             long epochSecond = microsecondRounded.setScale(0, RoundingMode.DOWN).longValueExact();
             int microsecond = microsecondRounded.subtract(BigDecimal.valueOf(epochSecond)).movePointRight(6)
@@ -799,7 +794,7 @@ public class DateTimeExtractAndTransform {
         if (datetime.checkRange()) {
             throw new AnalysisException("Operation from_unixtime of " + second + " out of range");
         }
-        return formatFromUnixTime(datetime, format, nanosecond);
+        return formatFromUnixTime(datetime, format, dateTime.getNano());
     }
 
     private static Expression formatFromUnixTime(DateTimeV2Literal datetime,

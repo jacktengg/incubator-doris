@@ -518,4 +518,21 @@ public class DateUtils {
         }
         return false;
     }
+
+    /** Determine whether the local interval intersects a spring-forward gap. */
+    public static boolean hasGapTransitionInLocalDateTimeRange(
+            ZoneId zoneId, LocalDateTime lower, LocalDateTime upper) {
+        ZoneRules rules = zoneId.getRules();
+        Instant searchStart = lower.minusDays(2).atZone(zoneId).toInstant();
+        ZoneOffsetTransition transition = rules.nextTransition(searchStart);
+        while (transition != null && !transition.getDateTimeBefore().isAfter(upper)) {
+            if (transition.isGap()
+                    && upper.isAfter(transition.getDateTimeBefore())
+                    && lower.isBefore(transition.getDateTimeAfter())) {
+                return true;
+            }
+            transition = rules.nextTransition(transition.getInstant());
+        }
+        return false;
+    }
 }

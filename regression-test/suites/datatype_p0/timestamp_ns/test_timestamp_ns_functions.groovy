@@ -75,11 +75,27 @@ suite("test_timestamp_ns_functions") {
             from_unixtime(0.123456499, '%s.%f|%n'),
             from_unixtime(0.123456500, '%s.%f|%n'),
             from_unixtime(0.999999499, '%s.%f|%n'),
-            from_unixtime(0.999999500, '%s.%f|%n')
+            from_unixtime(0.999999500, '%s.%f|%n'),
+            from_unixtime(57599.999999500, '%Y-%m-%d %H:%i:%s.%f|%n')
     """
     qt_from_unixtime_microsecond_rounding_fold fromUnixTimeMicrosecondRoundingSql
     sql "set debug_skip_fold_constant = true"
     qt_from_unixtime_microsecond_rounding_runtime fromUnixTimeMicrosecondRoundingSql
+    sql "set debug_skip_fold_constant = false"
+
+    [false, true].each { skipFoldConstant ->
+        sql "set debug_skip_fold_constant = ${skipFoldConstant}"
+        ["add", "sub"].each { operation ->
+            test {
+                sql """
+                    select date_${operation}(
+                        cast('1970-01-01 00:00:00.000000000' as timestamp_ns),
+                        interval '18446744073709551620.000000' second_microsecond)
+                """
+                exception "Operation second_microsecond_add of"
+            }
+        }
+    }
     sql "set debug_skip_fold_constant = false"
 
     def datetimeTimeNanosecondFormatSql = """

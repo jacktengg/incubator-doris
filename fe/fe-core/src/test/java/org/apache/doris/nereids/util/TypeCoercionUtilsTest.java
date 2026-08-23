@@ -908,10 +908,13 @@ public class TypeCoercionUtilsTest {
         Expression date = new SlotReference("date", DateV2Type.INSTANCE, true);
         Expression nanoString = new StringLiteral("2024-01-01 00:00:00.000000001");
 
-        Assertions.assertThrows(AnalysisException.class,
-                () -> TypeCoercionUtils.processComparisonPredicate(new EqualTo(date, nanoString)));
-        Assertions.assertThrows(AnalysisException.class,
-                () -> TypeCoercionUtils.processComparisonPredicate(new EqualTo(nanoString, date)));
+        Expression dateFirst = TypeCoercionUtils.processComparisonPredicate(new EqualTo(date, nanoString));
+        Assertions.assertEquals(dateFirst.child(0).getDataType(), dateFirst.child(1).getDataType());
+        Assertions.assertFalse(dateFirst.child(0).getDataType().isTimeStampNsType());
+
+        Expression stringFirst = TypeCoercionUtils.processComparisonPredicate(new EqualTo(nanoString, date));
+        Assertions.assertEquals(stringFirst.child(0).getDataType(), stringFirst.child(1).getDataType());
+        Assertions.assertFalse(stringFirst.child(0).getDataType().isTimeStampNsType());
     }
 
     @Test
@@ -920,12 +923,13 @@ public class TypeCoercionUtilsTest {
         Expression nanoString = new StringLiteral("2024-01-01 00:00:00.000000001");
         Expression dateString = new StringLiteral("2024-01-02");
 
-        Assertions.assertThrows(AnalysisException.class,
-                () -> TypeCoercionUtils.processInPredicate(
-                        new InPredicate(date, ImmutableList.of(nanoString, dateString))));
-        Assertions.assertThrows(AnalysisException.class,
-                () -> ExpressionAnalyzer.FUNCTION_ANALYZER_RULE.rewrite(
-                        new Not(new InPredicate(date, ImmutableList.of(dateString, nanoString))), null));
+        InPredicate inPredicate = (InPredicate) TypeCoercionUtils.processInPredicate(
+                new InPredicate(date, ImmutableList.of(nanoString, dateString)));
+        Assertions.assertFalse(inPredicate.getCompareExpr().getDataType().isTimeStampNsType());
+        Assertions.assertEquals(inPredicate.getCompareExpr().getDataType(),
+                inPredicate.getOptions().get(0).getDataType());
+        Assertions.assertDoesNotThrow(() -> ExpressionAnalyzer.FUNCTION_ANALYZER_RULE.rewrite(
+                new Not(new InPredicate(date, ImmutableList.of(dateString, nanoString))), null));
     }
 
     @Test

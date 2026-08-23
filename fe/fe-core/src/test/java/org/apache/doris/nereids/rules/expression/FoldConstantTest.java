@@ -586,7 +586,7 @@ class FoldConstantTest extends ExpressionRewriteTestHelper {
         f = new FromUnixtime(DecimalV3Literal.of(new BigDecimal("1761548288.123456789")),
                 StringLiteral.of("%Y-%m-%d %H:%i:%s.%f|%n"));
         rewritten = executor.rewrite(f, context);
-        Assertions.assertEquals(new VarcharLiteral("2025-10-27 14:58:08.123457|123456789"), rewritten);
+        Assertions.assertEquals(new VarcharLiteral("2025-10-27 14:58:08.123457|123457000"), rewritten);
 
         UnixTimestamp ut = new UnixTimestamp(StringLiteral.of("2021-11-11"), StringLiteral.of("%Y-%m-%d"));
         rewritten = executor.rewrite(ut, context);
@@ -1436,6 +1436,12 @@ class FoldConstantTest extends ExpressionRewriteTestHelper {
                 () -> DateTimeArithmetic.microSecondsSub(TimeStampNsLiteral.getMinValue(), new BigIntLiteral(1)));
         Assertions.assertThrows(AnalysisException.class,
                 () -> DateTimeArithmetic.secondsAdd(TimeStampNsLiteral.getMaxValue(), new BigIntLiteral(1)));
+        Assertions.assertThrows(AnalysisException.class,
+                () -> DateTimeArithmetic.secondMicrosecondAdd(
+                        epoch, new VarcharLiteral("18446744073709551620.000000")));
+        Assertions.assertThrows(AnalysisException.class,
+                () -> DateTimeArithmetic.secondMicrosecondSub(
+                        epoch, new VarcharLiteral("18446744073709551620.000000")));
         Assertions.assertThrows(AnalysisException.class,
                 () -> TimeRoundSeries.secondFloorTimeStampNs(TimeStampNsLiteral.getMinValue()));
     }

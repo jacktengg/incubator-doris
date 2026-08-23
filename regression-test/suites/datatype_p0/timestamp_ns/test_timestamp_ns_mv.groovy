@@ -35,7 +35,8 @@ suite("test_timestamp_ns_mv") {
         (2, '1970-01-01 00:00:00.000000000'),
         (3, '1970-01-01 00:00:00.000000000'),
         (4, '2262-04-11 23:47:16.854775807'),
-        (5, null)
+        (5, null),
+        (6, '1970-01-01 00:00:00.000000001')
     """
     sql """
         insert into timestamp_ns_mv_build values
@@ -74,4 +75,24 @@ suite("test_timestamp_ns_mv") {
         from timestamp_ns_multi_mv
         order by probe_id, build_id
     """
+
+    def dateTruncMvSql = """
+        select id, date_trunc(dt, 'second') as dt_second
+        from timestamp_ns_mv_probe
+        where dt >= cast('1970-01-01 00:00:00.000000000' as timestamp_ns)
+    """
+    def exactBoundaryQuery = """
+        select id from timestamp_ns_mv_probe
+        where dt >= cast('1970-01-01 00:00:00.000000000' as timestamp_ns)
+    """
+    async_mv_rewrite_success(context.dbName, dateTruncMvSql, exactBoundaryQuery,
+            "timestamp_ns_date_trunc_exact_mv")
+
+    def afterBoundaryQuery = """
+        select id from timestamp_ns_mv_probe
+        where dt >= cast('1970-01-01 00:00:00.000000001' as timestamp_ns)
+    """
+    async_mv_rewrite_fail(context.dbName, dateTruncMvSql, afterBoundaryQuery,
+            "timestamp_ns_date_trunc_after_mv")
+    order_qt_date_trunc_after_boundary "${afterBoundaryQuery} order by id"
 }

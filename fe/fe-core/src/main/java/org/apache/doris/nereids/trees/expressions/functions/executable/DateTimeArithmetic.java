@@ -209,12 +209,13 @@ public class DateTimeArithmetic {
             long val = 0;
             lastDigits = 0;
             while (idx < len && Character.isDigit(str.charAt(idx))) {
-                val = val * 10 + (str.charAt(idx) - '0');
-                idx++;
-                lastDigits++;
-                if (val < 0) {
+                int digit = str.charAt(idx) - '0';
+                if (val > (Long.MAX_VALUE - digit) / 10) {
                     throw new AnalysisException("Invalid time format");
                 }
+                val = val * 10 + digit;
+                idx++;
+                lastDigits++;
             }
             values[i] = val;
 

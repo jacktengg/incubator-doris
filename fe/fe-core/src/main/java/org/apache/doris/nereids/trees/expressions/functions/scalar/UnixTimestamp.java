@@ -25,6 +25,7 @@ import org.apache.doris.nereids.trees.expressions.functions.PropagateNullLiteral
 import org.apache.doris.nereids.trees.expressions.functions.PropagateNullable;
 import org.apache.doris.nereids.trees.expressions.literal.DateTimeLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.Literal;
+import org.apache.doris.nereids.trees.expressions.literal.TimeStampNsLiteral;
 import org.apache.doris.nereids.trees.expressions.visitor.ExpressionVisitor;
 import org.apache.doris.nereids.types.BigIntType;
 import org.apache.doris.nereids.types.DataType;
@@ -34,10 +35,14 @@ import org.apache.doris.nereids.types.DecimalV3Type;
 import org.apache.doris.nereids.types.StringType;
 import org.apache.doris.nereids.types.TimeStampNsType;
 import org.apache.doris.nereids.types.VarcharType;
+import org.apache.doris.nereids.util.DateUtils;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
 
+import java.time.DateTimeException;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 import java.util.List;
 
 /**
@@ -148,12 +153,38 @@ public class UnixTimestamp extends ScalarFunction
         if (arity() != 1) {
             return false;
         }
-        if (null == lower) {
-            lower = DateTimeLiteral.MIN_DATETIME;
+        DataType argumentType = child(0).getDataType();
+        if (!(argumentType instanceof DateTimeV2Type || argumentType instanceof TimeStampNsType)) {
+            return true;
         }
-        if (null == upper) {
-            upper = DateTimeLiteral.MAX_DATETIME;
+        ZoneId timeZone;
+        try {
+            timeZone = DateUtils.getTimeZone();
+        } catch (DateTimeException e) {
+            return false;
         }
-        return true;
+        if (timeZone.getRules().isFixedOffset()) {
+            return true;
+        }
+        if (lower == null || upper == null) {
+            return false;
+        }
+        LocalDateTime lowerDateTime = toLocalDateTime(lower);
+        LocalDateTime upperDateTime = toLocalDateTime(upper);
+        if (lowerDateTime == null || upperDateTime == null || upperDateTime.isBefore(lowerDateTime)) {
+            return false;
+        }
+        return !DateUtils.hasGapTransitionInLocalDateTimeRange(
+                timeZone, lowerDateTime, upperDateTime);
+    }
+
+    private LocalDateTime toLocalDateTime(Literal literal) {
+        if (literal instanceof TimeStampNsLiteral) {
+            return ((TimeStampNsLiteral) literal).toJavaDateType();
+        }
+        if (literal instanceof DateTimeLiteral) {
+            return ((DateTimeLiteral) literal).toJavaDateType();
+        }
+        return null;
     }
 }
