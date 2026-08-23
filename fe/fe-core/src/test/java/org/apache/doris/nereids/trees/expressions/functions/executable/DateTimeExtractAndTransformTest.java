@@ -196,6 +196,9 @@ class DateTimeExtractAndTransformTest {
     @Test
     void testFromUnixTimeNanosecondKeepsMicrosecondRounding() {
         VarcharLiteral format = new VarcharLiteral("%s.%f|%n");
+        Assertions.assertEquals(new VarcharLiteral("00.000000|000000001"),
+                DateTimeExtractAndTransform.fromUnixTime(
+                        new DecimalV3Literal(new BigDecimal("0.000000001")), format));
         Assertions.assertEquals(new VarcharLiteral("00.123456|123456499"),
                 DateTimeExtractAndTransform.fromUnixTime(
                         new DecimalV3Literal(new BigDecimal("0.123456499")), format));

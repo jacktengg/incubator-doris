@@ -556,9 +556,9 @@ struct FromUnixTimeDecimalImpl {
         }
         if constexpr (std::is_same_v<Impl, time_format_type::UserDefinedImpl>) {
             char buf[100 + SAFE_FORMAT_STRING_MARGIN];
-            if (!dt.to_format_string_conservative(
-                        format.data, format.size, buf, 100 + SAFE_FORMAT_STRING_MARGIN,
-                        dt.microsecond() * TimeStampNsValue::NANOS_PER_MICROSECOND)) {
+            if (!dt.to_format_string_conservative(format.data, format.size, buf,
+                                                  100 + SAFE_FORMAT_STRING_MARGIN,
+                                                  get_nanosecond(fraction))) {
                 return true;
             }
 
