@@ -23,9 +23,14 @@ import org.apache.doris.nereids.trees.expressions.functions.scalar.Now;
 import org.apache.doris.nereids.trees.expressions.literal.DateTimeV2Literal;
 import org.apache.doris.nereids.trees.expressions.literal.IntegerLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.TimeStampNsLiteral;
+import org.apache.doris.qe.ConnectContext;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
 
 class DateTimeAcquireTest {
     @Test
@@ -48,5 +53,31 @@ class DateTimeAcquireTest {
         Assertions.assertInstanceOf(TimeStampNsLiteral.class, evaluated);
         TimeStampNsLiteral timestampNs = (TimeStampNsLiteral) evaluated;
         Assertions.assertEquals(0, timestampNs.getNanoSecond() % 100);
+    }
+
+    @Test
+    void testCurrentTimestampUsesStatementStartTime() {
+        Instant statementStart = Instant.parse("2024-02-29T12:34:56.123456789Z");
+        ConnectContext previousContext = ConnectContext.get();
+        ConnectContext context = new ConnectContext() {
+            @Override
+            public Instant getStartTimeInstant() {
+                return statementStart;
+            }
+        };
+        context.getSessionVariable().setTimeZone("UTC");
+        context.setThreadLocalInfo();
+        try {
+            TimeStampNsLiteral expected = TimeStampNsLiteral.fromJavaDateType(
+                    LocalDateTime.ofInstant(statementStart, ZoneId.of("UTC")));
+
+            Assertions.assertEquals(expected, DateTimeAcquire.now(new IntegerLiteral(9)));
+            Assertions.assertEquals(expected, DateTimeAcquire.currentTimestamp(new IntegerLiteral(9)));
+        } finally {
+            ConnectContext.remove();
+            if (previousContext != null) {
+                previousContext.setThreadLocalInfo();
+            }
+        }
     }
 }

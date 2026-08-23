@@ -40,6 +40,26 @@ class CoordinatorContextTest {
     }
 
     @Test
+    void testRefreshQueryGlobalsUsesStatementStartTime() {
+        Instant statementStart = Instant.ofEpochSecond(1_704_067_201L, 987_654_321L);
+        ConnectContext context = new ConnectContext() {
+            @Override
+            public Instant getStartTimeInstant() {
+                return statementStart;
+            }
+        };
+        context.getSessionVariable().setTimeZone("UTC");
+        TQueryGlobals queryGlobals = new TQueryGlobals();
+
+        CoordinatorContext.refreshQueryGlobals(queryGlobals, context);
+
+        Assertions.assertEquals(TimeUtils.getDatetimeFormatWithTimeZone().format(statementStart),
+                queryGlobals.getNowString());
+        Assertions.assertEquals(statementStart.toEpochMilli(), queryGlobals.getTimestampMs());
+        Assertions.assertEquals(statementStart.getNano(), queryGlobals.getNanoSeconds());
+    }
+
+    @Test
     void testLoadQueryGlobalsSetNanoseconds() {
         TQueryGlobals queryGlobals = new TQueryGlobals();
 

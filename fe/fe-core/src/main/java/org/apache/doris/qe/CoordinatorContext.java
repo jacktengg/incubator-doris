@@ -367,7 +367,7 @@ public class CoordinatorContext {
     }
 
     public static void refreshQueryGlobals(TQueryGlobals queryGlobals, ConnectContext context) {
-        setQueryGlobalsCurrentTime(queryGlobals);
+        setQueryGlobalsCurrentTime(queryGlobals, context.getStartTimeInstant());
         if (context.getSessionVariable().getTimeZone().equals("CST")) {
             queryGlobals.setTimeZone(TimeUtils.DEFAULT_TIME_ZONE);
         } else {

@@ -28,7 +28,9 @@ import org.apache.doris.nereids.trees.expressions.literal.TimeV2Literal;
 import org.apache.doris.nereids.trees.expressions.literal.TinyIntLiteral;
 import org.apache.doris.nereids.types.DateTimeV2Type;
 import org.apache.doris.nereids.util.DateUtils;
+import org.apache.doris.qe.ConnectContext;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 
@@ -42,7 +44,7 @@ public class DateTimeAcquire {
      */
     @ExecFunction(name = "now")
     public static Expression now() {
-        return DateTimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()), 0);
+        return DateTimeV2Literal.fromJavaDateType(currentDateTime(), 0);
     }
 
     @ExecFunction(name = "now")
@@ -55,7 +57,7 @@ public class DateTimeAcquire {
      */
     @ExecFunction(name = "current_timestamp")
     public static Expression currentTimestamp() {
-        return DateTimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()), 0);
+        return DateTimeV2Literal.fromJavaDateType(currentDateTime(), 0);
     }
 
     @ExecFunction(name = "current_timestamp")
@@ -64,13 +66,20 @@ public class DateTimeAcquire {
     }
 
     private static Expression currentTimestamp(int precision) {
-        LocalDateTime dateTime = LocalDateTime.now(DateUtils.getTimeZone());
+        LocalDateTime dateTime = currentDateTime();
         if (precision <= DateTimeV2Type.MAX_SCALE) {
             return DateTimeV2Literal.fromJavaDateType(dateTime, precision);
         }
         int factor = (int) Math.pow(10, DateUtils.NANOSECOND_SCALE - precision);
         return TimeStampNsLiteral.fromJavaDateType(
                 dateTime.withNano(dateTime.getNano() / factor * factor));
+    }
+
+    private static LocalDateTime currentDateTime() {
+        ConnectContext connectContext = ConnectContext.get();
+        // Executable functions are also invoked by evaluators without a session context.
+        Instant currentTime = connectContext == null ? Instant.now() : connectContext.getStartTimeInstant();
+        return LocalDateTime.ofInstant(currentTime, DateUtils.getTimeZone());
     }
 
     /**
