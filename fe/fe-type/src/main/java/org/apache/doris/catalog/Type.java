@@ -293,6 +293,7 @@ public abstract class Type {
         variantSubTypes.add(DECIMAL256);
         variantSubTypes.add(DATEV2);
         variantSubTypes.add(DATETIMEV2);
+        variantSubTypes.add(TIMESTAMP_NS);
         variantSubTypes.add(TIMESTAMP_TZ);
         variantSubTypes.add(IPV4);
         variantSubTypes.add(IPV6);

@@ -35,6 +35,7 @@ import org.apache.doris.nereids.trees.expressions.CaseWhen;
 import org.apache.doris.nereids.trees.expressions.Cast;
 import org.apache.doris.nereids.trees.expressions.ComparisonPredicate;
 import org.apache.doris.nereids.trees.expressions.Divide;
+import org.apache.doris.nereids.trees.expressions.EqualTo;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.InPredicate;
 import org.apache.doris.nereids.trees.expressions.IntegralDivide;
@@ -1422,11 +1423,13 @@ public class TypeCoercionUtils {
         if (isTimeStampNsAndDateLikePair(left.getDataType(), right.getDataType())) {
             commonType = findExactCommonTypeForTimeStampNsAndDateLike(
                     ImmutableList.of(left, right));
-            // The BE comparison kernel compares the two physical types exactly. Keep a mixed
-            // TIMESTAMP_NS/DATETIMEV2 comparison only when no exact literal conversion exists.
-            if (!commonType.isPresent()
-                    && isTimeStampNsAndDateTimeV2Pair(left.getDataType(), right.getDataType())) {
-                return comparisonPredicate;
+            // The BE comparison kernel compares TIMESTAMP_NS and DATETIMEV2 exactly. Date-like
+            // peers with no exact common type can first be widened losslessly to DATETIMEV2.
+            if (!commonType.isPresent()) {
+                Optional<Expression> normalized = normalizeTimeStampNsDateLikeComparison(comparisonPredicate);
+                if (normalized.isPresent()) {
+                    return normalized.get();
+                }
             }
         } else if (GlobalVariable.enableNewTypeCoercionBehavior) {
             commonType = findWiderTypeForTwo(left.getDataType(), right.getDataType(), false, false);
@@ -1513,7 +1516,7 @@ public class TypeCoercionUtils {
                     fmtInPredicate.getCompareExpr(),
                     fmtInPredicate.getOptions().toArray(new Expression[0])));
         } else {
-            Optional<Expression> normalized = normalizeTimeStampNsDateTimeV2InOptions(fmtInPredicate);
+            Optional<Expression> normalized = normalizeTimeStampNsDateLikeInOptions(fmtInPredicate);
             if (normalized.isPresent()) {
                 return normalized.get();
             }
@@ -1530,35 +1533,83 @@ public class TypeCoercionUtils {
                 .orElse(fmtInPredicate);
     }
 
+    private static Optional<Expression> normalizeTimeStampNsDateLikeComparison(
+            ComparisonPredicate comparisonPredicate) {
+        Expression left = comparisonPredicate.left();
+        Expression right = comparisonPredicate.right();
+        if (left.getDataType() instanceof TimeStampNsType
+                && canWidenLosslesslyToDateTimeV2(right.getDataType())) {
+            return Optional.of(comparisonPredicate.withChildren(
+                    left, castIfNotSameType(right, DateTimeV2Type.forType(right.getDataType()))));
+        }
+        if (right.getDataType() instanceof TimeStampNsType
+                && canWidenLosslesslyToDateTimeV2(left.getDataType())) {
+            return Optional.of(comparisonPredicate.withChildren(
+                    castIfNotSameType(left, DateTimeV2Type.forType(left.getDataType())), right));
+        }
+        return Optional.empty();
+    }
+
+    private static boolean canWidenLosslesslyToDateTimeV2(DataType dataType) {
+        return dataType instanceof DateTimeV2Type
+                || dataType instanceof DateTimeType
+                || dataType instanceof DateV2Type
+                || dataType instanceof DateType;
+    }
+
+    private static DateTimeV2Type widestDateTimeV2Type(List<Expression> expressions) {
+        int scale = 0;
+        for (Expression expression : expressions) {
+            if (expression.getDataType() instanceof DateTimeV2Type) {
+                scale = Math.max(scale, ((DateTimeV2Type) expression.getDataType()).getScale());
+            }
+        }
+        return DateTimeV2Type.of(scale);
+    }
+
     /**
-     * Normalize mixed TIMESTAMP_NS/DATETIMEV2 literal options independently when the whole IN list
-     * has no common type. Exactly representable options are cast to the compare expression's type.
-     * A valid literal that is not representable in that type can never match and is removed. If no
-     * option remains, false-or-null preserves the original result for a nullable compare expression
-     * and therefore also preserves NOT IN semantics.
+     * Normalize mixed TIMESTAMP_NS/date-like options independently when the whole IN list has no
+     * common type. DATE, DATEV2, and DATETIME operands are widened losslessly to DATETIMEV2.
+     * Exactly representable literals are cast to the compare expression's type, impossible literals
+     * are removed, and non-literal mixed options are lowered to exact mixed equalities. Keeping NULL
+     * in the homogeneous IN portion preserves IN and NOT IN three-valued semantics.
      */
-    private static Optional<Expression> normalizeTimeStampNsDateTimeV2InOptions(InPredicate inPredicate) {
-        Expression compareExpr = inPredicate.getCompareExpr();
-        DataType compareType = compareExpr.getDataType();
-        if (!(compareType instanceof TimeStampNsType) && !(compareType instanceof DateTimeV2Type)) {
+    private static Optional<Expression> normalizeTimeStampNsDateLikeInOptions(InPredicate inPredicate) {
+        Expression originalCompareExpr = inPredicate.getCompareExpr();
+        DataType originalCompareType = originalCompareExpr.getDataType();
+        if (!(originalCompareType instanceof TimeStampNsType)
+                && !canWidenLosslesslyToDateTimeV2(originalCompareType)) {
             return Optional.empty();
         }
 
+        DateTimeV2Type dateTimeV2Type = widestDateTimeV2Type(inPredicate.children());
+        Expression compareExpr = originalCompareType instanceof TimeStampNsType
+                ? originalCompareExpr : castIfNotSameType(originalCompareExpr, dateTimeV2Type);
+        DataType compareType = compareExpr.getDataType();
         List<Expression> normalizedOptions = new ArrayList<>(inPredicate.getOptions().size());
+        List<Expression> mixedEqualities = new ArrayList<>();
         for (Expression option : inPredicate.getOptions()) {
             if (option.isNullLiteral() || option.getDataType().equals(compareType)) {
                 normalizedOptions.add(castIfNotSameType(option, compareType));
                 continue;
             }
-            if (!isTimeStampNsAndDateTimeV2Pair(compareType, option.getDataType())) {
+            Expression normalizedOption = option;
+            if (canWidenLosslesslyToDateTimeV2(option.getDataType())) {
+                normalizedOption = castIfNotSameType(option, dateTimeV2Type);
+            }
+            if (normalizedOption.getDataType().equals(compareType)) {
+                normalizedOptions.add(normalizedOption);
+                continue;
+            }
+            if (!isTimeStampNsAndDateTimeV2Pair(compareType, normalizedOption.getDataType())) {
                 return Optional.empty();
             }
             // Only a successfully evaluated literal proves that a failed exact conversion means
-            // the equality is impossible. Keep non-literals and invalid explicit casts on the
-            // original analysis-error path.
+            // the equality is impossible. Non-literals use the exact mixed comparison kernel.
             Optional<Literal> optionLiteral = getLiteralAfterExplicitCast(option);
             if (!optionLiteral.isPresent()) {
-                return Optional.empty();
+                mixedEqualities.add(processComparisonPredicate(new EqualTo(compareExpr, normalizedOption)));
+                continue;
             }
             Literal literal = optionLiteral.get();
             if (literal.isNullLiteral()) {
@@ -1574,10 +1625,18 @@ public class TypeCoercionUtils {
                 normalizedOptions.add(castIfNotSameType(option, compareType));
             }
         }
-        if (normalizedOptions.isEmpty()) {
+        List<Expression> disjunctions = new ArrayList<>();
+        if (!normalizedOptions.isEmpty()) {
+            disjunctions.add(new InPredicate(compareExpr, normalizedOptions));
+        }
+        disjunctions.addAll(mixedEqualities);
+        if (disjunctions.isEmpty()) {
             return Optional.of(ExpressionUtils.falseOrNull(compareExpr));
         }
-        return Optional.of(new InPredicate(compareExpr, normalizedOptions));
+        if (disjunctions.size() > 1 && compareExpr.containsVolatileExpression()) {
+            return Optional.empty();
+        }
+        return Optional.of(ExpressionUtils.or(disjunctions));
     }
 
     /**

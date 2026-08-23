@@ -66,7 +66,11 @@ public class DateTimeAcquire {
     }
 
     private static Expression currentTimestamp(int precision) {
-        LocalDateTime dateTime = currentDateTime();
+        return currentTimestamp(precision, DateUtils.getTimeZone());
+    }
+
+    private static Expression currentTimestamp(int precision, ZoneId zoneId) {
+        LocalDateTime dateTime = currentDateTime(zoneId);
         if (precision <= DateTimeV2Type.MAX_SCALE) {
             return DateTimeV2Literal.fromJavaDateType(dateTime, precision);
         }
@@ -76,10 +80,14 @@ public class DateTimeAcquire {
     }
 
     private static LocalDateTime currentDateTime() {
+        return currentDateTime(DateUtils.getTimeZone());
+    }
+
+    private static LocalDateTime currentDateTime(ZoneId zoneId) {
         ConnectContext connectContext = ConnectContext.get();
         // Executable functions are also invoked by evaluators without a session context.
         Instant currentTime = connectContext == null ? Instant.now() : connectContext.getStartTimeInstant();
-        return LocalDateTime.ofInstant(currentTime, DateUtils.getTimeZone());
+        return LocalDateTime.ofInstant(currentTime, zoneId);
     }
 
     /**
@@ -144,6 +152,11 @@ public class DateTimeAcquire {
      */
     @ExecFunction(name = "utc_timestamp")
     public static Expression utcTimestamp() {
-        return DateTimeV2Literal.fromJavaDateType(LocalDateTime.now(ZoneId.of("UTC+0")), 0);
+        return currentTimestamp(0, ZoneId.of("UTC+0"));
+    }
+
+    @ExecFunction(name = "utc_timestamp")
+    public static Expression utcTimestamp(IntegerLiteral precision) {
+        return currentTimestamp(precision.getValue(), ZoneId.of("UTC+0"));
     }
 }

@@ -23,6 +23,7 @@
 #include <climits>
 #include <cstdint>
 #include <cstring>
+#include <limits>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -453,10 +454,11 @@ struct DateTrunc {
     using DateValueType = typename PrimitiveTypeTraits<PType>::CppType;
 
     struct State {
-        using CallbackFunction =
-                std::function<void(const ColumnPtr&, ColumnType&, size_t, const cctz::time_zone&)>;
+        using CallbackFunction = std::function<void(const ColumnPtr&, ColumnType&, size_t,
+                                                    const cctz::time_zone&, bool)>;
         CallbackFunction callback_function;
         cctz::time_zone timezone;
+        bool clamp_to_timestamp_ns_min = false;
     };
 
     static bool is_variadic() { return true; }
@@ -491,6 +493,7 @@ struct DateTrunc {
 
         std::shared_ptr<State> state = std::make_shared<State>();
         state->timezone = context->state()->timezone_obj();
+        state->clamp_to_timestamp_ns_min = context->is_auto_partition_boundary_context();
         if (std::strncmp("year", lower_str.data(), 4) == 0) {
             state->callback_function = &execute_impl_right_const<TimeUnit::YEAR>;
         } else if (std::strncmp("quarter", lower_str.data(), 7) == 0) {
@@ -526,7 +529,8 @@ struct DateTrunc {
         auto* state = reinterpret_cast<State*>(
                 context->get_function_state(FunctionContext::THREAD_LOCAL));
         DCHECK(state != nullptr);
-        state->callback_function(datetime_column, *res, input_rows_count, state->timezone);
+        state->callback_function(datetime_column, *res, input_rows_count, state->timezone,
+                                 state->clamp_to_timestamp_ns_min);
         block.replace_by_position(result, std::move(res));
         return Status::OK();
     }
@@ -535,7 +539,8 @@ private:
     template <TimeUnit Unit>
     static void execute_impl_right_const(const ColumnPtr& datetime_column,
                                          ColumnType& result_column, size_t input_rows_count,
-                                         const cctz::time_zone& timezone) {
+                                         const cctz::time_zone& timezone,
+                                         bool clamp_to_timestamp_ns_min) {
         auto& data = static_cast<const ColumnType*>(datetime_column.get())->get_data();
         auto& res = result_column.get_data();
         for (size_t i = 0; i < input_rows_count; ++i) {
@@ -557,7 +562,11 @@ private:
             } else {
                 if constexpr (PType == TYPE_TIMESTAMP_NS) {
                     if (!dt.template datetime_trunc<Unit>()) {
-                        throw_out_of_bound_one_date<DateValueType>("date_trunc", data[i]);
+                        if (clamp_to_timestamp_ns_min) {
+                            dt = DateValueType(std::numeric_limits<int64_t>::min());
+                        } else {
+                            throw_out_of_bound_one_date<DateValueType>("date_trunc", data[i]);
+                        }
                     }
                 } else {
                     dt.template datetime_trunc<Unit>();

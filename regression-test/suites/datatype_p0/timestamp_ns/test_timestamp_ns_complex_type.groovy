@@ -57,4 +57,39 @@ suite("test_timestamp_ns_complex_type") {
         where dt_json is not null
         order by id
     """
+
+    def variantV2Function = getFeConfig("enable_variant_v2").toBoolean() ? "parse_to_variant" : ""
+    sql "set default_variant_enable_doc_mode = false"
+    sql "drop table if exists timestamp_ns_typed_variant"
+    sql """
+        create table timestamp_ns_typed_variant (
+            id int,
+            v variant<
+                'ordinary':timestamp_ns,
+                'sparse':timestamp_ns,
+                properties(
+                    "variant_max_subcolumns_count" = "1",
+                    "variant_enable_typed_paths_to_sparse" = "true")
+            >
+        )
+        duplicate key(id)
+        distributed by hash(id) buckets 1
+        properties("replication_num" = "1")
+    """
+    sql """
+        insert into timestamp_ns_typed_variant values
+        (1, ${variantV2Function}('{"ordinary":"1677-09-21 00:12:43.145224192","sparse":"1969-12-31 23:59:59.999999999"}')),
+        (2, ${variantV2Function}('{"ordinary":"1970-01-01 00:00:00.000000001","sparse":"2262-04-11 23:47:16.854775807"}')),
+        (3, null)
+    """
+    sql "sync"
+    order_qt_typed_variant_timestamp_ns """
+        select id,
+               cast(v['ordinary'] as timestamp_ns),
+               cast(v['sparse'] as timestamp_ns),
+               cast(cast(v['ordinary'] as timestamp_ns) as string),
+               cast(cast(v['sparse'] as timestamp_ns) as string)
+        from timestamp_ns_typed_variant
+        order by id
+    """
 }

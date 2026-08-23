@@ -100,6 +100,18 @@ class TimestampNsFunctionSignatureTest {
     }
 
     @Test
+    void testUtcTimestampUsesTimestampNsForNanosecondPrecision() {
+        assertAnalyzedType("utc_timestamp(0)", DateTimeV2Type.SYSTEM_DEFAULT);
+        assertAnalyzedType("utc_timestamp(6)", DateTimeV2Type.MAX);
+        assertAnalyzedType("utc_timestamp(7)", TimeStampNsType.INSTANCE);
+        assertAnalyzedType("utc_timestamp(8)", TimeStampNsType.INSTANCE);
+        assertAnalyzedType("utc_timestamp(9)", TimeStampNsType.INSTANCE);
+        Assertions.assertThrows(AnalysisException.class,
+                () -> ExpressionAnalyzer.analyzeFunction(
+                        null, null, parser.parseExpression("utc_timestamp(10)")));
+    }
+
+    @Test
     void testUntypedDatetimeInputsDoNotSelectTimestampNsSignatures() {
         VarcharLiteral first = new VarcharLiteral("2010-01-01 01:00:00");
         VarcharLiteral second = new VarcharLiteral("2010-01-02 01:00:00");
@@ -139,11 +151,13 @@ class TimestampNsFunctionSignatureTest {
     }
 
     @Test
-    void testMixedDateLikeColumnsRequireExplicitCast() {
+    void testMixedDateLikeColumnsRequireExplicitCastExceptDateDiff() {
         Expression datetime = SlotReference.of("datetime", DateTimeV2Type.MAX);
         Expression timestampTz = SlotReference.of("timestamp_tz", TimeStampTzType.MAX);
-        Assertions.assertThrows(AnalysisException.class,
-                () -> new DateDiff(timestampNs, datetime).getSignature());
+        assertSignature(new DateDiff(timestampNs, datetime), IntegerType.INSTANCE,
+                TimeStampNsType.INSTANCE, DateTimeV2Type.MAX);
+        assertSignature(new DateDiff(datetime, timestampNs), IntegerType.INSTANCE,
+                DateTimeV2Type.MAX, TimeStampNsType.INSTANCE);
         Assertions.assertThrows(AnalysisException.class,
                 () -> new TimeDiff(timestampNs, datetime).getSignature());
         Assertions.assertThrows(AnalysisException.class,
@@ -177,9 +191,9 @@ class TimestampNsFunctionSignatureTest {
                 2500, 1, 2, 3, 4, 5, 123456);
 
         assertSignature(new DateDiff(timestampNs, insideRange), IntegerType.INSTANCE,
-                TimeStampNsType.INSTANCE, TimeStampNsType.INSTANCE);
-        Assertions.assertThrows(AnalysisException.class,
-                () -> new DateDiff(timestampNs, outsideRange).getSignature());
+                TimeStampNsType.INSTANCE, DateTimeV2Type.MAX);
+        assertSignature(new DateDiff(timestampNs, outsideRange), IntegerType.INSTANCE,
+                TimeStampNsType.INSTANCE, DateTimeV2Type.MAX);
 
         Expression datetime = SlotReference.of("datetime", DateTimeV2Type.MAX);
         TimeStampNsLiteral exactTimestampNs = new TimeStampNsLiteral(
@@ -187,15 +201,15 @@ class TimestampNsFunctionSignatureTest {
         TimeStampNsLiteral inexactTimestampNs = new TimeStampNsLiteral(
                 "2024-01-02 03:04:05.123456001");
         assertSignature(new DateDiff(datetime, exactTimestampNs), IntegerType.INSTANCE,
-                DateTimeV2Type.MAX, DateTimeV2Type.MAX);
+                DateTimeV2Type.MAX, TimeStampNsType.INSTANCE);
         Expression exactTimestampNsCast = new Cast(
                 new VarcharLiteral("2024-01-02 03:04:05.123456000"), TimeStampNsType.INSTANCE);
         Expression coerced = TypeCoercionUtils.processBoundFunction(
                 new DateDiff(datetime, exactTimestampNsCast));
-        Assertions.assertEquals(DateTimeV2Type.MAX, coerced.child(1).getDataType());
+        Assertions.assertEquals(TimeStampNsType.INSTANCE, coerced.child(1).getDataType());
         Assertions.assertTrue(coerced.checkInputDataTypes().success());
-        Assertions.assertThrows(AnalysisException.class,
-                () -> new DateDiff(datetime, inexactTimestampNs).getSignature());
+        assertSignature(new DateDiff(datetime, inexactTimestampNs), IntegerType.INSTANCE,
+                DateTimeV2Type.MAX, TimeStampNsType.INSTANCE);
 
         Assertions.assertThrows(AnalysisException.class,
                 () -> new SecondFloor(timestampNs, datetime).getSignature());

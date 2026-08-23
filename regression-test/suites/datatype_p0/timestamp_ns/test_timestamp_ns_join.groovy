@@ -102,4 +102,100 @@ suite("test_timestamp_ns_join") {
         join timestamp_ns_join_datetimev2 r on l.dt <=> r.dt
         order by l.id, r.id
     """
+
+    sql "drop table if exists timestamp_ns_asof_left"
+    sql "drop table if exists timestamp_ns_asof_right"
+    for (def tableName : ["timestamp_ns_asof_left", "timestamp_ns_asof_right"]) {
+        sql """
+            create table ${tableName} (
+                id int,
+                k int,
+                dt timestamp_ns not null
+            )
+            duplicate key(id)
+            distributed by hash(id) buckets 1
+            properties("replication_num" = "1")
+        """
+    }
+    sql """
+        insert into timestamp_ns_asof_left values
+        (1, 1, '1677-09-21 00:12:43.145224192'),
+        (2, 1, '1969-12-31 23:59:59.999999999'),
+        (3, 1, '1970-01-01 00:00:00.000000000'),
+        (4, 1, '1970-01-01 00:00:00.000000001'),
+        (5, 1, '2262-04-11 23:47:16.854775807')
+    """
+    sql """
+        insert into timestamp_ns_asof_right values
+        (11, 1, '1677-09-21 00:12:43.145224192'),
+        (12, 1, '1969-12-31 23:59:59.999999999'),
+        (13, 1, '1970-01-01 00:00:00.000000000'),
+        (14, 1, '1970-01-01 00:00:00.000000001'),
+        (15, 1, '2262-04-11 23:47:16.854775807')
+    """
+    order_qt_timestamp_ns_asof_ge """
+        select l.id, l.dt, r.id, r.dt
+        from timestamp_ns_asof_left l
+        asof left join timestamp_ns_asof_right r
+        match_condition(l.dt >= r.dt)
+        on l.k = r.k
+        order by l.id
+    """
+    order_qt_timestamp_ns_asof_gt """
+        select l.id, l.dt, r.id, r.dt
+        from timestamp_ns_asof_left l
+        asof left join timestamp_ns_asof_right r
+        match_condition(l.dt > r.dt)
+        on l.k = r.k
+        order by l.id
+    """
+    order_qt_timestamp_ns_asof_le """
+        select l.id, l.dt, r.id, r.dt
+        from timestamp_ns_asof_left l
+        asof left join timestamp_ns_asof_right r
+        match_condition(l.dt <= r.dt)
+        on l.k = r.k
+        order by l.id
+    """
+    order_qt_timestamp_ns_asof_lt """
+        select l.id, l.dt, r.id, r.dt
+        from timestamp_ns_asof_left l
+        asof left join timestamp_ns_asof_right r
+        match_condition(l.dt < r.dt)
+        on l.k = r.k
+        order by l.id
+    """
+
+    sql "drop table if exists timestamp_ns_asof_nullable_left"
+    sql "drop table if exists timestamp_ns_asof_nullable_right"
+    for (def tableName : ["timestamp_ns_asof_nullable_left", "timestamp_ns_asof_nullable_right"]) {
+        sql """
+            create table ${tableName} (
+                id int,
+                k int,
+                dt timestamp_ns
+            )
+            duplicate key(id)
+            distributed by hash(id) buckets 1
+            properties("replication_num" = "1")
+        """
+    }
+    sql """
+        insert into timestamp_ns_asof_nullable_left values
+        (1, 1, '1970-01-01 00:00:00.000000000'),
+        (2, 1, null)
+    """
+    sql """
+        insert into timestamp_ns_asof_nullable_right values
+        (11, 1, '1969-12-31 23:59:59.999999999'),
+        (12, 1, null)
+    """
+    order_qt_timestamp_ns_asof_nullable """
+        select l.id, l.dt, r.id, r.dt
+        from timestamp_ns_asof_nullable_left l
+        asof left join timestamp_ns_asof_nullable_right r
+        match_condition(l.dt >= r.dt)
+        on l.k = r.k
+        order by l.id
+    """
 }

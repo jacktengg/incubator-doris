@@ -649,10 +649,7 @@ suite("test_date_function") {
     sql "select /*+SET_VAR(debug_skip_fold_constant=true)*/ utc_timestamp(),utc_timestamp() + 1;"
     utc_timestamp_str = sql """ select utc_timestamp(6), utc_timestamp(6) + 1 """
     assertTrue(utc_timestamp_str[0].size() == 2)
-    test {
-        sql """ select utc_timestamp(7) """
-        exception "scale must be between 0 and 6"
-    }
+    sql """ select utc_timestamp(7) """
     test {
         sql """ SELECT UTC_TIMESTAMP(NULL); """
         exception "UTC_TIMESTAMP argument cannot be NULL."

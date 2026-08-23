@@ -38,6 +38,11 @@ public class TypeTest {
                 .contains(org.joda.time.DateTime.class));
     }
 
+    @Test
+    public void testTimestampNsVariantSubtype() {
+        Assert.assertTrue(Type.getVariantSubTypes().contains(Type.TIMESTAMP_NS));
+    }
+
     // ===================== ArrayType =====================
     @Test
     public void testArrayOfArrayExactMatch() {

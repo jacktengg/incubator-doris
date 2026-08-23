@@ -143,4 +143,33 @@ suite("test_timestamp_ns_partition_bucket") {
     order_qt_list_partition_rounding """
         select dt, id from timestamp_ns_list_partition_rounding order by id
     """
+
+    sql "drop table if exists timestamp_ns_auto_range_boundary"
+    sql """
+        create table timestamp_ns_auto_range_boundary (
+            id int,
+            dt timestamp_ns not null
+        )
+        duplicate key(id)
+        auto partition by range (date_trunc(dt, 'day')) ()
+        distributed by hash(id) buckets 1
+        properties("replication_num" = "1")
+    """
+    sql """
+        insert into timestamp_ns_auto_range_boundary values
+        (1, '1677-09-21 00:12:43.145224192'),
+        (2, '1677-09-21 00:12:43.145224193'),
+        (3, '1677-09-21 23:59:59.999999999'),
+        (4, '2262-04-11 23:47:16.854775807')
+    """
+    order_qt_auto_range_boundary_rows """
+        select id, dt from timestamp_ns_auto_range_boundary order by id
+    """
+    order_qt_auto_range_boundary_partitions """
+        select partition_name, partition_description
+        from information_schema.partitions
+        where table_schema = '${context.dbName}'
+          and table_name = 'timestamp_ns_auto_range_boundary'
+        order by partition_name
+    """
 }

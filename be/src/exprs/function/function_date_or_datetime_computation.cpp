@@ -237,6 +237,11 @@ ALL_FUNCTION_TIME_DIFF(FunctionDatetimeDaysDiff, DaysDiffImpl)
 ALL_FUNCTION_TIME_DIFF(FunctionDatetimeMilliSecondsDiff, MilliSecondsDiffImpl)
 ALL_FUNCTION_TIME_DIFF(FunctionDatetimeMicroSecondsDiff, MicroSecondsDiffImpl)
 
+using FunctionDateDiffTimeStampNsDateTimeV2 =
+        FunctionDateOrDateTimeComputation<MixedDateDiffImpl<TYPE_TIMESTAMP_NS, TYPE_DATETIMEV2>>;
+using FunctionDateDiffDateTimeV2TimeStampNs =
+        FunctionDateOrDateTimeComputation<MixedDateDiffImpl<TYPE_DATETIMEV2, TYPE_TIMESTAMP_NS>>;
+
 using FunctionDatetimeToYearWeekTwoArgs =
         FunctionDateOrDateTimeComputation<ToYearWeekTwoArgsImpl<TYPE_DATETIMEV2>>;
 using FunctionDatetimeToWeekTwoArgs =
@@ -400,6 +405,8 @@ void register_function_date_time_computation(SimpleFunctionFactory& factory) {
     REGISTER_ALL_DATEV2_FUNCTIONS_DIFF(FunctionDatetimeDaysDiff)
     REGISTER_ALL_DATEV2_FUNCTIONS_DIFF(FunctionDatetimeMilliSecondsDiff)
     REGISTER_ALL_DATEV2_FUNCTIONS_DIFF(FunctionDatetimeMicroSecondsDiff)
+    factory.register_function<FunctionDateDiffTimeStampNsDateTimeV2>();
+    factory.register_function<FunctionDateDiffDateTimeV2TimeStampNs>();
 
     factory.register_function<FunctionToYearWeekTwoArgs>();
     factory.register_function<FunctionToWeekTwoArgs>();

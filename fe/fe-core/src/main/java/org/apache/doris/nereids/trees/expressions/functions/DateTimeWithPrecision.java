@@ -26,6 +26,8 @@ import org.apache.doris.nereids.trees.expressions.literal.IntegerLikeLiteral;
 import org.apache.doris.nereids.types.DateTimeV2Type;
 import org.apache.doris.nereids.types.TimeStampNsType;
 
+import java.util.Locale;
+
 /**
  * TimeWithPrecision. fill precision to the return type.
  *
@@ -49,8 +51,9 @@ public abstract class DateTimeWithPrecision extends ScalarFunction {
             if (getArgument(0) instanceof IntegerLikeLiteral) {
                 IntegerLikeLiteral integerLikeLiteral = (IntegerLikeLiteral) getArgument(0);
                 int precision = integerLikeLiteral.getIntValue();
-                if (precision > TimeStampNsType.SCALE) {
-                    throw new AnalysisException("Precision of NOW must be between 0 and "
+                if (precision < 0 || precision > TimeStampNsType.SCALE) {
+                    throw new AnalysisException("Precision of " + getName().toUpperCase(Locale.ROOT)
+                            + " must be between 0 and "
                             + TimeStampNsType.SCALE + ". Precision was set to: " + precision);
                 }
                 signature = signature.withReturnType(precision > DateTimeV2Type.MAX_SCALE

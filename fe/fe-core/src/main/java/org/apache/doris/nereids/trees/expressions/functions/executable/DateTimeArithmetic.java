@@ -1135,6 +1135,16 @@ public class DateTimeArithmetic {
         return new IntegerLiteral(dateDiffByDayNumber(date1, date2));
     }
 
+    @ExecFunction(name = "datediff")
+    public static Expression dateDiff(TimeStampNsLiteral date1, DateTimeV2Literal date2) {
+        return new IntegerLiteral(dateDiffByDayNumber(date1, date2));
+    }
+
+    @ExecFunction(name = "datediff")
+    public static Expression dateDiff(DateTimeV2Literal date1, TimeStampNsLiteral date2) {
+        return new IntegerLiteral(dateDiffByDayNumber(date1, date2));
+    }
+
     private static int dateDiffByDayNumber(DateLiteral date1, DateLiteral date2) {
         return (int) (DateTimeExtractAndTransform.calcDayNumber(date1.getYear(), date1.getMonth(), date1.getDay())
                 - DateTimeExtractAndTransform.calcDayNumber(date2.getYear(), date2.getMonth(), date2.getDay()));

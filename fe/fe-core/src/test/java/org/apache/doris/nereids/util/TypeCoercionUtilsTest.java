@@ -233,15 +233,22 @@ public class TypeCoercionUtilsTest {
                         timestampNsAndTime.right().getDataType());
 
                 for (DataType widerDateLikeType : ImmutableList.of(
-                        DateType.INSTANCE, DateV2Type.INSTANCE, DateTimeType.INSTANCE, TimeStampTzType.MAX)) {
-                    Assertions.assertThrows(AnalysisException.class,
-                            () -> TypeCoercionUtils.processComparisonPredicate(
-                                    new EqualTo(new SlotReference("ts", TimeStampNsType.INSTANCE),
-                                            new SlotReference("wider", widerDateLikeType))));
+                        DateType.INSTANCE, DateV2Type.INSTANCE, DateTimeType.INSTANCE)) {
+                    EqualTo normalizedComparison = (EqualTo) TypeCoercionUtils.processComparisonPredicate(
+                            new EqualTo(new SlotReference("ts", TimeStampNsType.INSTANCE),
+                                    new SlotReference("wider", widerDateLikeType)));
+                    Assertions.assertEquals(TimeStampNsType.INSTANCE,
+                            normalizedComparison.left().getDataType());
+                    Assertions.assertEquals(DateTimeV2Type.SYSTEM_DEFAULT,
+                            normalizedComparison.right().getDataType());
                     Assertions.assertThrows(AnalysisException.class,
                             () -> org.apache.doris.nereids.trees.plans.logical.LogicalSetOperation
                                     .getAssignmentCompatibleType(TimeStampNsType.INSTANCE, widerDateLikeType));
                 }
+                Assertions.assertThrows(AnalysisException.class,
+                        () -> TypeCoercionUtils.processComparisonPredicate(
+                                new EqualTo(new SlotReference("ts", TimeStampNsType.INSTANCE),
+                                        new SlotReference("tz", TimeStampTzType.MAX))));
 
                 Assertions.assertEquals(Optional.empty(),
                         TypeCoercionUtils.findWiderCommonTypeByVariable(
@@ -271,9 +278,12 @@ public class TypeCoercionUtilsTest {
                         () -> new If(BooleanLiteral.TRUE, timestampNs, timestampTz).getSignature());
                 Assertions.assertEquals(TimeStampNsType.INSTANCE,
                         new NullIf(timestampNs, time).getSignature().returnType);
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processInPredicate(new InPredicate(timestampNs,
-                                ImmutableList.of(datetime))));
+                EqualTo mixedColumnIn = (EqualTo) TypeCoercionUtils.processInPredicate(
+                        new InPredicate(timestampNs, ImmutableList.of(datetime)));
+                Assertions.assertEquals(TimeStampNsType.INSTANCE,
+                        mixedColumnIn.left().getDataType());
+                Assertions.assertEquals(DateTimeV2Type.MAX,
+                        mixedColumnIn.right().getDataType());
                 Assertions.assertThrows(AnalysisException.class,
                         () -> new Nvl(timestampNs, datetime).getSignature());
                 Assertions.assertThrows(AnalysisException.class,
@@ -327,9 +337,12 @@ public class TypeCoercionUtilsTest {
                         safeDateLiteralComparison.left().getDataType());
                 Assertions.assertEquals(TimeStampNsType.INSTANCE,
                         safeDateLiteralComparison.right().getDataType());
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processComparisonPredicate(
-                                new EqualTo(timestampNs, outsideDate)));
+                EqualTo outsideDateComparison = (EqualTo) TypeCoercionUtils.processComparisonPredicate(
+                        new EqualTo(timestampNs, outsideDate));
+                Assertions.assertEquals(TimeStampNsType.INSTANCE,
+                        outsideDateComparison.left().getDataType());
+                Assertions.assertEquals(DateTimeV2Type.SYSTEM_DEFAULT,
+                        outsideDateComparison.right().getDataType());
 
                 EqualTo exactTimestampLiteralComparison = (EqualTo) TypeCoercionUtils.processComparisonPredicate(
                         new EqualTo(dateTimeV2, exactTimestampNs));
@@ -344,9 +357,13 @@ public class TypeCoercionUtilsTest {
                         exactDateTimestampLiteralComparison.left().getDataType());
                 Assertions.assertEquals(DateV2Type.INSTANCE,
                         exactDateTimestampLiteralComparison.right().getDataType());
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processComparisonPredicate(
-                                new EqualTo(dateV2, inexactDateTimestampNs)));
+                EqualTo inexactDateTimestampComparison = (EqualTo)
+                        TypeCoercionUtils.processComparisonPredicate(
+                                new EqualTo(dateV2, inexactDateTimestampNs));
+                Assertions.assertEquals(DateTimeV2Type.SYSTEM_DEFAULT,
+                        inexactDateTimestampComparison.left().getDataType());
+                Assertions.assertEquals(TimeStampNsType.INSTANCE,
+                        inexactDateTimestampComparison.right().getDataType());
 
                 EqualTo lowerBoundaryComparison = (EqualTo) TypeCoercionUtils.processComparisonPredicate(
                         new EqualTo(timestampNs, lowerOutsideDateTime));
@@ -390,8 +407,8 @@ public class TypeCoercionUtilsTest {
                         new InPredicate(timestampNs, ImmutableList.of(insideDate)));
                 safeDateIn.children().forEach(child -> Assertions.assertEquals(
                         TimeStampNsType.INSTANCE, child.getDataType()));
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processInPredicate(
+                Assertions.assertEquals(ExpressionUtils.falseOrNull(timestampNs),
+                        TypeCoercionUtils.processInPredicate(
                                 new InPredicate(timestampNs, ImmutableList.of(outsideDate))));
                 InPredicate exactTimestampIn = (InPredicate) TypeCoercionUtils.processInPredicate(
                         new InPredicate(dateTimeV2, ImmutableList.of(exactTimestampNs)));
@@ -401,9 +418,13 @@ public class TypeCoercionUtilsTest {
                         new InPredicate(dateV2, ImmutableList.of(exactDateTimestampNs)));
                 exactDateTimestampIn.children().forEach(child -> Assertions.assertEquals(
                         DateV2Type.INSTANCE, child.getDataType()));
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processInPredicate(
-                                new InPredicate(dateV2, ImmutableList.of(inexactDateTimestampNs))));
+                Assertions.assertEquals(BooleanType.INSTANCE,
+                        TypeCoercionUtils.processInPredicate(
+                                new InPredicate(dateV2, ImmutableList.of(inexactDateTimestampNs)))
+                                .getDataType());
+                Assertions.assertEquals(BooleanType.INSTANCE,
+                        TypeCoercionUtils.processInPredicate(new InPredicate(dateV2,
+                                ImmutableList.of(insideDate, inexactDateTimestampNs))).getDataType());
                 Assertions.assertEquals(ExpressionUtils.falseOrNull(timestampNs),
                         TypeCoercionUtils.processInPredicate(
                                 new InPredicate(timestampNs, ImmutableList.of(lowerOutsideDateTime))));

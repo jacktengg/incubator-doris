@@ -125,6 +125,33 @@ suite("test_timestamp_ns_literal") {
             right(cast(current_timestamp(8) as string), 1) = '0'
     """
 
+    def utcTimestampPrecisionSql = """
+        select
+            utc_timestamp(0) is not null,
+            utc_timestamp(6) is not null,
+            left(cast(utc_timestamp(7) as string), 27)
+                = left(cast(utc_timestamp(9) as string), 27),
+            right(cast(utc_timestamp(7) as string), 2) = '00',
+            left(cast(utc_timestamp(8) as string), 28)
+                = left(cast(utc_timestamp(9) as string), 28),
+            right(cast(utc_timestamp(8) as string), 1) = '0',
+            length(substring_index(cast(utc_timestamp(9) as string), '.', -1)) = 9,
+            utc_timestamp(9) = utc_timestamp(9)
+    """
+    sql "set debug_skip_fold_constant = false"
+    qt_utc_timestamp_precision_fold utcTimestampPrecisionSql
+    sql "set debug_skip_fold_constant = true"
+    qt_utc_timestamp_precision_runtime utcTimestampPrecisionSql
+    sql "set debug_skip_fold_constant = false"
+    qt_utc_timestamp_statement_snapshot """
+        select count(distinct utc_timestamp(9)) = 1
+        from numbers("number" = "4")
+    """
+    test {
+        sql "select utc_timestamp(10)"
+        exception "must be between 0 and 9"
+    }
+
     sql "drop table if exists test_timestamp_ns_current_default"
     sql """
         create table test_timestamp_ns_current_default (

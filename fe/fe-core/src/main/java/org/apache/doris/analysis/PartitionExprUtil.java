@@ -175,7 +175,10 @@ public class PartitionExprUtil {
                         beginLocalDateTime.getYear(), beginLocalDateTime.getMonthValue(),
                         beginLocalDateTime.getDayOfMonth(), beginLocalDateTime.getHour(),
                         beginLocalDateTime.getMinute(), beginLocalDateTime.getSecond());
-                LocalDateTime endLocalDateTime = getRangeEnd(beginLocalDateTime, intervalInfo);
+                LocalDateTime rangeStart = isMinimumTimeStampNs(beginDateTime)
+                        && "date_trunc".equals(intervalInfo.fnName)
+                        ? dateTrunc(beginLocalDateTime, intervalInfo.timeUnit) : beginLocalDateTime;
+                LocalDateTime endLocalDateTime = getRangeEnd(rangeStart, intervalInfo);
                 LiteralExpr endDateTime = beginDateTime instanceof DateLiteral
                         ? new DateLiteral(endLocalDateTime, beginDateTime.getType())
                         : new TimeStampNsLiteral(endLocalDateTime);
@@ -265,6 +268,10 @@ public class PartitionExprUtil {
             return PartitionValue.MAX_VALUE;
         }
 
+        if (isMinimumTimeStampNs(dateLiteral)) {
+            return new PartitionValue(dateLiteral.getStringValue());
+        }
+
         LocalDateTime dateTime = dateLiteral instanceof DateLiteral
                 ? ((DateLiteral) dateLiteral).getTimeFormatter()
                 : ((TimeStampNsLiteral) dateLiteral).toLocalDateTime();
@@ -284,6 +291,35 @@ public class PartitionExprUtil {
         }
 
         return new PartitionValue(timeString);
+    }
+
+    private static boolean isMinimumTimeStampNs(LiteralExpr value) {
+        return value instanceof TimeStampNsLiteral
+                && ((Number) value.getRealValue()).longValue() == Long.MIN_VALUE;
+    }
+
+    private static LocalDateTime dateTrunc(LocalDateTime value, String timeUnit) throws AnalysisException {
+        switch (timeUnit) {
+            case "year":
+                return LocalDateTime.of(value.getYear(), 1, 1, 0, 0);
+            case "quarter":
+                return LocalDateTime.of(value.getYear(), (value.getMonthValue() - 1) / 3 * 3 + 1, 1, 0, 0);
+            case "month":
+                return LocalDateTime.of(value.getYear(), value.getMonthValue(), 1, 0, 0);
+            case "week":
+                return value.minusDays(value.getDayOfWeek().getValue() - 1L)
+                        .withHour(0).withMinute(0).withSecond(0).withNano(0);
+            case "day":
+                return value.withHour(0).withMinute(0).withSecond(0).withNano(0);
+            case "hour":
+                return value.withMinute(0).withSecond(0).withNano(0);
+            case "minute":
+                return value.withSecond(0).withNano(0);
+            case "second":
+                return value.withNano(0);
+            default:
+                throw new AnalysisException("Unsupported date_trunc time unit: " + timeUnit);
+        }
     }
 
     private static String getFormatPartitionValue(String value) {

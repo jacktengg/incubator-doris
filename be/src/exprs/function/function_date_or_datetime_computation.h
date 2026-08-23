@@ -565,6 +565,30 @@ struct SubtractSecondMicrosecondImpl
     };
 
 DECLARE_DATE_FUNCTIONS(DateDiffImpl, datediff, TYPE_INT, (ts0.daynr() - ts1.daynr()));
+
+template <PrimitiveType LeftType, PrimitiveType RightType>
+struct MixedDateDiffImpl {
+    static constexpr PrimitiveType ArgPType = LeftType;
+    static constexpr PrimitiveType IntervalPType = RightType;
+    static constexpr PrimitiveType ReturnType = TYPE_INT;
+    static constexpr auto name = "datediff";
+
+    using LeftFieldType = typename PrimitiveTypeTraits<LeftType>::DataType::FieldType;
+    using RightFieldType = typename PrimitiveTypeTraits<RightType>::DataType::FieldType;
+    using LeftValueType = typename PrimitiveTypeTraits<LeftType>::CppType;
+    using RightValueType = typename PrimitiveTypeTraits<RightType>::CppType;
+
+    static inline int32_t execute(const LeftFieldType& left, const RightFieldType& right) {
+        const auto& left_value = reinterpret_cast<const LeftValueType&>(left);
+        const auto& right_value = reinterpret_cast<const RightValueType&>(right);
+        return left_value.daynr() - right_value.daynr();
+    }
+
+    static DataTypes get_variadic_argument_types() {
+        return {std::make_shared<typename PrimitiveTypeTraits<LeftType>::DataType>(),
+                std::make_shared<typename PrimitiveTypeTraits<RightType>::DataType>()};
+    }
+};
 // DECLARE_DATE_FUNCTIONS(TimeDiffImpl, timediff, DataTypeTime, ts0.datetime_diff_in_seconds(ts1));
 // Expands to below here because it use Time type which need some special deal.
 template <PrimitiveType DateType>
@@ -1336,6 +1360,9 @@ struct TimestampToDateTime : IFunction {
 template <PrimitiveType UTCType>
 struct UtcImpl {
     static constexpr PrimitiveType ReturnType = UTCType;
+    static constexpr int DATETIMEV2_MAX_SCALE = 6;
+
+    static bool skip_return_type_check() { return ReturnType == TYPE_DATETIMEV2; }
 
     static constexpr const char* get_function_name() {
         if constexpr (ReturnType == TYPE_DATETIMEV2 || ReturnType == TYPE_DATETIME) {
@@ -1357,6 +1384,25 @@ struct UtcImpl {
             const auto* col = assert_cast<const ColumnInt32*>(
                     block.get_by_position(arguments[0]).column.get());
             scale = col->get_element(0);
+        }
+        if constexpr (ReturnType == TYPE_DATETIMEV2) {
+            if (block.get_by_position(result).type->get_primitive_type() == TYPE_TIMESTAMP_NS) {
+                auto col_to = ColumnTimeStampNs::create();
+                const int32_t nanos = context->state()->nano_seconds();
+                const int64_t factor =
+                        common::exp10_i64(TimeStampNsValue::FRACTIONAL_DIGITS - scale);
+                const int32_t truncated_nanos = cast_set<int32_t>(nanos / factor * factor);
+                DateV2Value<DateTimeV2ValueType> utc_datetime;
+                utc_datetime.from_unixtime(context->state()->timestamp_ms() / 1000, nanos, "+00:00",
+                                           DATETIMEV2_MAX_SCALE);
+                TimeStampNsValue timestamp;
+                DCHECK(timestamp.from_datetime(utc_datetime,
+                                               cast_set<uint16_t>(truncated_nanos % 1000)));
+                col_to->insert_value(timestamp);
+                block.get_by_position(result).column =
+                        ColumnConst::create(std::move(col_to), input_rows_count);
+                return Status::OK();
+            }
         }
         auto col_to = PrimitiveTypeTraits<ReturnType>::ColumnType::create();
         DateV2Value<DateTimeV2ValueType> dtv;
