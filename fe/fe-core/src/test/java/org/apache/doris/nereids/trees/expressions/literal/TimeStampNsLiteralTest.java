@@ -102,6 +102,20 @@ class TimeStampNsLiteralTest {
     }
 
     @Test
+    void testNamedZoneGapPreservesNanoseconds() {
+        ConnectContext context = new ConnectContext();
+        context.getSessionVariable().setTimeZone("+00:00");
+        context.setThreadLocalInfo();
+        try {
+            Assertions.assertEquals("2024-03-10 07:00:00.123456789",
+                    new TimeStampNsLiteral(
+                            "2024-03-10 02:30:00.123456789America/New_York").getStringValue());
+        } finally {
+            ConnectContext.remove();
+        }
+    }
+
+    @Test
     void testRoundToDateTimeV2() {
         TimeStampNsLiteral literal = new TimeStampNsLiteral("2024-01-02 03:04:05.123456789");
         Assertions.assertEquals("2024-01-02 03:04:05.123456",

@@ -1513,6 +1513,10 @@ public class TypeCoercionUtils {
                     fmtInPredicate.getCompareExpr(),
                     fmtInPredicate.getOptions().toArray(new Expression[0])));
         } else {
+            Optional<Expression> normalized = normalizeTimeStampNsDateTimeV2InOptions(fmtInPredicate);
+            if (normalized.isPresent()) {
+                return normalized.get();
+            }
             throw new AnalysisException("unsupported in predicate " + inPredicate.toSql());
         }
 
@@ -1524,6 +1528,56 @@ public class TypeCoercionUtils {
                     return fmtInPredicate.withChildren(newChildren);
                 })
                 .orElse(fmtInPredicate);
+    }
+
+    /**
+     * Normalize mixed TIMESTAMP_NS/DATETIMEV2 literal options independently when the whole IN list
+     * has no common type. Exactly representable options are cast to the compare expression's type.
+     * A valid literal that is not representable in that type can never match and is removed. If no
+     * option remains, false-or-null preserves the original result for a nullable compare expression
+     * and therefore also preserves NOT IN semantics.
+     */
+    private static Optional<Expression> normalizeTimeStampNsDateTimeV2InOptions(InPredicate inPredicate) {
+        Expression compareExpr = inPredicate.getCompareExpr();
+        DataType compareType = compareExpr.getDataType();
+        if (!(compareType instanceof TimeStampNsType) && !(compareType instanceof DateTimeV2Type)) {
+            return Optional.empty();
+        }
+
+        List<Expression> normalizedOptions = new ArrayList<>(inPredicate.getOptions().size());
+        for (Expression option : inPredicate.getOptions()) {
+            if (option.isNullLiteral() || option.getDataType().equals(compareType)) {
+                normalizedOptions.add(castIfNotSameType(option, compareType));
+                continue;
+            }
+            if (!isTimeStampNsAndDateTimeV2Pair(compareType, option.getDataType())) {
+                return Optional.empty();
+            }
+            // Only a successfully evaluated literal proves that a failed exact conversion means
+            // the equality is impossible. Keep non-literals and invalid explicit casts on the
+            // original analysis-error path.
+            Optional<Literal> optionLiteral = getLiteralAfterExplicitCast(option);
+            if (!optionLiteral.isPresent()) {
+                return Optional.empty();
+            }
+            Literal literal = optionLiteral.get();
+            if (literal.isNullLiteral()) {
+                normalizedOptions.add(castIfNotSameType(option, compareType));
+                continue;
+            }
+            boolean exactlyRepresentable = compareType instanceof TimeStampNsType
+                    ? canExactlyCastLiteralToTimeStampNs(literal)
+                    : literal instanceof TimeStampNsLiteral
+                            && canExactlyCastTimeStampNsLiteralTo(
+                                    (TimeStampNsLiteral) literal, compareType);
+            if (exactlyRepresentable) {
+                normalizedOptions.add(castIfNotSameType(option, compareType));
+            }
+        }
+        if (normalizedOptions.isEmpty()) {
+            return Optional.of(ExpressionUtils.falseOrNull(compareExpr));
+        }
+        return Optional.of(new InPredicate(compareExpr, normalizedOptions));
     }
 
     /**
@@ -1783,21 +1837,16 @@ public class TypeCoercionUtils {
 
     /** Whether an expression is a date-like literal exactly representable as TIMESTAMP_NS. */
     public static boolean canExactlyCastToTimeStampNs(Expression expression) {
-        Optional<Literal> literal = ExpressionUtils.getLiteralAfterUnwrapNullable(expression);
-        if (!literal.isPresent() && expression instanceof Cast && expression.child(0) instanceof Literal) {
-            try {
-                Expression castLiteral = ((Literal) expression.child(0)).checkedCastTo(expression.getDataType());
-                literal = castLiteral instanceof Literal
-                        ? Optional.of((Literal) castLiteral) : Optional.empty();
-            } catch (AnalysisException e) {
-                return false;
-            }
-        }
-        if (!literal.isPresent() || literal.get().getDataType() instanceof TimeStampTzType) {
+        Optional<Literal> literal = getLiteralAfterExplicitCast(expression);
+        return literal.isPresent() && canExactlyCastLiteralToTimeStampNs(literal.get());
+    }
+
+    private static boolean canExactlyCastLiteralToTimeStampNs(Literal literal) {
+        if (literal.getDataType() instanceof TimeStampTzType) {
             return false;
         }
         try {
-            return literal.get().checkedCastTo(TimeStampNsType.INSTANCE) instanceof TimeStampNsLiteral;
+            return literal.checkedCastTo(TimeStampNsType.INSTANCE) instanceof TimeStampNsLiteral;
         } catch (AnalysisException e) {
             return false;
         }
@@ -1809,11 +1858,16 @@ public class TypeCoercionUtils {
         if (!literal.isPresent()) {
             return false;
         }
+        return canExactlyCastTimeStampNsLiteralTo(literal.get(), targetType);
+    }
+
+    private static boolean canExactlyCastTimeStampNsLiteralTo(
+            TimeStampNsLiteral literal, DataType targetType) {
         if (targetType.isDateType() || targetType.isDateV2Type()) {
-            return literal.get().isMidnight();
+            return literal.isMidnight();
         }
         if (targetType.isDateTimeType()) {
-            return literal.get().getNanoSecond() == 0;
+            return literal.getNanoSecond() == 0;
         }
         if (targetType instanceof DateTimeV2Type) {
             int scale = ((DateTimeV2Type) targetType).getScale();
@@ -1821,26 +1875,28 @@ public class TypeCoercionUtils {
                 scale = DateTimeV2Type.MAX_SCALE;
             }
             long factor = (long) Math.pow(10, TimeStampNsType.SCALE - scale);
-            return literal.get().getNanoSecond() % factor == 0;
+            return literal.getNanoSecond() % factor == 0;
         }
         return false;
     }
 
     private static Optional<TimeStampNsLiteral> getTimeStampNsLiteral(Expression expression) {
-        if (expression instanceof TimeStampNsLiteral) {
-            return Optional.of((TimeStampNsLiteral) expression);
-        }
-        if (expression instanceof Cast && expression.getDataType() instanceof TimeStampNsType
-                && expression.child(0) instanceof Literal) {
+        Optional<Literal> literal = getLiteralAfterExplicitCast(expression);
+        return literal.filter(TimeStampNsLiteral.class::isInstance)
+                .map(TimeStampNsLiteral.class::cast);
+    }
+
+    private static Optional<Literal> getLiteralAfterExplicitCast(Expression expression) {
+        Optional<Literal> literal = ExpressionUtils.getLiteralAfterUnwrapNullable(expression);
+        if (!literal.isPresent() && expression instanceof Cast && expression.child(0) instanceof Literal) {
             try {
                 Expression value = ((Literal) expression.child(0)).checkedCastTo(expression.getDataType());
-                return value instanceof TimeStampNsLiteral
-                        ? Optional.of((TimeStampNsLiteral) value) : Optional.empty();
+                return value instanceof Literal ? Optional.of((Literal) value) : Optional.empty();
             } catch (AnalysisException e) {
                 return Optional.empty();
             }
         }
-        return Optional.empty();
+        return literal;
     }
 
     @Deprecated

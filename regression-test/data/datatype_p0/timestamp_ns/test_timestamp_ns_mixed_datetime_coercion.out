@@ -24,6 +24,16 @@ true	true	true	true
 3	3
 4	4
 
+-- !partially_representable_literal_in_false --
+true	false
+
+-- !range_aware_in_three_valued_logic_false --
+1	false	true	false	true	\N	\N
+2	false	true	false	true	\N	\N
+3	true	false	false	true	true	false
+4	false	true	false	true	\N	\N
+5	\N	\N	\N	\N	\N	\N
+
 -- !mixed_column_comparison_true --
 1	true	true	false
 2	false	false	false
@@ -48,4 +58,14 @@ true	true	true	true
 -- !mixed_column_nested_loop_join_true --
 3	3
 4	4
+
+-- !partially_representable_literal_in_true --
+true	false
+
+-- !range_aware_in_three_valued_logic_true --
+1	false	true	false	true	\N	\N
+2	false	true	false	true	\N	\N
+3	true	false	false	true	true	false
+4	false	true	false	true	\N	\N
+5	\N	\N	\N	\N	\N	\N
 

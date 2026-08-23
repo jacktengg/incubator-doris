@@ -82,16 +82,39 @@ suite("test_timestamp_ns_mixed_datetime_coercion", "nonConcurrent") {
             order by l.id, r.id
         """
 
-        test {
-            sql """
-                select id
-                from timestamp_ns_mixed_datetime_coercion
-                where ts in (
-                    cast('1677-09-21 00:12:43.145224' as datetimev2(6)),
+        "qt_partially_representable_literal_in_${mode}" """
+            select
+                cast('2024-01-02 03:04:05.123456' as timestamp_ns) in (
+                    cast('2024-01-02 03:04:05.123456' as datetimev2(6)),
+                    cast('2262-04-11 23:47:16.854776' as datetimev2(6))),
+                cast('2024-01-02 03:04:05.123456' as timestamp_ns) not in (
+                    cast('2024-01-02 03:04:05.123456' as datetimev2(6)),
                     cast('2262-04-11 23:47:16.854776' as datetimev2(6)))
-            """
-            exception "unsupported in predicate"
-        }
+        """
+
+        "order_qt_range_aware_in_three_valued_logic_${mode}" """
+            select id,
+                ts in (
+                    cast('1677-09-21 00:12:43.145225' as datetimev2(6)),
+                    cast('2262-04-11 23:47:16.854776' as datetimev2(6))),
+                ts not in (
+                    cast('1677-09-21 00:12:43.145225' as datetimev2(6)),
+                    cast('2262-04-11 23:47:16.854776' as datetimev2(6))),
+                ts in (
+                    cast('1677-09-21 00:12:43.145224' as datetimev2(6)),
+                    cast('2262-04-11 23:47:16.854776' as datetimev2(6))),
+                ts not in (
+                    cast('1677-09-21 00:12:43.145224' as datetimev2(6)),
+                    cast('2262-04-11 23:47:16.854776' as datetimev2(6))),
+                ts in (
+                    cast('1677-09-21 00:12:43.145225' as datetimev2(6)),
+                    cast('2262-04-11 23:47:16.854776' as datetimev2(6)), null),
+                ts not in (
+                    cast('1677-09-21 00:12:43.145225' as datetimev2(6)),
+                    cast('2262-04-11 23:47:16.854776' as datetimev2(6)), null)
+            from timestamp_ns_mixed_datetime_coercion
+            order by id
+        """
         test {
             sql """
                 select case when id = 1 then ts

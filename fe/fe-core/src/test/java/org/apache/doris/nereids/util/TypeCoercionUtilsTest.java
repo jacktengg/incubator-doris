@@ -365,6 +365,27 @@ public class TypeCoercionUtilsTest {
                         new InPredicate(timestampNs, ImmutableList.of(lowerInsideDateTime)));
                 safeIn.children().forEach(child -> Assertions.assertEquals(
                         TimeStampNsType.INSTANCE, child.getDataType()));
+                InPredicate partiallyRepresentableIn = (InPredicate) TypeCoercionUtils.processInPredicate(
+                        new InPredicate(timestampNs,
+                                ImmutableList.of(lowerInsideDateTime, upperOutsideDateTime)));
+                Assertions.assertEquals(1, partiallyRepresentableIn.getOptions().size());
+                partiallyRepresentableIn.children().forEach(child -> Assertions.assertEquals(
+                        TimeStampNsType.INSTANCE, child.getDataType()));
+                InPredicate nullPreservedIn = (InPredicate) TypeCoercionUtils.processInPredicate(
+                        new InPredicate(timestampNs,
+                                ImmutableList.of(upperOutsideDateTime, NullLiteral.INSTANCE)));
+                Assertions.assertEquals(1, nullPreservedIn.getOptions().size());
+                Assertions.assertTrue(nullPreservedIn.getOptions().get(0).isNullLiteral());
+                Assertions.assertEquals(TimeStampNsType.INSTANCE,
+                        nullPreservedIn.getOptions().get(0).getDataType());
+                InPredicate castNullPreservedIn = (InPredicate) TypeCoercionUtils.processInPredicate(
+                        new InPredicate(timestampNs,
+                                ImmutableList.of(upperOutsideDateTime,
+                                        new Cast(NullLiteral.INSTANCE, DateTimeV2Type.MAX))));
+                Assertions.assertEquals(1, castNullPreservedIn.getOptions().size());
+                Assertions.assertTrue(castNullPreservedIn.getOptions().get(0).nullable());
+                Assertions.assertEquals(TimeStampNsType.INSTANCE,
+                        castNullPreservedIn.getOptions().get(0).getDataType());
                 InPredicate safeDateIn = (InPredicate) TypeCoercionUtils.processInPredicate(
                         new InPredicate(timestampNs, ImmutableList.of(insideDate)));
                 safeDateIn.children().forEach(child -> Assertions.assertEquals(
@@ -383,15 +404,20 @@ public class TypeCoercionUtilsTest {
                 Assertions.assertThrows(AnalysisException.class,
                         () -> TypeCoercionUtils.processInPredicate(
                                 new InPredicate(dateV2, ImmutableList.of(inexactDateTimestampNs))));
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processInPredicate(
+                Assertions.assertEquals(ExpressionUtils.falseOrNull(timestampNs),
+                        TypeCoercionUtils.processInPredicate(
                                 new InPredicate(timestampNs, ImmutableList.of(lowerOutsideDateTime))));
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processInPredicate(
+                Assertions.assertEquals(ExpressionUtils.falseOrNull(timestampNs),
+                        TypeCoercionUtils.processInPredicate(
                                 new InPredicate(timestampNs, ImmutableList.of(upperOutsideDateTime))));
-                Assertions.assertThrows(AnalysisException.class,
-                        () -> TypeCoercionUtils.processInPredicate(
+                Assertions.assertEquals(ExpressionUtils.falseOrNull(dateTimeV2),
+                        TypeCoercionUtils.processInPredicate(
                                 new InPredicate(dateTimeV2, ImmutableList.of(inexactTimestampNs))));
+                SlotReference nonNullableTimestampNs = new SlotReference(
+                        "non_nullable_ts", TimeStampNsType.INSTANCE, false);
+                Assertions.assertEquals(BooleanLiteral.FALSE,
+                        TypeCoercionUtils.processInPredicate(new InPredicate(
+                                nonNullableTimestampNs, ImmutableList.of(upperOutsideDateTime))));
 
                 CaseWhen safeCase = (CaseWhen) TypeCoercionUtils.processCaseWhen(new CaseWhen(
                         ImmutableList.of(new WhenClause(BooleanLiteral.TRUE, timestampNs)),
