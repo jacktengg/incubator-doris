@@ -560,6 +560,15 @@ public class StringArithmetic {
         return 0;
     }
 
+    private static int compareTimeStampNsLiteral(TimeStampNsLiteral first, TimeStampNsLiteral... second) {
+        for (int i = 0; i < second.length; i++) {
+            if (second[i].equals(first)) {
+                return i + 1;
+            }
+        }
+        return 0;
+    }
+
     private static int compareFloatLiteral(FloatLiteral first, FloatLiteral... second) {
         float firstValue = first.getValue();
         for (int i = 0; i < second.length; i++) {
@@ -672,7 +681,7 @@ public class StringArithmetic {
 
     @ExecFunction(name = "field")
     public static Expression fieldTimeStampNs(TimeStampNsLiteral first, TimeStampNsLiteral... second) {
-        return new IntegerLiteral(compareLiteral(first, second));
+        return new IntegerLiteral(compareTimeStampNsLiteral(first, second));
     }
 
     /**

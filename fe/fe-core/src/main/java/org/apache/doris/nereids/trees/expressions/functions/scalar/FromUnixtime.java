@@ -177,6 +177,18 @@ public class FromUnixtime extends ScalarFunction
         }
         try {
             long seconds = value.setScale(0, RoundingMode.DOWN).longValueExact();
+            if (arity() == 2) {
+                long microseconds = value.subtract(BigDecimal.valueOf(seconds))
+                        .movePointRight(6)
+                        .setScale(0, RoundingMode.HALF_UP)
+                        .longValueExact();
+                // The decimal formatter keeps the original calendar second when the rounded
+                // fraction reaches one second. Conservatively reject that discontinuity.
+                if (microseconds >= 1_000_000) {
+                    return null;
+                }
+                return Instant.ofEpochSecond(seconds, microseconds * 1_000);
+            }
             long nanos = value.subtract(BigDecimal.valueOf(seconds))
                     .movePointRight(9)
                     .setScale(0, RoundingMode.DOWN)

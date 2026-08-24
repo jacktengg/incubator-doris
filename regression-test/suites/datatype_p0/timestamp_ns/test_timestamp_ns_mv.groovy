@@ -57,6 +57,50 @@ suite("test_timestamp_ns_mv") {
         order by dt nulls first
     """
 
+    sql "drop table if exists timestamp_ns_aggregate_mv_base"
+    sql """
+        create table timestamp_ns_aggregate_mv_base (
+            grp int,
+            ts_key timestamp_ns,
+            ts_value timestamp_ns,
+            amount int
+        )
+        duplicate key(grp, ts_key)
+        distributed by hash(grp) buckets 1
+        properties("replication_num" = "1")
+    """
+    sql """
+        insert into timestamp_ns_aggregate_mv_base values
+        (1, '1970-01-01 00:00:00.000000001', '2024-01-01 00:00:00.123456789', 10),
+        (1, '1970-01-01 00:00:00.000000001', '2024-01-01 00:00:00.123456790', 20)
+    """
+    create_sync_mv(context.dbName, "timestamp_ns_aggregate_mv_base", "timestamp_ns_aggregate_mv", """
+        select grp as mv_grp,
+               ts_key as mv_ts_key,
+               min(ts_value) as mv_min_ts,
+               max(ts_value) as mv_max_ts,
+               sum(amount) as mv_sum
+        from timestamp_ns_aggregate_mv_base
+        group by grp, ts_key
+    """)
+    sql """
+        insert into timestamp_ns_aggregate_mv_base values
+        (1, '1970-01-01 00:00:00.000000001', '2024-01-01 00:00:00.123456788', 5)
+    """
+    sql "sync"
+    sql "set enable_materialized_view_rewrite = false"
+    order_qt_aggregate_mv_base_index_after_incremental_write """
+        select grp,
+               cast(ts_key as string),
+               cast(min(ts_value) as string),
+               cast(max(ts_value) as string),
+               sum(amount)
+        from timestamp_ns_aggregate_mv_base index timestamp_ns_aggregate_mv_base
+        group by grp, ts_key
+        order by grp, ts_key
+    """
+    sql "set enable_materialized_view_rewrite = true"
+
     sql "drop materialized view if exists timestamp_ns_multi_mv"
     sql """
         create materialized view timestamp_ns_multi_mv

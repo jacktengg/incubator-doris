@@ -239,6 +239,8 @@ std::string SchemaColumnsScanner::_type_to_string(TColumnDesc& desc) {
         }
         return fmt::to_string(debug_string_buffer);
     }
+    case TPrimitiveType::TIMESTAMP_NS:
+        return "timestamp_ns";
     case TPrimitiveType::TIMESTAMPTZ: {
         fmt::memory_buffer debug_string_buffer;
         if (!desc.__isset.columnScale || desc.columnScale == 0) {

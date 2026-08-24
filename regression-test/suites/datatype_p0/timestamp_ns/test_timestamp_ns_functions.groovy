@@ -70,12 +70,27 @@ suite("test_timestamp_ns_functions") {
     sql "set debug_skip_fold_constant = false"
     testFoldConst(scalarFunctionConstantsSql)
 
+    def exactTimestampNsFieldSql = """
+        select
+            cast('1970-01-01 00:00:00.000000001' as timestamp_ns)
+                = cast('1970-01-01 00:00:00.000000002' as timestamp_ns),
+            field(
+                cast('1970-01-01 00:00:00.000000002' as timestamp_ns),
+                cast('1970-01-01 00:00:00.000000001' as timestamp_ns),
+                cast('1970-01-01 00:00:00.000000002' as timestamp_ns))
+    """
+    qt_exact_timestamp_ns_field_fold exactTimestampNsFieldSql
+    sql "set debug_skip_fold_constant = true"
+    qt_exact_timestamp_ns_field_runtime exactTimestampNsFieldSql
+    sql "set debug_skip_fold_constant = false"
+
     def fromUnixTimeMicrosecondRoundingSql = """
         select
             from_unixtime(0.123456499, '%s.%f|%n'),
             from_unixtime(0.123456500, '%s.%f|%n'),
             from_unixtime(0.999999499, '%s.%f|%n'),
             from_unixtime(0.999999500, '%s.%f|%n'),
+            from_unixtime(0.999999500, '%s.%n'),
             from_unixtime(57599.999999500, '%Y-%m-%d %H:%i:%s.%f|%n')
     """
     qt_from_unixtime_microsecond_rounding_fold fromUnixTimeMicrosecondRoundingSql

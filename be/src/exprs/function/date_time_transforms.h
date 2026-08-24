@@ -526,14 +526,14 @@ struct FromUnixTimeDecimalImpl {
     static DateV2Value<DateTimeV2ValueType> get_datetime_value(const ArgType& interger,
                                                                const ArgType& fraction,
                                                                const cctz::time_zone& time_zone) {
-        auto epoch_second = static_cast<int64_t>(interger);
+        const auto epoch_second = static_cast<int64_t>(interger);
         int32_t nanosecond = get_nanosecond(fraction);
         if constexpr (WithNanosecond) {
             constexpr int32_t MICROS_PER_SECOND = 1000000;
             const int32_t rounded_microseconds =
                     (nanosecond + TimeStampNsValue::NANOS_PER_MICROSECOND / 2) /
                     TimeStampNsValue::NANOS_PER_MICROSECOND;
-            epoch_second += rounded_microseconds / MICROS_PER_SECOND;
+            // Keep calendar fields aligned with the original epoch second used by %n.
             nanosecond = rounded_microseconds % MICROS_PER_SECOND *
                          TimeStampNsValue::NANOS_PER_MICROSECOND;
         }

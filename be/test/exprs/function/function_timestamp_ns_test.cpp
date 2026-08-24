@@ -161,7 +161,12 @@ TEST(TimestampNsFunctionTest, from_unixtime_formats_nanoseconds) {
                          "from_unixtime_new", decimal_arguments,
                          {{{DECIMAL128V3(1565080737, 999999500, 9),
                             std::string("%Y-%m-%d %H:%i:%s.%f|%n")},
-                           std::string("2019-08-06 16:38:58.000000|999999500")}})
+                           std::string("2019-08-06 16:38:57.000000|999999500")}})
+                         .ok()));
+    EXPECT_TRUE((check_function<DataTypeString, true>(
+                         "from_unixtime_new", decimal_arguments,
+                         {{{DECIMAL128V3(0, 999999500, 9), std::string("%s.%n")},
+                           std::string("00.999999500")}})
                          .ok()));
     EXPECT_TRUE(
             (check_function<DataTypeString, true>("from_unixtime_new", decimal_arguments,

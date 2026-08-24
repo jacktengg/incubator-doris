@@ -265,6 +265,9 @@ suite("test_timestamp_ns_mixed_datetime_expressions") {
             greatest(
                 cast('2024-02-29 12:34:56.123456789' as timestamp_ns),
                 cast('2024-02-29 12:34:56.123456' as datetimev2(6))),
+            field(
+                cast('2024-02-29 12:34:56.123456789' as timestamp_ns),
+                cast('2024-02-29 12:34:56.123456' as datetimev2(6))),
             array(
                 cast('2024-02-29 12:34:56.123456789' as timestamp_ns),
                 cast('2024-02-29 12:34:56.123456' as datetimev2(6)))
@@ -273,6 +276,38 @@ suite("test_timestamp_ns_mixed_datetime_expressions") {
     qt_mixed_literals_fold mixedLiteralSql
     sql "set debug_skip_fold_constant = true"
     qt_mixed_literals_no_fold mixedLiteralSql
+    sql "set debug_skip_fold_constant = false"
+
+    def mixedCollectionLiteralSql = """
+        select
+            array_contains(
+                array(cast('2024-01-02 03:04:05.123456789' as timestamp_ns)),
+                cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+            array_position(
+                array(cast('2024-01-02 03:04:05.123456000' as timestamp_ns)),
+                cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+            array_remove(
+                array(cast('2024-01-02 03:04:05.123456000' as timestamp_ns)),
+                cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+            array_pushback(
+                array(cast('2024-01-02 03:04:05.123456789' as timestamp_ns)),
+                cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+            array_pushfront(
+                array(cast('2024-01-02 03:04:05.123456789' as timestamp_ns)),
+                cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+            map_contains_key(
+                map(cast('2024-01-02 03:04:05.123456000' as timestamp_ns), 1),
+                cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+            map_contains_value(
+                map(1, cast('2024-01-02 03:04:05.123456000' as timestamp_ns)),
+                cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+            array_contains(
+                array(cast('2024-01-02 03:04:05.123456' as datetimev2(6))),
+                cast('2024-01-02 03:04:05.123456000' as timestamp_ns))
+    """
+    qt_mixed_collection_literals_fold mixedCollectionLiteralSql
+    sql "set debug_skip_fold_constant = true"
+    qt_mixed_collection_literals_no_fold mixedCollectionLiteralSql
     sql "set debug_skip_fold_constant = false"
 
     order_qt_mixed_value_expressions """
@@ -406,6 +441,13 @@ suite("test_timestamp_ns_mixed_datetime_expressions") {
             """
             exception "Can not find the compatibility function signature"
         }
+    }
+    test {
+        sql """
+            select array_contains(array(ts), dt)
+            from timestamp_ns_mixed_datetime_expressions
+        """
+        exception "Cannot find an exact common type for indexed ANY arguments"
     }
     test {
         sql """

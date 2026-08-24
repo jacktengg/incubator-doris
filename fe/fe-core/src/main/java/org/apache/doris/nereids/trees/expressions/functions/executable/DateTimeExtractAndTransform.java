@@ -783,11 +783,11 @@ public class DateTimeExtractAndTransform {
             nanosecond = second.subtract(BigDecimal.valueOf(unroundedEpochSecond)).movePointRight(9)
                     .setScale(0, RoundingMode.DOWN).intValueExact();
 
-            BigDecimal microsecondRounded = second.setScale(6, RoundingMode.HALF_UP);
-            long epochSecond = microsecondRounded.setScale(0, RoundingMode.DOWN).longValueExact();
-            int microsecond = microsecondRounded.subtract(BigDecimal.valueOf(epochSecond)).movePointRight(6)
-                    .intValueExact();
-            dateTime = Instant.ofEpochSecond(epochSecond, microsecond * 1000L)
+            int roundedMicrosecond = second.subtract(BigDecimal.valueOf(unroundedEpochSecond))
+                    .setScale(6, RoundingMode.HALF_UP).movePointRight(6).intValueExact();
+            int microsecond = roundedMicrosecond % 1_000_000;
+            // Keep calendar fields aligned with the original epoch second used by %n.
+            dateTime = Instant.ofEpochSecond(unroundedEpochSecond, microsecond * 1000L)
                     .atZone(DateUtils.getTimeZone());
         } catch (ArithmeticException | DateTimeException e) {
             throw new AnalysisException("Operation from_unixtime of " + second + " out of range", e);

@@ -19,14 +19,18 @@ package org.apache.doris.nereids.trees.expressions.functions.scalar;
 
 import org.apache.doris.nereids.trees.expressions.SlotReference;
 import org.apache.doris.nereids.trees.expressions.literal.BigIntLiteral;
+import org.apache.doris.nereids.trees.expressions.literal.DecimalV3Literal;
 import org.apache.doris.nereids.trees.expressions.literal.VarcharLiteral;
 import org.apache.doris.nereids.types.BigIntType;
+import org.apache.doris.nereids.types.DecimalV3Type;
 import org.apache.doris.qe.ConnectContext;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.math.BigDecimal;
 
 class FromUnixtimeTest {
     private final SlotReference timestampSlot = new SlotReference("ts", BigIntType.INSTANCE);
@@ -82,6 +86,18 @@ class FromUnixtimeTest {
 
         Assertions.assertFalse(fromUnixtime.isMonotonic(
                 new BigIntLiteral(1635638400L), new BigIntLiteral(1635642000L)));
+    }
+
+    @Test
+    void testIsNotMonotonicWhenNanosecondsRoundAcrossDstFallback() {
+        setTimeZone("Europe/Paris");
+        SlotReference decimalSlot = new SlotReference("ts", DecimalV3Type.createDecimalV3Type(21, 9));
+        FromUnixtime fromUnixtime = new FromUnixtime(decimalSlot,
+                new VarcharLiteral("%Y-%m-%d %H:%i:%s"));
+
+        Assertions.assertFalse(fromUnixtime.isMonotonic(
+                DecimalV3Literal.of(new BigDecimal("1635641999.999999000")),
+                DecimalV3Literal.of(new BigDecimal("1635641999.999999999"))));
     }
 
     @Test
