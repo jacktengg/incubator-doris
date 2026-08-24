@@ -101,6 +101,53 @@ TEST(TimestampNsFunctionTest, calendar_extract_and_format) {
                          .ok()));
 }
 
+TEST(TimestampNsFunctionTest, additional_calendar_functions) {
+    const InputTypeSet one_argument = {{PrimitiveType::TYPE_TIMESTAMP_NS}};
+    EXPECT_TRUE((check_function<DataTypeInt16, true>(
+                         "year_of_week", one_argument,
+                         {{{std::string("1677-09-21 00:12:43.145224192")}, int16_t(1677)},
+                          {{std::string("2005-01-01 23:59:59.999999999")}, int16_t(2004)},
+                          {{std::string("2008-12-30 00:00:00.000000001")}, int16_t(2009)},
+                          {{std::string("2262-04-11 23:47:16.854775807")}, int16_t(2262)}})
+                         .ok()));
+    EXPECT_TRUE((check_function<DataTypeInt32, true>(
+                         "time_to_sec", one_argument,
+                         {{{std::string("1677-09-21 00:12:43.145224192")}, int32_t(763)},
+                          {{std::string("2024-02-29 12:34:56.123456789")}, int32_t(45296)},
+                          {{std::string("2262-04-11 23:47:16.854775807")}, int32_t(85636)}})
+                         .ok()));
+
+    const InputTypeSet months_between_arguments = {{PrimitiveType::TYPE_TIMESTAMP_NS},
+                                                   {PrimitiveType::TYPE_TIMESTAMP_NS},
+                                                   {PrimitiveType::TYPE_BOOLEAN}};
+    EXPECT_TRUE((check_function<DataTypeFloat64, true>(
+                         "months_between", months_between_arguments,
+                         {{{std::string("2024-03-31 23:59:59.999999999"),
+                            std::string("2024-02-29 00:00:00.000000001"), uint8_t(1)},
+                           double(1)},
+                          {{std::string("2024-02-29 12:34:56.123456789"),
+                            std::string("2024-02-29 00:00:00.000000001"), uint8_t(0)},
+                           double(0)}})
+                         .ok()));
+
+    const InputTypeSet relative_day_arguments = {{PrimitiveType::TYPE_TIMESTAMP_NS},
+                                                 {PrimitiveType::TYPE_VARCHAR}};
+    EXPECT_TRUE((check_function<DataTypeDateV2, true>(
+                         "next_day", relative_day_arguments,
+                         {{{std::string("2024-02-29 12:34:56.123456789"), std::string("MON")},
+                           std::string("2024-03-04")},
+                          {{std::string("2262-04-11 23:47:16.854775807"), std::string("MON")},
+                           std::string("2262-04-14")}})
+                         .ok()));
+    EXPECT_TRUE((check_function<DataTypeDateV2, true>(
+                         "previous_day", relative_day_arguments,
+                         {{{std::string("1677-09-21 00:12:43.145224192"), std::string("MON")},
+                           std::string("1677-09-20")},
+                          {{std::string("2024-02-29 12:34:56.123456789"), std::string("MON")},
+                           std::string("2024-02-26")}})
+                         .ok()));
+}
+
 TEST(TimestampNsFunctionTest, datetimev2_and_timev2_format_nanosecond_scales) {
     const InputTypeSet datetimev2_scale3_format_arguments = {{PrimitiveType::TYPE_DATETIMEV2, 3},
                                                              Consted {PrimitiveType::TYPE_VARCHAR}};

@@ -143,6 +143,10 @@ public class DateTimeExtractAndTransform {
         return new SmallIntLiteral((short) date.getYear());
     }
 
+    @ExecFunction(name = "year_of_week")
+    public static Expression yearOfWeek(TimeStampNsLiteral date) {
+        return new SmallIntLiteral((short) date.toJavaDateType().get(WeekFields.ISO.weekBasedYear()));
+    }
 
     /**
      * Executable datetime extract century
@@ -262,6 +266,12 @@ public class DateTimeExtractAndTransform {
     @ExecFunction(name = "second")
     public static Expression second(TimeV2Literal time) {
         return new TinyIntLiteral(((byte) time.getSecond()));
+    }
+
+    @ExecFunction(name = "time_to_sec")
+    public static Expression timeToSec(TimeStampNsLiteral date) {
+        return new IntegerLiteral((int) (date.getHour() * 3600 + date.getMinute() * 60
+                + date.getSecond()));
     }
 
     /**
@@ -1696,6 +1706,16 @@ public class DateTimeExtractAndTransform {
      */
     @ExecFunction(name = "months_between")
     public static Expression monthsBetween(DateV2Literal t1, DateV2Literal t2, BooleanLiteral roundOff) {
+        return monthsBetween((DateLiteral) t1, t2, roundOff);
+    }
+
+    @ExecFunction(name = "months_between")
+    public static Expression monthsBetween(
+            TimeStampNsLiteral t1, TimeStampNsLiteral t2, BooleanLiteral roundOff) {
+        return monthsBetween((DateLiteral) t1, t2, roundOff);
+    }
+
+    private static Expression monthsBetween(DateLiteral t1, DateLiteral t2, BooleanLiteral roundOff) {
         long yearBetween = t1.getYear() - t2.getYear();
         long monthBetween = t1.getMonth() - t2.getMonth();
         int daysInMonth1 = YearMonth.of((int) t1.getYear(), (int) t1.getMonth()).lengthOfMonth();
@@ -1727,13 +1747,22 @@ public class DateTimeExtractAndTransform {
      */
     @ExecFunction(name = "next_day")
     public static Expression nextDay(DateV2Literal date, StringLiteral day) {
+        return nextDay((DateLiteral) date, day);
+    }
+
+    @ExecFunction(name = "next_day")
+    public static Expression nextDay(TimeStampNsLiteral date, StringLiteral day) {
+        return nextDay((DateLiteral) date, day);
+    }
+
+    private static Expression nextDay(DateLiteral date, StringLiteral day) {
         int dayOfWeek = getDayOfWeek(day.getValue());
         if (dayOfWeek == 0) {
             throw new RuntimeException("Invalid day of week: " + day.getValue());
         }
         int daysToAdd = (dayOfWeek - date.getDayOfWeek() + 7) % 7;
         daysToAdd = daysToAdd == 0 ? 7 : daysToAdd;
-        return date.plusDays(daysToAdd);
+        return DateV2Literal.fromJavaDateType(date.toJavaDateType().plusDays(daysToAdd));
     }
 
     /**
@@ -1741,13 +1770,22 @@ public class DateTimeExtractAndTransform {
      */
     @ExecFunction(name = "previous_day")
     public static Expression previousDay(DateV2Literal date, StringLiteral day) {
+        return previousDay((DateLiteral) date, day);
+    }
+
+    @ExecFunction(name = "previous_day")
+    public static Expression previousDay(TimeStampNsLiteral date, StringLiteral day) {
+        return previousDay((DateLiteral) date, day);
+    }
+
+    private static Expression previousDay(DateLiteral date, StringLiteral day) {
         int dayOfWeek = getDayOfWeek(day.getValue());
         if (dayOfWeek == 0) {
             throw new RuntimeException("Invalid day of week: " + day.getValue());
         }
         int daysToSub = (date.getDayOfWeek() - dayOfWeek + 7) % 7;
         daysToSub = daysToSub == 0 ? 7 : daysToSub;
-        return date.plusDays(-daysToSub);
+        return DateV2Literal.fromJavaDateType(date.toJavaDateType().minusDays(daysToSub));
     }
 
     /**

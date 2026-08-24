@@ -75,6 +75,8 @@ using FunctionDateTimeV2Century =
 
 using FunctionTimestampNsYear =
         FunctionDateOrDateTimeToSomething<DataTypeInt16, ToYearImpl<TYPE_TIMESTAMP_NS>>;
+using FunctionTimestampNsYearOfWeek =
+        FunctionDateOrDateTimeToSomething<DataTypeInt16, ToYearOfWeekImpl<TYPE_TIMESTAMP_NS>>;
 using FunctionTimestampNsQuarter =
         FunctionDateOrDateTimeToSomething<DataTypeInt8, ToQuarterImpl<TYPE_TIMESTAMP_NS>>;
 using FunctionTimestampNsMonth =
@@ -142,6 +144,7 @@ void register_function_to_time_function(SimpleFunctionFactory& factory) {
     factory.register_function<FunctionTimestampNsWeek>();
     factory.register_function<FunctionTimestampNsMonth>();
     factory.register_function<FunctionTimestampNsYear>();
+    factory.register_function<FunctionTimestampNsYearOfWeek>();
     factory.register_function<FunctionTimestampNsQuarter>();
     factory.register_function<FunctionTimestampNsToDate>();
     factory.register_function<FunctionTimestampNsDate>();

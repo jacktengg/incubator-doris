@@ -1238,13 +1238,22 @@ struct TimeToSecImpl {
                           uint32_t result, size_t input_rows_count) {
         auto res_col = ColumnInt32::create(input_rows_count);
         const auto& arg_col = block.get_by_position(arguments[0]).column;
-        const auto& column_data = assert_cast<const ColumnTimeV2&>(*arg_col);
-
         auto& res_data = res_col->get_data();
-        for (int i = 0; i < input_rows_count; ++i) {
-            res_data[i] =
-                    cast_set<int, int64_t, false>(static_cast<int64_t>(column_data.get_element(i)) /
-                                                  (TimeValue::ONE_SECOND_MICROSECONDS));
+        if (block.get_by_position(arguments[0]).type->get_primitive_type() == TYPE_TIMESTAMP_NS) {
+            const auto& column_data = assert_cast<const ColumnTimeStampNs&>(*arg_col);
+            for (int i = 0; i < input_rows_count; ++i) {
+                res_data[i] = cast_set<int, int64_t, false>(
+                        column_data.get_element(i).time_part_to_seconds());
+            }
+        } else {
+            DORIS_CHECK_EQ(block.get_by_position(arguments[0]).type->get_primitive_type(),
+                           TYPE_TIMEV2);
+            const auto& column_data = assert_cast<const ColumnTimeV2&>(*arg_col);
+            for (int i = 0; i < input_rows_count; ++i) {
+                res_data[i] = cast_set<int, int64_t, false>(
+                        static_cast<int64_t>(column_data.get_element(i)) /
+                        TimeValue::ONE_SECOND_MICROSECONDS);
+            }
         }
         block.replace_by_position(result, std::move(res_col));
 
@@ -1473,6 +1482,13 @@ protected:
     }
 };
 
+template <typename DateValue>
+DateV2Value<DateV2ValueType> date_v2_from_date_like(const DateValue& value) {
+    DateV2Value<DateV2ValueType> date;
+    date.unchecked_set_time(value.year(), value.month(), value.day(), 0, 0, 0, 0);
+    return date;
+}
+
 class FunctionMonthsBetween : public IFunction {
 public:
     static constexpr auto name = "months_between";
@@ -1498,20 +1514,17 @@ public:
 
         const auto& [col3, col3_const] =
                 unpack_if_const(block.get_by_position(arguments[2]).column);
-
-        const auto& date1_col = *assert_cast<const ColumnDateV2*>(date_cols[0].get());
-        const auto& date2_col = *assert_cast<const ColumnDateV2*>(date_cols[1].get());
         const auto& round_off_col = *assert_cast<const ColumnBool*>(col3.get());
 
-        if (date_consts[0] && date_consts[1]) {
-            execute_vector<true, false>(input_rows_count, date1_col, date2_col, round_off_col,
-                                        *res);
-        } else if (col3_const) {
-            execute_vector<false, true>(input_rows_count, date1_col, date2_col, round_off_col,
-                                        *res);
+        auto date_type = block.get_by_position(arguments[0]).type->get_primitive_type();
+        DORIS_CHECK_EQ(date_type, block.get_by_position(arguments[1]).type->get_primitive_type());
+        if (date_type == TYPE_TIMESTAMP_NS) {
+            execute_typed<ColumnTimeStampNs>(input_rows_count, date_cols, date_consts, col3_const,
+                                             round_off_col, *res);
         } else {
-            execute_vector<false, false>(input_rows_count, date1_col, date2_col, round_off_col,
-                                         *res);
+            DORIS_CHECK_EQ(date_type, TYPE_DATEV2);
+            execute_typed<ColumnDateV2>(input_rows_count, date_cols, date_consts, col3_const,
+                                        round_off_col, *res);
         }
 
         block.replace_by_position(result, std::move(res));
@@ -1519,17 +1532,33 @@ public:
     }
 
 private:
-    template <bool is_date_const, bool is_round_off_const>
-    static void execute_vector(const size_t input_rows_count, const ColumnDateV2& date1_col,
-                               const ColumnDateV2& date2_col, const ColumnBool& round_off_col,
+    template <typename DateColumn>
+    static void execute_typed(size_t input_rows_count, const ColumnPtr (&date_cols)[2],
+                              const bool (&date_consts)[2], bool round_off_const,
+                              const ColumnBool& round_off_col, ColumnFloat64& res) {
+        const auto& date1_col = *assert_cast<const DateColumn*>(date_cols[0].get());
+        const auto& date2_col = *assert_cast<const DateColumn*>(date_cols[1].get());
+        if (date_consts[0] && date_consts[1]) {
+            execute_vector<true, false>(input_rows_count, date1_col, date2_col, round_off_col, res);
+        } else if (round_off_const) {
+            execute_vector<false, true>(input_rows_count, date1_col, date2_col, round_off_col, res);
+        } else {
+            execute_vector<false, false>(input_rows_count, date1_col, date2_col, round_off_col,
+                                         res);
+        }
+    }
+
+    template <bool is_date_const, bool is_round_off_const, typename DateColumn>
+    static void execute_vector(const size_t input_rows_count, const DateColumn& date1_col,
+                               const DateColumn& date2_col, const ColumnBool& round_off_col,
                                ColumnFloat64& res) {
         res.reserve(input_rows_count);
         double months_between;
         bool round_off;
 
         if constexpr (is_date_const) {
-            auto dtv1 = date1_col.get_element(0);
-            auto dtv2 = date2_col.get_element(0);
+            auto dtv1 = date_v2_from_date_like(date1_col.get_element(0));
+            auto dtv2 = date_v2_from_date_like(date2_col.get_element(0));
             months_between = calc_months_between(dtv1, dtv2);
         }
 
@@ -1539,8 +1568,8 @@ private:
 
         for (int i = 0; i < input_rows_count; ++i) {
             if constexpr (!is_date_const) {
-                auto dtv1 = date1_col.get_element(i);
-                auto dtv2 = date2_col.get_element(i);
+                auto dtv1 = date_v2_from_date_like(date1_col.get_element(i));
+                auto dtv2 = date_v2_from_date_like(date2_col.get_element(i));
                 months_between = calc_months_between(dtv1, dtv2);
             }
             if constexpr (!is_round_off_const) {
@@ -1602,15 +1631,16 @@ public:
                 unpack_if_const(block.get_by_position(arguments[0]).column);
         const auto& [right_col, right_const] =
                 unpack_if_const(block.get_by_position(arguments[1]).column);
-        const auto& date_col = *assert_cast<const ColumnDateV2*>(left_col.get());
         const auto& week_col = *assert_cast<const ColumnString*>(right_col.get());
         Status status;
-        if (left_const) {
-            status = execute_vector<true, false>(input_rows_count, date_col, week_col, *res);
-        } else if (right_const) {
-            status = execute_vector<false, true>(input_rows_count, date_col, week_col, *res);
+        auto date_type = block.get_by_position(arguments[0]).type->get_primitive_type();
+        if (date_type == TYPE_TIMESTAMP_NS) {
+            status = execute_typed<ColumnTimeStampNs>(input_rows_count, left_col, left_const,
+                                                      right_const, week_col, *res);
         } else {
-            status = execute_vector<false, false>(input_rows_count, date_col, week_col, *res);
+            DORIS_CHECK_EQ(date_type, TYPE_DATEV2);
+            status = execute_typed<ColumnDateV2>(input_rows_count, left_col, left_const,
+                                                 right_const, week_col, *res);
         }
         if (!status.ok()) {
             return status;
@@ -1643,13 +1673,26 @@ private:
         return Status::OK();
     }
 
-    template <bool left_const, bool right_const>
-    static Status execute_vector(size_t input_rows_count, const ColumnDateV2& left_col,
+    template <typename DateColumn>
+    static Status execute_typed(size_t input_rows_count, const ColumnPtr& left_col, bool left_const,
+                                bool right_const, const ColumnString& week_col,
+                                ColumnDateV2& res_col) {
+        const auto& date_col = *assert_cast<const DateColumn*>(left_col.get());
+        if (left_const) {
+            return execute_vector<true, false>(input_rows_count, date_col, week_col, res_col);
+        } else if (right_const) {
+            return execute_vector<false, true>(input_rows_count, date_col, week_col, res_col);
+        }
+        return execute_vector<false, false>(input_rows_count, date_col, week_col, res_col);
+    }
+
+    template <bool left_const, bool right_const, typename DateColumn>
+    static Status execute_vector(size_t input_rows_count, const DateColumn& left_col,
                                  const ColumnString& right_col, ColumnDateV2& res_col) {
         DateV2Value<DateV2ValueType> dtv;
         int week_day;
         if constexpr (left_const) {
-            dtv = left_col.get_element(0);
+            dtv = date_v2_from_date_like(left_col.get_element(0));
         }
         if constexpr (right_const) {
             auto week = right_col.get_data_at(0);
@@ -1662,7 +1705,7 @@ private:
 
         for (size_t i = 0; i < input_rows_count; ++i) {
             if constexpr (!left_const) {
-                dtv = left_col.get_element(i);
+                dtv = date_v2_from_date_like(left_col.get_element(i));
             }
             if constexpr (!right_const) {
                 auto week = right_col.get_data_at(i);

@@ -70,6 +70,35 @@ suite("test_timestamp_ns_functions") {
     sql "set debug_skip_fold_constant = false"
     testFoldConst(scalarFunctionConstantsSql)
 
+    def additionalCalendarFunctionsSql = """
+        select
+            months_between(
+                cast('2024-03-31 23:59:59.999999999' as timestamp_ns),
+                cast('2024-02-29 00:00:00.000000001' as timestamp_ns)),
+            months_between(
+                cast('2024-02-29 12:34:56.123456789' as timestamp_ns),
+                cast('2024-02-29 00:00:00.000000001' as timestamp_ns), false),
+            next_day(cast('2262-04-11 23:47:16.854775807' as timestamp_ns), 'MON'),
+            previous_day(cast('1677-09-21 00:12:43.145224192' as timestamp_ns), 'MON'),
+            year_of_week(cast('2005-01-01 23:59:59.999999999' as timestamp_ns)),
+            yow(cast('2008-12-30 00:00:00.000000001' as timestamp_ns)),
+            time_to_sec(cast('2024-02-29 12:34:56.123456789' as timestamp_ns))
+    """
+    qt_additional_calendar_functions_fold additionalCalendarFunctionsSql
+    sql "set debug_skip_fold_constant = true"
+    qt_additional_calendar_functions_runtime additionalCalendarFunctionsSql
+    sql "set debug_skip_fold_constant = false"
+
+    order_qt_additional_calendar_function_columns """
+        select id,
+               months_between(value,
+                   cast('2024-02-29 00:00:00.000000001' as timestamp_ns), true),
+               next_day(value, 'MON'), previous_day(value, 'MON'),
+               year_of_week(value), time_to_sec(value)
+        from timestamp_ns_functions
+        order by id
+    """
+
     def exactTimestampNsFieldSql = """
         select
             cast('1970-01-01 00:00:00.000000001' as timestamp_ns)

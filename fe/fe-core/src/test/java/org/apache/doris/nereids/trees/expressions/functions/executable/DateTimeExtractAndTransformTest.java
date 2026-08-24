@@ -19,8 +19,12 @@ package org.apache.doris.nereids.trees.expressions.functions.executable;
 
 import org.apache.doris.nereids.exceptions.AnalysisException;
 import org.apache.doris.nereids.trees.expressions.literal.BigIntLiteral;
+import org.apache.doris.nereids.trees.expressions.literal.BooleanLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.DateTimeV2Literal;
+import org.apache.doris.nereids.trees.expressions.literal.DateV2Literal;
 import org.apache.doris.nereids.trees.expressions.literal.DecimalV3Literal;
+import org.apache.doris.nereids.trees.expressions.literal.DoubleLiteral;
+import org.apache.doris.nereids.trees.expressions.literal.IntegerLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.SmallIntLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.StringLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.TimeStampNsLiteral;
@@ -36,6 +40,27 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 class DateTimeExtractAndTransformTest {
+    @Test
+    void testAdditionalTimestampNsCalendarFunctions() {
+        TimeStampNsLiteral leapDay = new TimeStampNsLiteral("2024-02-29 12:34:56.123456789");
+        Assertions.assertEquals(new SmallIntLiteral((short) 2004),
+                DateTimeExtractAndTransform.yearOfWeek(
+                        new TimeStampNsLiteral("2005-01-01 23:59:59.999999999")));
+        Assertions.assertEquals(new IntegerLiteral(45296),
+                DateTimeExtractAndTransform.timeToSec(leapDay));
+        Assertions.assertEquals(new DoubleLiteral(1),
+                DateTimeExtractAndTransform.monthsBetween(
+                        new TimeStampNsLiteral("2024-03-31 23:59:59.999999999"),
+                        new TimeStampNsLiteral("2024-02-29 00:00:00.000000001"),
+                        BooleanLiteral.TRUE));
+        Assertions.assertEquals(new DateV2Literal("2262-04-14"),
+                DateTimeExtractAndTransform.nextDay(
+                        TimeStampNsLiteral.getMaxValue(), new StringLiteral("MON")));
+        Assertions.assertEquals(new DateV2Literal("1677-09-20"),
+                DateTimeExtractAndTransform.previousDay(
+                        TimeStampNsLiteral.getMinValue(), new StringLiteral("MON")));
+    }
+
     @Test
     void testUnixTimestampMatchesBeDstTransitionPolicy() {
         ConnectContext context = new ConnectContext();
