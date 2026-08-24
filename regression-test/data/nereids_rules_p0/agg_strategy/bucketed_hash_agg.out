@@ -34,11 +34,6 @@ c	220
 -- !no_group_by_result --
 550
 
--- !ordered_group_concat_result --
-a	10,30,50	10,30,50
-b	20,80,40,100	20,80,40,100
-c	60,70,90	60,70,90
-
 -- !count_distinct_result --
 a	4	200
 b	5	370

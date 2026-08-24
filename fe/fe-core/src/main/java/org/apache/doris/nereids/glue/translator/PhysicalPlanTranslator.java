@@ -252,6 +252,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -3320,9 +3321,9 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
         }
         // Exclude one-phase-only aggregates (e.g. GROUP_CONCAT with ORDER BY).
         // BucketedAggregationNode has no sort-info field, so fusing would drop
-        // the aggregate ORDER BY contract. Also exclude functions that do not
-        // support two-phase execution.
-        if (!supportsBucketedAgg(aggregate)) {
+        // the aggregate ORDER BY contract. Only aggregates supporting two-phase
+        // execution can be safely fused.
+        if (!supportsTwoPhaseAgg(aggregate)) {
             return false;
         }
         // BucketedAggregationNode does not support sortByGroupKey (PushTopnToAgg
@@ -3414,16 +3415,33 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
     }
 
     /**
-     * Check whether all aggregate functions in this physical hash aggregate are
-     * compatible with bucketed fusion. Aggregate functions with ORDER BY cannot
-     * be bucketed because BucketedAggregationNode does not carry sort-info
-     * metadata (aggSortInfos); fusing them would drop the aggregate ORDER BY
-     * contract. Functions must also support two-phase execution.
+     * Check whether all aggregate functions in this physical hash aggregate
+     * support two-phase execution. One-phase-only aggregates (e.g. GROUP_CONCAT
+     * with ORDER BY) cannot be bucketed because BucketedAggregationNode does not
+     * carry sort-info metadata (aggSortInfos); fusing them would drop the
+     * aggregate ORDER BY contract and produce unordered results.
      */
-    private boolean supportsBucketedAgg(PhysicalHashAggregate<? extends Plan> aggregate) {
-        for (AggregateFunction function : aggregate.getAggregateFunctions()) {
-            if (function.getArguments().stream().anyMatch(OrderExpression.class::isInstance)
-                    || !function.supportAggregatePhase(AggregatePhase.TWO)) {
+    private boolean supportsTwoPhaseAgg(PhysicalHashAggregate<? extends Plan> aggregate) {
+        for (NamedExpression o : aggregate.getOutputExpressions()) {
+            AtomicBoolean foundOnePhaseOnly = new AtomicBoolean(false);
+            o.foreach(c -> {
+                if (c instanceof OrderExpression) {
+                    // Any aggregate function with an internal ORDER BY
+                    // (e.g. GROUP_CONCAT(... ORDER BY ...)) needs sort-info
+                    // metadata, which BucketedAggregationNode does not carry.
+                    foundOnePhaseOnly.set(true);
+                    return false;
+                }
+                if (c instanceof AggregateExpression) {
+                    AggregateFunction func = ((AggregateExpression) c).getFunction();
+                    if (!func.supportAggregatePhase(AggregatePhase.TWO)) {
+                        foundOnePhaseOnly.set(true);
+                    }
+                    return true;
+                }
+                return false;
+            });
+            if (foundOnePhaseOnly.get()) {
                 return false;
             }
         }

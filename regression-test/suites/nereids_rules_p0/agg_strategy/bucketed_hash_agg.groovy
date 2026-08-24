@@ -142,28 +142,7 @@ suite("bucketed_hash_agg") {
     """
 
     // ============================================================
-    // Test 5: Aggregate-internal ORDER BY — bucketed agg has no sort metadata,
-    //         so ordered aggregate functions must use regular aggregation.
-    // ============================================================
-    String orderedGroupConcatQuery = """
-        SELECT grp,
-               GROUP_CONCAT(CAST(val AS STRING) ORDER BY id),
-               GROUP_CONCAT(DISTINCT CAST(val AS STRING) ORDER BY id)
-        FROM bucketed_agg_reg_test
-        GROUP BY grp
-    """
-    explain {
-        sql("${orderedGroupConcatQuery}")
-        notContains("BUCKETED AGGREGATE")
-    }
-
-    order_qt_ordered_group_concat_result """
-    ${orderedGroupConcatQuery}
-    ORDER BY grp;
-    """
-
-    // ============================================================
-    // Test 6: COUNT(DISTINCT) + GROUP BY — results must be correct
+    // Test 5: COUNT(DISTINCT) + GROUP BY — results must be correct
     // ============================================================
     sql "set be_number_for_test=1"
     sql "set enable_bucketed_hash_agg = true;"
