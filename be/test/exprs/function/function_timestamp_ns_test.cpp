@@ -227,6 +227,8 @@ TEST(TimestampNsFunctionTest, from_unixtime_formats_nanoseconds) {
                           -1, -1, true)
                           .ok()));
 
+    // During a rolling upgrade, an old FE can still send the two-argument DECIMAL64(18,6)
+    // signature. Keep that path registered alongside the new nanosecond DECIMAL128 path.
     const InputTypeSet legacy_decimal_arguments = {{PrimitiveType::TYPE_DECIMAL64, 6, 18},
                                                    Consted {PrimitiveType::TYPE_VARCHAR}};
     EXPECT_TRUE((check_function<DataTypeString, true>(
@@ -234,6 +236,11 @@ TEST(TimestampNsFunctionTest, from_unixtime_formats_nanoseconds) {
                          {{{DECIMAL64(1565080737, 123456, 6), std::string("%f")},
                            std::string("123456")}})
                          .ok()));
+    EXPECT_TRUE(
+            (check_function<DataTypeString, true>(
+                     "from_unixtime_new", legacy_decimal_arguments,
+                     {{{DECIMAL64(0, 999999, 6), std::string("%s.%f")}, std::string("00.999999")}})
+                     .ok()));
     EXPECT_FALSE((check_function<DataTypeString, true>(
                           "from_unixtime_new", legacy_decimal_arguments,
                           {{{DECIMAL64(1565080737, 123456, 6), std::string("%f|%n")},

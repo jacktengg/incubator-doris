@@ -58,6 +58,10 @@ public class FromUnixtime extends ScalarFunction
             FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT).args(BigIntType.INSTANCE, VarcharType.SYSTEM_DEFAULT),
             FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT).args(BigIntType.INSTANCE, StringType.INSTANCE),
             FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT).args(DECIMAL_MICRO_ARGUMENT_TYPE),
+            FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT).args(DECIMAL_MICRO_ARGUMENT_TYPE,
+                    VarcharType.SYSTEM_DEFAULT),
+            FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT).args(DECIMAL_MICRO_ARGUMENT_TYPE,
+                    StringType.INSTANCE),
             FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT).args(DECIMAL_NANO_ARGUMENT_TYPE,
                     VarcharType.SYSTEM_DEFAULT),
             FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT).args(DECIMAL_NANO_ARGUMENT_TYPE,
@@ -106,8 +110,14 @@ public class FromUnixtime extends ScalarFunction
                 return FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT)
                         .args(DECIMAL_MICRO_ARGUMENT_TYPE);
             } else {
+                // Scale selects the execution path, independently of the input storage width:
+                // DECIMAL(10,3) uses DECIMAL64(18,6), while DECIMAL(18,9) and legacy
+                // DECIMALV2(27,9) use DECIMAL128(21,9) to preserve nanoseconds.
+                DecimalV3Type decimalType = DecimalV3Type.forType(getArgumentType(0));
+                DecimalV3Type argumentType = decimalType.getScale() <= DECIMAL_MICRO_ARGUMENT_TYPE.getScale()
+                        ? DECIMAL_MICRO_ARGUMENT_TYPE : DECIMAL_NANO_ARGUMENT_TYPE;
                 return FunctionSignature.ret(VarcharType.SYSTEM_DEFAULT)
-                        .args(DECIMAL_NANO_ARGUMENT_TYPE, VarcharType.SYSTEM_DEFAULT);
+                        .args(argumentType, VarcharType.SYSTEM_DEFAULT);
             }
         }
         return signature;
@@ -180,10 +190,14 @@ public class FromUnixtime extends ScalarFunction
     }
 
     private void checkFractionFormatSpecifiers() {
-        if (arity() != 2 || !(child(1) instanceof StringLikeLiteral)) {
+        if (arity() != 2) {
             return;
         }
-        String format = ((StringLikeLiteral) child(1)).getValue();
+        Expression formatArgument = getArgument(1);
+        if (!(formatArgument instanceof StringLikeLiteral)) {
+            return;
+        }
+        String format = ((StringLikeLiteral) formatArgument).getValue();
         if (DateTimeFormatterUtils.containsFormatSpecifier(format, 'f')
                 && DateTimeFormatterUtils.containsFormatSpecifier(format, 'n')) {
             // 0.999999500 is rounded to 1.000000 for %f but remains 0.999999500 for %n,

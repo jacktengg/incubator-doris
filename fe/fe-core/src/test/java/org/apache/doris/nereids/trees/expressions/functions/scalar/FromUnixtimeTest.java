@@ -17,12 +17,15 @@
 
 package org.apache.doris.nereids.trees.expressions.functions.scalar;
 
+import org.apache.doris.catalog.FunctionSignature;
 import org.apache.doris.nereids.exceptions.AnalysisException;
 import org.apache.doris.nereids.trees.expressions.SlotReference;
 import org.apache.doris.nereids.trees.expressions.literal.BigIntLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.DecimalV3Literal;
 import org.apache.doris.nereids.trees.expressions.literal.VarcharLiteral;
 import org.apache.doris.nereids.types.BigIntType;
+import org.apache.doris.nereids.types.DataType;
+import org.apache.doris.nereids.types.DecimalV2Type;
 import org.apache.doris.nereids.types.DecimalV3Type;
 import org.apache.doris.qe.ConnectContext;
 
@@ -116,6 +119,18 @@ class FromUnixtimeTest {
     }
 
     @Test
+    void testDecimalTwoArgumentSignatureByScale() {
+        DecimalV3Type decimalMicro = DecimalV3Type.createDecimalV3Type(18, 6);
+        DecimalV3Type decimalNano = DecimalV3Type.createDecimalV3Type(21, 9);
+
+        assertDecimalTwoArgumentType(decimalMicro, DecimalV3Type.createDecimalV3Type(18, 6), true);
+        assertDecimalTwoArgumentType(decimalNano, DecimalV3Type.createDecimalV3Type(21, 9), false);
+        assertDecimalTwoArgumentType(decimalMicro, DecimalV3Type.createDecimalV3Type(10, 3), false);
+        assertDecimalTwoArgumentType(decimalNano, DecimalV3Type.createDecimalV3Type(18, 9), false);
+        assertDecimalTwoArgumentType(decimalNano, DecimalV2Type.createDecimalV2Type(27, 9), false);
+    }
+
+    @Test
     void testIsMonotonicWithNonMonotonicFormat() {
         setTimeZone("+00:00");
         FromUnixtime fromUnixtime = new FromUnixtime(timestampSlot, new VarcharLiteral("%W"));
@@ -126,5 +141,15 @@ class FromUnixtimeTest {
 
     private void setTimeZone(String timeZone) {
         ConnectContext.get().getSessionVariable().setTimeZone(timeZone);
+    }
+
+    private void assertDecimalTwoArgumentType(
+            DecimalV3Type expectedType, DataType inputType, boolean nullable) {
+        FromUnixtime fromUnixtime = new FromUnixtime(
+                new SlotReference("decimal_value", inputType, nullable), new VarcharLiteral("%s.%f"));
+        FunctionSignature signature = fromUnixtime.getSignature();
+
+        Assertions.assertEquals(expectedType, signature.getArgType(0));
+        Assertions.assertEquals(nullable, fromUnixtime.nullable());
     }
 }
