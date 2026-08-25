@@ -272,6 +272,8 @@ suite("test_timestamp_ns_cast", "nonConcurrent") {
         sql """
             create table timestamp_ns_cast_datelike_boundary (
                 id int,
+                date_value date,
+                datev2_value datev2,
                 datetimev2_value datetimev2(6),
                 timestamptz_value timestamptz(6)
             )
@@ -281,18 +283,22 @@ suite("test_timestamp_ns_cast", "nonConcurrent") {
         """
         sql """
             insert into timestamp_ns_cast_datelike_boundary values
-            (1, '1677-09-21 00:12:43.145224',
+            (0, '0001-01-01','0001-01-01', '0001-01-01 00:00:00.000000',
+                cast('0001-01-01 00:00:00.000000+08:00' as timestamptz(6))),
+            (1, '9999-12-31','9999-12-31', '1677-09-21 00:12:43.145224',
                 cast('1677-09-21 00:12:43.145224+08:00' as timestamptz(6))),
-            (2, '1677-09-21 00:12:43.145225',
+            (2, '1677-09-22', '1677-09-22', '1677-09-21 00:12:43.145225',
                 cast('1677-09-21 00:12:43.145225+08:00' as timestamptz(6))),
-            (3, '2262-04-11 23:47:16.854775',
+            (3, '1677-09-22','1677-09-22',  '2262-04-11 23:47:16.854775',
                 cast('2262-04-11 23:47:16.854775+08:00' as timestamptz(6))),
-            (4, '2262-04-11 23:47:16.854776',
+            (4, '1677-09-22','1677-09-22',  '2262-04-11 23:47:16.854776',
                 cast('2262-04-11 23:47:16.854776+08:00' as timestamptz(6)))
         """
 
         order_qt_datelike_boundary_non_strict """
             select id,
+                   cast(date_value as timestamp_ns),
+                   cast(datev2_value as timestamp_ns),
                    cast(datetimev2_value as timestamp_ns),
                    cast(timestamptz_value as timestamp_ns)
             from timestamp_ns_cast_datelike_boundary
@@ -334,11 +340,59 @@ suite("test_timestamp_ns_cast", "nonConcurrent") {
         sql "set enable_strict_cast = true"
         test {
             sql """
+                select cast(date_value as timestamp_ns)
+                from timestamp_ns_cast_datelike_boundary
+                where id = 0
+            """
+            exception "TIMESTAMP_NS overflow"
+        }
+        test {
+            sql """
+                select cast(date_value as timestamp_ns)
+                from timestamp_ns_cast_datelike_boundary
+                where id = 1
+            """
+            exception "TIMESTAMP_NS overflow"
+        }
+        test {
+            sql """
+                select cast(datev2_value as timestamp_ns)
+                from timestamp_ns_cast_datelike_boundary
+                where id = 0
+            """
+            exception "TIMESTAMP_NS overflow"
+        }
+        test {
+            sql """
+                select cast(datev2_value as timestamp_ns)
+                from timestamp_ns_cast_datelike_boundary
+                where id = 1
+            """
+            exception "TIMESTAMP_NS overflow"
+        }
+        test {
+            sql """
+                select cast(datetimev2_value as timestamp_ns)
+                from timestamp_ns_cast_datelike_boundary
+                where id = 0
+            """
+            exception "TIMESTAMP_NS overflow"
+        }
+        test {
+            sql """
                 select cast(datetimev2_value as timestamp_ns)
                 from timestamp_ns_cast_datelike_boundary
                 where id = 1
             """
             exception "TIMESTAMP_NS overflow"
+        }
+        test {
+            sql """
+                select cast(timestamptz_value as timestamp_ns)
+                from timestamp_ns_cast_datelike_boundary
+                where id = 0
+            """
+            exception "can not cast timestamptz"
         }
         test {
             sql """
