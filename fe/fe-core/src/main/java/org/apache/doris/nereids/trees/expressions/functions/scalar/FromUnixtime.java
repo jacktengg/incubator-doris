@@ -18,6 +18,7 @@
 package org.apache.doris.nereids.trees.expressions.functions.scalar;
 
 import org.apache.doris.catalog.FunctionSignature;
+import org.apache.doris.nereids.exceptions.AnalysisException;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.functions.ExplicitlyCastableSignature;
 import org.apache.doris.nereids.trees.expressions.functions.Monotonic;
@@ -31,6 +32,7 @@ import org.apache.doris.nereids.types.BigIntType;
 import org.apache.doris.nereids.types.DecimalV3Type;
 import org.apache.doris.nereids.types.StringType;
 import org.apache.doris.nereids.types.VarcharType;
+import org.apache.doris.nereids.util.DateTimeFormatterUtils;
 import org.apache.doris.nereids.util.DateUtils;
 
 import com.google.common.base.Preconditions;
@@ -112,6 +114,16 @@ public class FromUnixtime extends ScalarFunction
     }
 
     @Override
+    public void checkLegalityBeforeTypeCoercion() {
+        checkFractionFormatSpecifiers();
+    }
+
+    @Override
+    public void checkLegalityAfterRewrite() {
+        checkFractionFormatSpecifiers();
+    }
+
+    @Override
     public <R, C> R accept(ExpressionVisitor<R, C> visitor, C context) {
         return visitor.visitFromUnixtime(this, context);
     }
@@ -167,6 +179,19 @@ public class FromUnixtime extends ScalarFunction
         return DateUtils.monoFormat.contains(((StringLikeLiteral) format).getValue());
     }
 
+    private void checkFractionFormatSpecifiers() {
+        if (arity() != 2 || !(child(1) instanceof StringLikeLiteral)) {
+            return;
+        }
+        String format = ((StringLikeLiteral) child(1)).getValue();
+        if (DateTimeFormatterUtils.containsFormatSpecifier(format, 'f')
+                && DateTimeFormatterUtils.containsFormatSpecifier(format, 'n')) {
+            // 0.999999500 is rounded to 1.000000 for %f but remains 0.999999500 for %n,
+            // so the two specifiers cannot consistently describe one FROM_UNIXTIME result.
+            throw new AnalysisException("FROM_UNIXTIME format cannot contain both %f and %n");
+        }
+    }
+
     private Instant toInstant(Literal literal) {
         if (!(literal instanceof NumericLiteral)) {
             return null;
@@ -176,19 +201,14 @@ public class FromUnixtime extends ScalarFunction
             return null;
         }
         try {
-            long seconds = value.setScale(0, RoundingMode.DOWN).longValueExact();
-            if (arity() == 2) {
-                long microseconds = value.subtract(BigDecimal.valueOf(seconds))
-                        .movePointRight(6)
-                        .setScale(0, RoundingMode.HALF_UP)
-                        .longValueExact();
-                // The decimal formatter keeps the original calendar second when the rounded
-                // fraction reaches one second. Conservatively reject that discontinuity.
-                if (microseconds >= 1_000_000) {
-                    return null;
-                }
-                return Instant.ofEpochSecond(seconds, microseconds * 1_000);
+            if (arity() == 2 && child(1) instanceof StringLikeLiteral
+                    && !DateTimeFormatterUtils.containsFormatSpecifier(
+                            ((StringLikeLiteral) child(1)).getValue(), 'n')) {
+                // Match execution before checking DST transitions: for example,
+                // 1635641999.999999500 rounds to the following integral second.
+                value = value.setScale(6, RoundingMode.HALF_UP);
             }
+            long seconds = value.setScale(0, RoundingMode.DOWN).longValueExact();
             long nanos = value.subtract(BigDecimal.valueOf(seconds))
                     .movePointRight(9)
                     .setScale(0, RoundingMode.DOWN)

@@ -426,6 +426,24 @@ struct DateFormatImpl {
     }
 };
 
+inline bool contains_from_unixtime_format_specifier(StringRef format, char specifier) {
+    for (size_t i = 0; i + 1 < format.size; ++i) {
+        // Consume the character after every '%', so "%%n" is escaped text rather than %n.
+        if (format.data[i] == '%' && format.data[++i] == specifier) {
+            return true;
+        }
+    }
+    return false;
+}
+
+inline bool has_conflicting_from_unixtime_fraction_specifiers(StringRef format) {
+    // %f formats the microsecond-rounded instant, while %n formats the original nanosecond
+    // instant. For example, 0.999999500 becomes 1.000000 for %f but stays 0.999999500 for %n,
+    // so one result cannot contain both fields consistently.
+    return contains_from_unixtime_format_specifier(format, 'f') &&
+           contains_from_unixtime_format_specifier(format, 'n');
+}
+
 template <bool WithStringArg, bool NewVersion = false>
 struct FromUnixTimeImpl {
     using ArgType = Int64;
@@ -465,7 +483,7 @@ struct FromUnixTimeImpl {
     template <typename Impl>
     static bool execute(const ArgType& val, StringRef format, ColumnString::Chars& res_data,
                         size_t& offset, const cctz::time_zone& time_zone) {
-        if (!check_valid(val)) {
+        if (!check_valid(val) || has_conflicting_from_unixtime_fraction_specifiers(format)) {
             return true;
         }
         DateV2Value<DateTimeV2ValueType> dt = get_datetime_value(val, time_zone);
@@ -525,17 +543,22 @@ struct FromUnixTimeDecimalImpl {
 
     static DateV2Value<DateTimeV2ValueType> get_datetime_value(const ArgType& interger,
                                                                const ArgType& fraction,
-                                                               const cctz::time_zone& time_zone) {
-        const auto epoch_second = static_cast<int64_t>(interger);
+                                                               const cctz::time_zone& time_zone,
+                                                               bool preserve_nanosecond) {
+        auto epoch_second = static_cast<int64_t>(interger);
         int32_t nanosecond = get_nanosecond(fraction);
         if constexpr (WithNanosecond) {
-            constexpr int32_t MICROS_PER_SECOND = 1000000;
-            const int32_t rounded_microseconds =
-                    (nanosecond + TimeStampNsValue::NANOS_PER_MICROSECOND / 2) /
-                    TimeStampNsValue::NANOS_PER_MICROSECOND;
-            // Keep calendar fields aligned with the original epoch second used by %n.
-            nanosecond = rounded_microseconds % MICROS_PER_SECOND *
-                         TimeStampNsValue::NANOS_PER_MICROSECOND;
+            if (!preserve_nanosecond) {
+                // Keep the established %f behavior by rounding the complete instant, including
+                // carry: 0.999999500 seconds is formatted as 01.000000, not 00.000000.
+                constexpr int32_t MICROS_PER_SECOND = 1000000;
+                const int32_t rounded_microseconds =
+                        (nanosecond + TimeStampNsValue::NANOS_PER_MICROSECOND / 2) /
+                        TimeStampNsValue::NANOS_PER_MICROSECOND;
+                epoch_second += rounded_microseconds / MICROS_PER_SECOND;
+                nanosecond = rounded_microseconds % MICROS_PER_SECOND *
+                             TimeStampNsValue::NANOS_PER_MICROSECOND;
+            }
         }
         DateV2Value<DateTimeV2ValueType> dt;
         dt.from_unixtime(epoch_second, nanosecond, time_zone, 6);
@@ -547,10 +570,15 @@ struct FromUnixTimeDecimalImpl {
     static bool execute_decimal(const ArgType& interger, const ArgType& fraction, StringRef format,
                                 ColumnString::Chars& res_data, size_t& offset,
                                 const cctz::time_zone& time_zone) {
+        if (has_conflicting_from_unixtime_fraction_specifiers(format)) [[unlikely]] {
+            return true;
+        }
         if (!check_valid(interger + (fraction > 0 ? 1 : ((fraction < 0) ? -1 : 0)))) [[unlikely]] {
             return true;
         }
-        DateV2Value<DateTimeV2ValueType> dt = get_datetime_value(interger, fraction, time_zone);
+        const bool preserve_nanosecond = contains_from_unixtime_format_specifier(format, 'n');
+        DateV2Value<DateTimeV2ValueType> dt =
+                get_datetime_value(interger, fraction, time_zone, preserve_nanosecond);
         if (!dt.is_valid_date()) [[unlikely]] {
             return true;
         }

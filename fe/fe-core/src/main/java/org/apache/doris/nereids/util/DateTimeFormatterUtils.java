@@ -192,6 +192,22 @@ public class DateTimeFormatterUtils {
         return res;
     }
 
+    /**
+     * Return whether a MySQL-style format contains the specified conversion.
+     * For example, {@code "%s.%n"} contains {@code 'n'}, but {@code "%s.%%n"} only prints
+     * the literal text {@code "%n"} and therefore does not.
+     */
+    public static boolean containsFormatSpecifier(String pattern, char specifier) {
+        for (int i = 0; i + 1 < pattern.length(); i++) {
+            if (pattern.charAt(i) == '%') {
+                if (pattern.charAt(++i) == specifier) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
     private static int calcWeekNumber(int year, int month, int day, int mode) {
         int[] weekYear = new int[1];
         return calcWeekNumberAndYear(year, month, day, mode, weekYear);

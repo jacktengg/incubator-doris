@@ -186,55 +186,72 @@ TEST(TimestampNsFunctionTest, from_unixtime_formats_nanoseconds) {
 
     const InputTypeSet decimal_arguments = {{PrimitiveType::TYPE_DECIMAL128I, 9, 21},
                                             Consted {PrimitiveType::TYPE_VARCHAR}};
-    EXPECT_TRUE((check_function<DataTypeString, true>(
-                         "from_unixtime_new", decimal_arguments,
-                         {{{DECIMAL128V3(1565080737, 123456789, 9),
-                            std::string("%Y-%m-%d %H:%i:%s.%f|%n")},
-                           std::string("2019-08-06 16:38:57.123457|123456789")}})
+    EXPECT_TRUE((check_function<DataTypeString, true>("from_unixtime_new", decimal_arguments,
+                                                      {{{DECIMAL128V3(1565080737, 123456789, 9),
+                                                         std::string("%Y-%m-%d %H:%i:%s.%f")},
+                                                        std::string("2019-08-06 16:38:57.123457")}})
                          .ok()));
     EXPECT_TRUE((check_function<DataTypeString, true>(
                          "from_unixtime_new", decimal_arguments,
-                         {{{DECIMAL128V3(1565080737, 123456499, 9),
-                            std::string("%Y-%m-%d %H:%i:%s.%f|%n")},
-                           std::string("2019-08-06 16:38:57.123456|123456499")}})
+                         {{{DECIMAL128V3(1565080737, 123456789, 9), std::string("%n")},
+                           std::string("123456789")}})
+                         .ok()));
+    EXPECT_TRUE((check_function<DataTypeString, true>("from_unixtime_new", decimal_arguments,
+                                                      {{{DECIMAL128V3(1565080737, 123456499, 9),
+                                                         std::string("%Y-%m-%d %H:%i:%s.%f")},
+                                                        std::string("2019-08-06 16:38:57.123456")}})
+                         .ok()));
+    EXPECT_TRUE((check_function<DataTypeString, true>("from_unixtime_new", decimal_arguments,
+                                                      {{{DECIMAL128V3(1565080737, 123456500, 9),
+                                                         std::string("%Y-%m-%d %H:%i:%s.%f")},
+                                                        std::string("2019-08-06 16:38:57.123457")}})
+                         .ok()));
+    EXPECT_TRUE((check_function<DataTypeString, true>("from_unixtime_new", decimal_arguments,
+                                                      {{{DECIMAL128V3(1565080737, 999999500, 9),
+                                                         std::string("%Y-%m-%d %H:%i:%s.%f")},
+                                                        std::string("2019-08-06 16:38:58.000000")}})
                          .ok()));
     EXPECT_TRUE((check_function<DataTypeString, true>(
                          "from_unixtime_new", decimal_arguments,
-                         {{{DECIMAL128V3(1565080737, 123456500, 9),
-                            std::string("%Y-%m-%d %H:%i:%s.%f|%n")},
-                           std::string("2019-08-06 16:38:57.123457|123456500")}})
-                         .ok()));
-    EXPECT_TRUE((check_function<DataTypeString, true>(
-                         "from_unixtime_new", decimal_arguments,
-                         {{{DECIMAL128V3(1565080737, 999999500, 9),
-                            std::string("%Y-%m-%d %H:%i:%s.%f|%n")},
-                           std::string("2019-08-06 16:38:57.000000|999999500")}})
+                         {{{DECIMAL128V3(0, 999999500, 9), std::string("%s.%f")},
+                           std::string("01.000000")}})
                          .ok()));
     EXPECT_TRUE((check_function<DataTypeString, true>(
                          "from_unixtime_new", decimal_arguments,
                          {{{DECIMAL128V3(0, 999999500, 9), std::string("%s.%n")},
                            std::string("00.999999500")}})
                          .ok()));
-    EXPECT_TRUE(
-            (check_function<DataTypeString, true>("from_unixtime_new", decimal_arguments,
-                                                  {{{DECIMAL128V3(0, 1, 9), std::string("%f|%n")},
-                                                    std::string("000000|000000001")}})
-                     .ok()));
+    EXPECT_FALSE((check_function<DataTypeString, true>(
+                          "from_unixtime_new", decimal_arguments,
+                          {{{DECIMAL128V3(0, 1, 9), std::string("%f|%n")}, std::string("unused")}},
+                          -1, -1, true)
+                          .ok()));
 
     const InputTypeSet legacy_decimal_arguments = {{PrimitiveType::TYPE_DECIMAL64, 6, 18},
                                                    Consted {PrimitiveType::TYPE_VARCHAR}};
     EXPECT_TRUE((check_function<DataTypeString, true>(
                          "from_unixtime_new", legacy_decimal_arguments,
-                         {{{DECIMAL64(1565080737, 123456, 6), std::string("%f|%n")},
-                           std::string("123456|123456000")}})
+                         {{{DECIMAL64(1565080737, 123456, 6), std::string("%f")},
+                           std::string("123456")}})
                          .ok()));
+    EXPECT_FALSE((check_function<DataTypeString, true>(
+                          "from_unixtime_new", legacy_decimal_arguments,
+                          {{{DECIMAL64(1565080737, 123456, 6), std::string("%f|%n")},
+                            std::string("unused")}},
+                          -1, -1, true)
+                          .ok()));
 
     const InputTypeSet integer_arguments = {PrimitiveType::TYPE_BIGINT,
                                             Consted {PrimitiveType::TYPE_VARCHAR}};
     EXPECT_TRUE((check_function<DataTypeString, true>(
                          "from_unixtime_new", integer_arguments,
-                         {{{int64_t(0), std::string("%f|%n")}, std::string("000000|000000000")}})
+                         {{{int64_t(0), std::string("%n")}, std::string("000000000")}})
                          .ok()));
+    EXPECT_FALSE(
+            (check_function<DataTypeString, true>(
+                     "from_unixtime_new", integer_arguments,
+                     {{{int64_t(0), std::string("%f|%n")}, std::string("unused")}}, -1, -1, true)
+                     .ok()));
 }
 
 TEST(TimestampNsFunctionTest, datetime_to_timestamp_keeps_datetimev2_overload) {

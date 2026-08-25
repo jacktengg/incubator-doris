@@ -17,6 +17,7 @@
 
 package org.apache.doris.nereids.trees.expressions.functions.scalar;
 
+import org.apache.doris.nereids.exceptions.AnalysisException;
 import org.apache.doris.nereids.trees.expressions.SlotReference;
 import org.apache.doris.nereids.trees.expressions.literal.BigIntLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.DecimalV3Literal;
@@ -89,7 +90,7 @@ class FromUnixtimeTest {
     }
 
     @Test
-    void testIsNotMonotonicWhenNanosecondsRoundAcrossDstFallback() {
+    void testIsNotMonotonicWhenMicrosecondRoundingCrossesDstFallback() {
         setTimeZone("Europe/Paris");
         SlotReference decimalSlot = new SlotReference("ts", DecimalV3Type.createDecimalV3Type(21, 9));
         FromUnixtime fromUnixtime = new FromUnixtime(decimalSlot,
@@ -98,6 +99,20 @@ class FromUnixtimeTest {
         Assertions.assertFalse(fromUnixtime.isMonotonic(
                 DecimalV3Literal.of(new BigDecimal("1635641999.999999000")),
                 DecimalV3Literal.of(new BigDecimal("1635641999.999999999"))));
+    }
+
+    @Test
+    void testRejectMixedFractionFormatSpecifiers() {
+        FromUnixtime fromUnixtime = new FromUnixtime(timestampSlot,
+                new VarcharLiteral("%s.%f|%n"));
+
+        Assertions.assertThrows(AnalysisException.class,
+                fromUnixtime::checkLegalityBeforeTypeCoercion);
+        Assertions.assertThrows(AnalysisException.class,
+                fromUnixtime::checkLegalityAfterRewrite);
+        FromUnixtime escapedNanosecond = new FromUnixtime(timestampSlot,
+                new VarcharLiteral("%s.%f|%%n"));
+        Assertions.assertDoesNotThrow(escapedNanosecond::checkLegalityAfterRewrite);
     }
 
     @Test

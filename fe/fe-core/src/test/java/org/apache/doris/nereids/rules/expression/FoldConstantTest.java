@@ -584,10 +584,19 @@ class FoldConstantTest extends ExpressionRewriteTestHelper {
         Assertions.assertEquals(new VarcharLiteral("2025-10-27 14:58:08.100000"), rewritten);
 
         f = new FromUnixtime(DecimalV3Literal.of(new BigDecimal("1761548288.123456789")),
-                StringLiteral.of("%Y-%m-%d %H:%i:%s.%f|%n"));
+                StringLiteral.of("%Y-%m-%d %H:%i:%s.%f"));
         rewritten = executor.rewrite(f, context);
-        // %f uses rounded microseconds, while %n preserves the input nanoseconds.
-        Assertions.assertEquals(new VarcharLiteral("2025-10-27 14:58:08.123457|123456789"), rewritten);
+        Assertions.assertEquals(new VarcharLiteral("2025-10-27 14:58:08.123457"), rewritten);
+
+        f = new FromUnixtime(DecimalV3Literal.of(new BigDecimal("1761548288.123456789")),
+                StringLiteral.of("%n"));
+        rewritten = executor.rewrite(f, context);
+        Assertions.assertEquals(new VarcharLiteral("123456789"), rewritten);
+
+        f = new FromUnixtime(DecimalV3Literal.of(new BigDecimal("0.999999500")),
+                StringLiteral.of("%s.%f"));
+        rewritten = executor.rewrite(f, context);
+        Assertions.assertEquals(new VarcharLiteral("01.000000"), rewritten);
 
         f = new FromUnixtime(DecimalV3Literal.of(new BigDecimal("0.999999500")),
                 StringLiteral.of("%s.%n"));

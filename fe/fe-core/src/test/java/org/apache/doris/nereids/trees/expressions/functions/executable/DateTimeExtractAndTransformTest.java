@@ -219,20 +219,29 @@ class DateTimeExtractAndTransformTest {
     }
 
     @Test
-    void testFromUnixTimeNanosecondKeepsMicrosecondRoundingWithoutSecondCarry() {
-        VarcharLiteral format = new VarcharLiteral("%s.%f|%n");
-        Assertions.assertEquals(new VarcharLiteral("00.000000|000000001"),
+    void testFromUnixTimeNanosecondFractionFormats() {
+        VarcharLiteral microsecondFormat = new VarcharLiteral("%s.%f");
+        Assertions.assertEquals(new VarcharLiteral("00.000000"),
                 DateTimeExtractAndTransform.fromUnixTime(
-                        new DecimalV3Literal(new BigDecimal("0.000000001")), format));
-        Assertions.assertEquals(new VarcharLiteral("00.123456|123456499"),
+                        new DecimalV3Literal(new BigDecimal("0.000000001")), microsecondFormat));
+        Assertions.assertEquals(new VarcharLiteral("00.123456"),
                 DateTimeExtractAndTransform.fromUnixTime(
-                        new DecimalV3Literal(new BigDecimal("0.123456499")), format));
-        Assertions.assertEquals(new VarcharLiteral("00.123457|123456500"),
+                        new DecimalV3Literal(new BigDecimal("0.123456499")), microsecondFormat));
+        Assertions.assertEquals(new VarcharLiteral("00.123457"),
                 DateTimeExtractAndTransform.fromUnixTime(
-                        new DecimalV3Literal(new BigDecimal("0.123456500")), format));
-        Assertions.assertEquals(new VarcharLiteral("00.000000|999999500"),
+                        new DecimalV3Literal(new BigDecimal("0.123456500")), microsecondFormat));
+        Assertions.assertEquals(new VarcharLiteral("01.000000"),
                 DateTimeExtractAndTransform.fromUnixTime(
-                        new DecimalV3Literal(new BigDecimal("0.999999500")), format));
+                        new DecimalV3Literal(new BigDecimal("0.999999500")), microsecondFormat));
+
+        Assertions.assertEquals(new VarcharLiteral("00.999999500"),
+                DateTimeExtractAndTransform.fromUnixTime(
+                        new DecimalV3Literal(new BigDecimal("0.999999500")),
+                        new VarcharLiteral("%s.%n")));
+        Assertions.assertThrows(AnalysisException.class,
+                () -> DateTimeExtractAndTransform.fromUnixTime(
+                        new DecimalV3Literal(new BigDecimal("0.999999500")),
+                        new VarcharLiteral("%s.%f|%n")));
     }
 
     @Test

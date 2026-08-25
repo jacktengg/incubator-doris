@@ -58,7 +58,8 @@ suite("test_timestamp_ns_functions") {
                         '%Y-%m-%d %H:%i:%s.%f|%n'),
             time_format(cast('2024-02-29 12:34:56.123456789' as timestamp_ns),
                         '%H:%i:%s.%f|%n'),
-            from_unixtime(0.123456789, '%Y-%m-%d %H:%i:%s.%f|%n'),
+            from_unixtime(0.123456789, '%Y-%m-%d %H:%i:%s.%f'),
+            from_unixtime(0.123456789, '%Y-%m-%d %H:%i:%s.%n'),
             from_unixtime(0, '%n'),
             from_unixtime(0.000000001, '%n'),
             time(cast('2024-02-29 12:34:56.123456789' as timestamp_ns)),
@@ -128,16 +129,28 @@ suite("test_timestamp_ns_functions") {
 
     def fromUnixTimeMicrosecondRoundingSql = """
         select
-            from_unixtime(0.123456499, '%s.%f|%n'),
-            from_unixtime(0.123456500, '%s.%f|%n'),
-            from_unixtime(0.999999499, '%s.%f|%n'),
-            from_unixtime(0.999999500, '%s.%f|%n'),
+            from_unixtime(0.123456499, '%s.%f'),
+            from_unixtime(0.123456500, '%s.%f'),
+            from_unixtime(0.999999499, '%s.%f'),
+            from_unixtime(0.999999500, '%s.%f'),
             from_unixtime(0.999999500, '%s.%n'),
-            from_unixtime(57599.999999500, '%Y-%m-%d %H:%i:%s.%f|%n')
+            from_unixtime(57599.999999500, '%Y-%m-%d %H:%i:%s.%f'),
+            from_unixtime(57599.999999500, '%Y-%m-%d %H:%i:%s.%n')
     """
     qt_from_unixtime_microsecond_rounding_fold fromUnixTimeMicrosecondRoundingSql
     sql "set debug_skip_fold_constant = true"
     qt_from_unixtime_microsecond_rounding_runtime fromUnixTimeMicrosecondRoundingSql
+    sql "set debug_skip_fold_constant = false"
+
+    // %f rounds the complete instant (including carry), while %n preserves nanoseconds.
+    // Mixing both specifiers would describe two different instants at 0.999999500.
+    [false, true].each { skipFoldConstant ->
+        sql "set debug_skip_fold_constant = ${skipFoldConstant}"
+        test {
+            sql "select from_unixtime(0.999999500, '%s.%f|%n')"
+            exception "FROM_UNIXTIME format cannot contain both %f and %n"
+        }
+    }
     sql "set debug_skip_fold_constant = false"
 
     [false, true].each { skipFoldConstant ->

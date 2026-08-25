@@ -786,18 +786,18 @@ public class DateTimeExtractAndTransform {
         if (second.signum() < 0) {
             throw new AnalysisException("Operation from_unixtime of " + second + " out of range");
         }
+        boolean preserveNanosecond = DateTimeFormatterUtils.containsFormatSpecifier(format.getValue(), 'n');
+        // %f keeps its historical half-up microsecond semantics, including second carry. Thus
+        // 0.999999500 becomes 1.000000 for %f, while %n keeps the original 0.999999500 instant.
+        BigDecimal convertedSecond = preserveNanosecond ? second : second.setScale(6, RoundingMode.HALF_UP);
         int nanosecond;
         ZonedDateTime dateTime;
         try {
-            long unroundedEpochSecond = second.setScale(0, RoundingMode.DOWN).longValueExact();
-            nanosecond = second.subtract(BigDecimal.valueOf(unroundedEpochSecond)).movePointRight(9)
+            long epochSecond = convertedSecond.setScale(0, RoundingMode.DOWN).longValueExact();
+            nanosecond = convertedSecond.subtract(BigDecimal.valueOf(epochSecond)).movePointRight(9)
                     .setScale(0, RoundingMode.DOWN).intValueExact();
 
-            int roundedMicrosecond = second.subtract(BigDecimal.valueOf(unroundedEpochSecond))
-                    .setScale(6, RoundingMode.HALF_UP).movePointRight(6).intValueExact();
-            int microsecond = roundedMicrosecond % 1_000_000;
-            // Keep calendar fields aligned with the original epoch second used by %n.
-            dateTime = Instant.ofEpochSecond(unroundedEpochSecond, microsecond * 1000L)
+            dateTime = Instant.ofEpochSecond(epochSecond, nanosecond)
                     .atZone(DateUtils.getTimeZone());
         } catch (ArithmeticException | DateTimeException e) {
             throw new AnalysisException("Operation from_unixtime of " + second + " out of range", e);
@@ -819,6 +819,10 @@ public class DateTimeExtractAndTransform {
                     + " than 128.");
         }
         format = (StringLikeLiteral) SupportJavaDateFormatter.translateJavaFormatter(format);
+        if (DateTimeFormatterUtils.containsFormatSpecifier(format.getValue(), 'f')
+                && DateTimeFormatterUtils.containsFormatSpecifier(format.getValue(), 'n')) {
+            throw new AnalysisException("FROM_UNIXTIME format cannot contain both %f and %n");
+        }
         return new VarcharLiteral(DateTimeFormatterUtils.toFormatStringConservative(
                 datetime, format, false, nanosecond));
     }
