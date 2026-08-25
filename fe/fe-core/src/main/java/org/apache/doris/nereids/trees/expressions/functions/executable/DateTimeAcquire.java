@@ -84,10 +84,13 @@ public class DateTimeAcquire {
     }
 
     private static LocalDateTime currentDateTime(ZoneId zoneId) {
+        return LocalDateTime.ofInstant(currentInstant(), zoneId);
+    }
+
+    private static Instant currentInstant() {
         ConnectContext connectContext = ConnectContext.get();
         // Executable functions are also invoked by evaluators without a session context.
-        Instant currentTime = connectContext == null ? Instant.now() : connectContext.getStartTimeInstant();
-        return LocalDateTime.ofInstant(currentTime, zoneId);
+        return connectContext == null ? Instant.now() : connectContext.getStartTimeInstant();
     }
 
     /**
@@ -95,12 +98,12 @@ public class DateTimeAcquire {
      */
     @ExecFunction(name = "localtime")
     public static Expression localTime() {
-        return DateTimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()), 0);
+        return DateTimeV2Literal.fromJavaDateType(currentDateTime(), 0);
     }
 
     @ExecFunction(name = "localtimestamp")
     public static Expression localTimestamp() {
-        return DateTimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()), 0);
+        return DateTimeV2Literal.fromJavaDateType(currentDateTime(), 0);
     }
 
     /**
@@ -108,12 +111,12 @@ public class DateTimeAcquire {
      */
     @ExecFunction(name = "curdate")
     public static Expression curDate() {
-        return DateV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()));
+        return DateV2Literal.fromJavaDateType(currentDateTime());
     }
 
     @ExecFunction(name = "current_date")
     public static Expression currentDate() {
-        return DateV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()));
+        return DateV2Literal.fromJavaDateType(currentDateTime());
     }
 
     /**
@@ -121,22 +124,22 @@ public class DateTimeAcquire {
      */
     @ExecFunction(name = "curtime")
     public static Expression curTime() {
-        return TimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()));
+        return TimeV2Literal.fromJavaDateType(currentDateTime());
     }
 
     @ExecFunction(name = "curtime")
     public static Expression curTime(TinyIntLiteral precision) {
-        return TimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()), precision.getValue());
+        return TimeV2Literal.fromJavaDateType(currentDateTime(), precision.getValue());
     }
 
     @ExecFunction(name = "current_time")
     public static Expression currentTime() {
-        return TimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()));
+        return TimeV2Literal.fromJavaDateType(currentDateTime());
     }
 
     @ExecFunction(name = "current_time")
     public static Expression currentTime(TinyIntLiteral precision) {
-        return TimeV2Literal.fromJavaDateType(LocalDateTime.now(DateUtils.getTimeZone()), precision.getValue());
+        return TimeV2Literal.fromJavaDateType(currentDateTime(), precision.getValue());
     }
 
     /**
@@ -144,7 +147,7 @@ public class DateTimeAcquire {
      */
     @ExecFunction(name = "unix_timestamp")
     public static Expression unixTimestamp() {
-        return new BigIntLiteral((int) (System.currentTimeMillis() / 1000L));
+        return new BigIntLiteral(currentInstant().getEpochSecond());
     }
 
     /**

@@ -38,7 +38,10 @@ import org.apache.doris.nereids.trees.expressions.functions.BoundFunction;
 import org.apache.doris.nereids.trees.expressions.functions.ExplicitlyCastableSignature;
 import org.apache.doris.nereids.trees.expressions.functions.agg.Avg;
 import org.apache.doris.nereids.trees.expressions.functions.agg.Sum;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.Array;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Coalesce;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.CreateMap;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.CreateStruct;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.ElementAt;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Greatest;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.If;
@@ -554,6 +557,46 @@ public class TypeCoercionUtilsTest {
                 "2024-01-02 03:04:05.123456", DateV2Type.INSTANCE);
         Assertions.assertTrue(dateTargetWithTime.isPresent());
         Assertions.assertEquals(DateTimeV2Type.of(6), dateTargetWithTime.get().getDataType());
+    }
+
+    @Test
+    public void testTimestampNsExactCoercionInNestedResultTypes() {
+        boolean oldBehavior = GlobalVariable.enableNewTypeCoercionBehavior;
+        try {
+            for (boolean newBehavior : ImmutableList.of(false, true)) {
+                GlobalVariable.enableNewTypeCoercionBehavior = newBehavior;
+
+                Expression timestampNs = new TimeStampNsLiteral("2024-01-02 03:04:05.123456789");
+                Expression dateTimeV2 = new DateTimeV2Literal(
+                        DateTimeV2Type.MAX, "2024-01-02 03:04:05.123456");
+
+                CaseWhen arrayCase = (CaseWhen) TypeCoercionUtils.processCaseWhen(new CaseWhen(
+                        ImmutableList.of(new WhenClause(BooleanLiteral.TRUE, new Array(timestampNs))),
+                        new Array(dateTimeV2)));
+                Assertions.assertEquals(ArrayType.of(TimeStampNsType.INSTANCE), arrayCase.getDataType());
+
+                If mapIf = new If(BooleanLiteral.TRUE,
+                        new CreateMap(new IntegerLiteral(1), timestampNs),
+                        new CreateMap(new IntegerLiteral(1), dateTimeV2));
+                Assertions.assertEquals(MapType.of(IntegerType.INSTANCE, TimeStampNsType.INSTANCE),
+                        mapIf.getSignature().returnType);
+
+                Coalesce structCoalesce = new Coalesce(
+                        new CreateStruct(new IntegerLiteral(1), timestampNs),
+                        new CreateStruct(new IntegerLiteral(1), dateTimeV2));
+                StructType structType = (StructType) structCoalesce.getSignature().returnType;
+                Assertions.assertEquals(IntegerType.INSTANCE, structType.getFields().get(0).getDataType());
+                Assertions.assertEquals(TimeStampNsType.INSTANCE, structType.getFields().get(1).getDataType());
+
+                Expression dateTimeArrayColumn = new SlotReference(
+                        "datetime_array", ArrayType.of(DateTimeV2Type.MAX));
+                Assertions.assertThrows(AnalysisException.class,
+                        () -> new If(BooleanLiteral.TRUE, new Array(timestampNs), dateTimeArrayColumn)
+                                .getSignature());
+            }
+        } finally {
+            GlobalVariable.enableNewTypeCoercionBehavior = oldBehavior;
+        }
     }
 
     @Test

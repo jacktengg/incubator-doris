@@ -58,6 +58,9 @@ public abstract class DateTimeWithPrecision extends ScalarFunction {
                 }
                 signature = signature.withReturnType(precision > DateTimeV2Type.MAX_SCALE
                         ? TimeStampNsType.INSTANCE : DateTimeV2Type.of(precision));
+            } else if (!getArgument(0).isLiteral()) {
+                throw new AnalysisException(getName().toUpperCase(Locale.ROOT)
+                        + " precision argument must be a constant literal.");
             } else {
                 signature = signature.withReturnType(DateTimeV2Type.of(6));
             }

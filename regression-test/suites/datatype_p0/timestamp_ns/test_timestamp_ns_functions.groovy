@@ -16,6 +16,19 @@
 // under the License.
 
 suite("test_timestamp_ns_functions") {
+    test {
+        sql """
+            select now(precision)
+            from (
+                select 6 as precision union all
+                select 7 union all
+                select 9 union all
+                select 10
+            ) scales
+        """
+        exception "NOW precision argument must be a constant literal."
+    }
+
     sql "set time_zone = '+08:00'"
     sql "drop table if exists timestamp_ns_functions"
     sql """

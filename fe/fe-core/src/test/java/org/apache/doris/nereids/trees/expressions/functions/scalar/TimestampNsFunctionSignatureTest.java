@@ -100,6 +100,13 @@ class TimestampNsFunctionSignatureTest {
     }
 
     @Test
+    void testNowRequiresLiteralPrecision() {
+        AnalysisException exception = Assertions.assertThrows(AnalysisException.class,
+                () -> new Now(SlotReference.of("precision", IntegerType.INSTANCE)).getSignature());
+        Assertions.assertEquals("NOW precision argument must be a constant literal.", exception.getMessage());
+    }
+
+    @Test
     void testUtcTimestampUsesTimestampNsForNanosecondPrecision() {
         assertAnalyzedType("utc_timestamp(0)", DateTimeV2Type.SYSTEM_DEFAULT);
         assertAnalyzedType("utc_timestamp(6)", DateTimeV2Type.MAX);

@@ -20,13 +20,22 @@ package org.apache.doris.nereids.trees.expressions.functions.executable;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.ExpressionEvaluator;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.Now;
+import org.apache.doris.nereids.trees.expressions.literal.BigIntLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.DateTimeV2Literal;
+import org.apache.doris.nereids.trees.expressions.literal.DateV2Literal;
 import org.apache.doris.nereids.trees.expressions.literal.IntegerLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.TimeStampNsLiteral;
+import org.apache.doris.nereids.trees.expressions.literal.TimeV2Literal;
+import org.apache.doris.nereids.trees.expressions.literal.TinyIntLiteral;
 import org.apache.doris.qe.ConnectContext;
+import org.apache.doris.qe.CoordinatorContext;
+import org.apache.doris.qe.SessionVariable;
+import org.apache.doris.thrift.TQueryGlobals;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
+import org.mockito.Mockito;
 
 import java.time.Instant;
 import java.time.LocalDateTime;
@@ -58,26 +67,43 @@ class DateTimeAcquireTest {
     @Test
     void testCurrentTimestampUsesStatementStartTime() {
         Instant statementStart = Instant.parse("2024-02-29T12:34:56.123456789Z");
-        ConnectContext previousContext = ConnectContext.get();
-        ConnectContext context = new ConnectContext() {
-            @Override
-            public Instant getStartTimeInstant() {
-                return statementStart;
-            }
-        };
-        context.getSessionVariable().setTimeZone("UTC");
-        context.setThreadLocalInfo();
-        try {
+        ConnectContext context = Mockito.mock(ConnectContext.class);
+        SessionVariable sessionVariable = new SessionVariable();
+        sessionVariable.setTimeZone("UTC");
+        Mockito.when(context.getStartTimeInstant()).thenReturn(statementStart);
+        Mockito.when(context.getSessionVariable()).thenReturn(sessionVariable);
+        try (MockedStatic<ConnectContext> mockedContext = Mockito.mockStatic(ConnectContext.class)) {
+            mockedContext.when(ConnectContext::get).thenReturn(context);
             TimeStampNsLiteral expected = TimeStampNsLiteral.fromJavaDateType(
                     LocalDateTime.ofInstant(statementStart, ZoneId.of("UTC")));
 
             Assertions.assertEquals(expected, DateTimeAcquire.now(new IntegerLiteral(9)));
             Assertions.assertEquals(expected, DateTimeAcquire.currentTimestamp(new IntegerLiteral(9)));
-        } finally {
-            ConnectContext.remove();
-            if (previousContext != null) {
-                previousContext.setThreadLocalInfo();
-            }
+
+            LocalDateTime localStart = LocalDateTime.ofInstant(statementStart, ZoneId.of("UTC"));
+            DateTimeV2Literal expectedSecond = DateTimeV2Literal.fromJavaDateType(localStart, 0);
+            DateV2Literal expectedDate = (DateV2Literal) DateV2Literal.fromJavaDateType(localStart);
+            TimeV2Literal expectedTime = (TimeV2Literal) TimeV2Literal.fromJavaDateType(localStart);
+            TimeV2Literal expectedMicrosecondTime = (TimeV2Literal) TimeV2Literal.fromJavaDateType(localStart, 6);
+
+            Assertions.assertEquals(expectedSecond, DateTimeAcquire.localTime());
+            Assertions.assertEquals(expectedSecond, DateTimeAcquire.localTimestamp());
+            Assertions.assertEquals(expectedDate, DateTimeAcquire.curDate());
+            Assertions.assertEquals(expectedDate, DateTimeAcquire.currentDate());
+            Assertions.assertEquals(expectedTime, DateTimeAcquire.curTime());
+            Assertions.assertEquals(expectedTime, DateTimeAcquire.currentTime());
+            Assertions.assertEquals(expectedMicrosecondTime,
+                    DateTimeAcquire.curTime(new TinyIntLiteral((byte) 6)));
+            Assertions.assertEquals(expectedMicrosecondTime,
+                    DateTimeAcquire.currentTime(new TinyIntLiteral((byte) 6)));
+            Assertions.assertEquals(statementStart.getEpochSecond(),
+                    ((BigIntLiteral) DateTimeAcquire.unixTimestamp()).getValue());
+            Assertions.assertEquals(expectedSecond, DateTimeAcquire.utcTimestamp());
+            Assertions.assertEquals(expected, DateTimeAcquire.utcTimestamp(new IntegerLiteral(9)));
+
+            TQueryGlobals queryGlobals = CoordinatorContext.createQueryGlobals(context);
+            Assertions.assertEquals(statementStart.toEpochMilli(), queryGlobals.getTimestampMs());
+            Assertions.assertEquals(statementStart.getNano(), queryGlobals.getNanoSeconds());
         }
     }
 }

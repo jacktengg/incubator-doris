@@ -44,8 +44,11 @@ import org.apache.doris.nereids.trees.expressions.Multiply;
 import org.apache.doris.nereids.trees.expressions.SubqueryExpr;
 import org.apache.doris.nereids.trees.expressions.Subtract;
 import org.apache.doris.nereids.trees.expressions.functions.BoundFunction;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.Array;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.CreateMap;
+import org.apache.doris.nereids.trees.expressions.functions.scalar.CreateStruct;
 import org.apache.doris.nereids.trees.expressions.functions.scalar.ElementAt;
+import org.apache.doris.nereids.trees.expressions.literal.ArrayLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.BigIntLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.BooleanLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.DateLiteral;
@@ -65,6 +68,7 @@ import org.apache.doris.nereids.trees.expressions.literal.Result;
 import org.apache.doris.nereids.trees.expressions.literal.SmallIntLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.StringLikeLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.StringLiteral;
+import org.apache.doris.nereids.trees.expressions.literal.StructLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.TimeStampNsLiteral;
 import org.apache.doris.nereids.trees.expressions.literal.TimeV2Literal;
 import org.apache.doris.nereids.trees.expressions.literal.TimestampTzLiteral;
@@ -1873,6 +1877,112 @@ public class TypeCoercionUtils {
 
     private static Optional<List<DataType>> replaceExactTimeStampNsAndDateLikeTypes(
             List<DataType> dataTypes, List<? extends Expression> expressions) {
+        List<List<Expression>> expressionGroups = expressions.stream()
+                .map(ImmutableList::of)
+                .collect(Collectors.toList());
+        return replaceExactTimeStampNsAndDateLikeNestedTypes(dataTypes, expressionGroups);
+    }
+
+    private static Optional<List<DataType>> replaceExactTimeStampNsAndDateLikeNestedTypes(
+            List<DataType> dataTypes, List<List<Expression>> expressionGroups) {
+        Preconditions.checkArgument(dataTypes.size() == expressionGroups.size());
+        if (dataTypes.stream().anyMatch(ArrayType.class::isInstance)
+                && dataTypes.stream().allMatch(type -> type instanceof ArrayType || type instanceof NullType)) {
+            List<DataType> itemTypes = dataTypes.stream()
+                    .map(type -> type instanceof ArrayType ? ((ArrayType) type).getItemType() : NullType.INSTANCE)
+                    .collect(Collectors.toList());
+            List<List<Expression>> itemExpressionGroups = expressionGroups.stream()
+                    .map(TypeCoercionUtils::extractArrayItemExpressions)
+                    .collect(Collectors.toList());
+            return replaceExactTimeStampNsAndDateLikeNestedTypes(itemTypes, itemExpressionGroups)
+                    .map(types -> {
+                        List<DataType> replacedTypes = Lists.newArrayListWithCapacity(types.size());
+                        for (int i = 0; i < types.size(); i++) {
+                            replacedTypes.add(dataTypes.get(i) instanceof ArrayType
+                                    ? ArrayType.of(types.get(i)) : NullType.INSTANCE);
+                        }
+                        return replacedTypes;
+                    });
+        }
+        if (dataTypes.stream().anyMatch(MapType.class::isInstance)
+                && dataTypes.stream().allMatch(type -> type instanceof MapType || type instanceof NullType)) {
+            Optional<List<DataType>> keyTypes = replaceExactTimeStampNsAndDateLikeNestedTypes(
+                    dataTypes.stream()
+                            .map(type -> type instanceof MapType
+                                    ? ((MapType) type).getKeyType() : NullType.INSTANCE)
+                            .collect(Collectors.toList()),
+                    expressionGroups.stream()
+                            .map(group -> extractMapExpressions(group, true))
+                            .collect(Collectors.toList()));
+            if (!keyTypes.isPresent()) {
+                return Optional.empty();
+            }
+            Optional<List<DataType>> valueTypes = replaceExactTimeStampNsAndDateLikeNestedTypes(
+                    dataTypes.stream()
+                            .map(type -> type instanceof MapType
+                                    ? ((MapType) type).getValueType() : NullType.INSTANCE)
+                            .collect(Collectors.toList()),
+                    expressionGroups.stream()
+                            .map(group -> extractMapExpressions(group, false))
+                            .collect(Collectors.toList()));
+            if (!valueTypes.isPresent()) {
+                return Optional.empty();
+            }
+            List<DataType> replacedTypes = Lists.newArrayListWithCapacity(dataTypes.size());
+            for (int i = 0; i < dataTypes.size(); i++) {
+                replacedTypes.add(dataTypes.get(i) instanceof MapType
+                        ? MapType.of(keyTypes.get().get(i), valueTypes.get().get(i)) : NullType.INSTANCE);
+            }
+            return Optional.of(replacedTypes);
+        }
+        if (dataTypes.stream().anyMatch(StructType.class::isInstance)
+                && dataTypes.stream().allMatch(type -> type instanceof StructType || type instanceof NullType)) {
+            int fieldCount = dataTypes.stream()
+                    .filter(StructType.class::isInstance)
+                    .map(StructType.class::cast)
+                    .mapToInt(type -> type.getFields().size())
+                    .findFirst()
+                    .orElse(0);
+            boolean sameFieldCount = dataTypes.stream()
+                    .filter(StructType.class::isInstance)
+                    .map(StructType.class::cast)
+                    .allMatch(type -> type.getFields().size() == fieldCount);
+            if (!sameFieldCount) {
+                return Optional.of(dataTypes);
+            }
+            List<List<DataType>> fieldTypes = Lists.newArrayListWithCapacity(fieldCount);
+            for (int fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
+                final int index = fieldIndex;
+                Optional<List<DataType>> replacedFieldTypes = replaceExactTimeStampNsAndDateLikeNestedTypes(
+                        dataTypes.stream()
+                                .map(type -> type instanceof StructType
+                                        ? ((StructType) type).getFields().get(index).getDataType()
+                                        : NullType.INSTANCE)
+                                .collect(Collectors.toList()),
+                        expressionGroups.stream()
+                                .map(group -> extractStructFieldExpressions(group, index))
+                                .collect(Collectors.toList()));
+                if (!replacedFieldTypes.isPresent()) {
+                    return Optional.empty();
+                }
+                fieldTypes.add(replacedFieldTypes.get());
+            }
+            List<DataType> replacedTypes = Lists.newArrayListWithCapacity(dataTypes.size());
+            for (int typeIndex = 0; typeIndex < dataTypes.size(); typeIndex++) {
+                if (dataTypes.get(typeIndex) instanceof NullType) {
+                    replacedTypes.add(NullType.INSTANCE);
+                    continue;
+                }
+                List<StructField> fields = ((StructType) dataTypes.get(typeIndex)).getFields();
+                List<StructField> replacedFields = Lists.newArrayListWithCapacity(fieldCount);
+                for (int fieldIndex = 0; fieldIndex < fieldCount; fieldIndex++) {
+                    replacedFields.add(fields.get(fieldIndex).withDataType(fieldTypes.get(fieldIndex).get(typeIndex)));
+                }
+                replacedTypes.add(new StructType(replacedFields));
+            }
+            return Optional.of(replacedTypes);
+        }
+
         boolean containsTimeStampNs = dataTypes.stream()
                 .anyMatch(TimeStampNsType.class::isInstance);
         boolean containsOtherDateLike = dataTypes.stream()
@@ -1885,7 +1995,7 @@ public class TypeCoercionUtils {
         for (int i = 0; i < dataTypes.size(); i++) {
             DataType dataType = dataTypes.get(i);
             if (dataType.isDateLikeType() && !(dataType instanceof TimeStampNsType)
-                    && !canExactlyCastToTimeStampNs(expressions.get(i))) {
+                    && !expressionGroups.get(i).stream().allMatch(TypeCoercionUtils::canExactlyCastToTimeStampNs)) {
                 allOtherDateLikeValuesFitTimeStampNs = false;
                 break;
             }
@@ -1903,7 +2013,7 @@ public class TypeCoercionUtils {
         Optional<DataType> otherCommonType = findWiderCommonTypeByVariable(
                 otherDateLikeTypes, false, false);
         if (otherCommonType.isPresent() && !otherCommonType.get().isTimeStampTzType()
-                && allTimeStampNsValuesFitType(dataTypes, expressions, otherCommonType.get())) {
+                && allTimeStampNsValuesFitType(dataTypes, expressionGroups, otherCommonType.get())) {
             return Optional.of(dataTypes.stream()
                     .map(dataType -> dataType instanceof TimeStampNsType ? otherCommonType.get() : dataType)
                     .collect(Collectors.toList()));
@@ -1912,14 +2022,62 @@ public class TypeCoercionUtils {
     }
 
     private static boolean allTimeStampNsValuesFitType(List<DataType> dataTypes,
-            List<? extends Expression> expressions, DataType targetType) {
+            List<List<Expression>> expressionGroups, DataType targetType) {
         for (int i = 0; i < dataTypes.size(); i++) {
             if (dataTypes.get(i) instanceof TimeStampNsType
-                    && !canExactlyCastTimeStampNsTo(expressions.get(i), targetType)) {
+                    && !expressionGroups.get(i).stream()
+                            .allMatch(expression -> canExactlyCastTimeStampNsTo(expression, targetType))) {
                 return false;
             }
         }
         return true;
+    }
+
+    private static List<Expression> extractArrayItemExpressions(List<Expression> expressions) {
+        List<Expression> items = Lists.newArrayList();
+        for (Expression expression : expressions) {
+            if (expression instanceof Array) {
+                items.addAll(expression.children());
+            } else if (expression instanceof ArrayLiteral) {
+                items.addAll(((ArrayLiteral) expression).getValue());
+            } else {
+                items.add(expression);
+            }
+        }
+        return items;
+    }
+
+    private static List<Expression> extractMapExpressions(List<Expression> expressions, boolean extractKeys) {
+        List<Expression> entries = Lists.newArrayList();
+        for (Expression expression : expressions) {
+            if (expression instanceof CreateMap) {
+                for (int i = extractKeys ? 0 : 1; i < expression.arity(); i += 2) {
+                    entries.add(expression.child(i));
+                }
+            } else if (expression instanceof MapLiteral) {
+                entries.addAll(extractKeys
+                        ? ((MapLiteral) expression).getValue().keySet()
+                        : ((MapLiteral) expression).getValue().values());
+            } else {
+                entries.add(expression);
+            }
+        }
+        return entries;
+    }
+
+    private static List<Expression> extractStructFieldExpressions(
+            List<Expression> expressions, int fieldIndex) {
+        List<Expression> fields = Lists.newArrayList();
+        for (Expression expression : expressions) {
+            if (expression instanceof CreateStruct) {
+                fields.add(expression.child(fieldIndex));
+            } else if (expression instanceof StructLiteral) {
+                fields.add(((StructLiteral) expression).getValue().get(fieldIndex));
+            } else {
+                fields.add(expression);
+            }
+        }
+        return fields;
     }
 
     /** Whether an expression is a date-like literal exactly representable as TIMESTAMP_NS. */
