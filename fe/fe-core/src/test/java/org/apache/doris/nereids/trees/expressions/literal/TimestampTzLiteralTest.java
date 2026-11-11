@@ -82,7 +82,7 @@ class TimestampTzLiteralTest {
         Assertions.assertEquals(3, literal.month);
         Assertions.assertEquals(10, literal.day);
         Assertions.assertEquals(7, literal.hour);
-        Assertions.assertEquals(0, literal.minute);
+        Assertions.assertEquals(30, literal.minute);
         Assertions.assertEquals(0, literal.second);
         Assertions.assertEquals(0, literal.microSecond);
 
@@ -94,6 +94,41 @@ class TimestampTzLiteralTest {
         Assertions.assertEquals(30, literal.minute);
         Assertions.assertEquals(0, literal.second);
         Assertions.assertEquals(0, literal.microSecond);
+    }
+
+    @Test
+    void testCastPreservesPositionInTimeZoneGap() {
+        // Apia skipped one day. Test the gap start, noon, fractions, and the last microsecond.
+        // The adjacent valid times must keep their original UTC instants.
+        String[][] cases = {
+                {"Pacific/Apia", "2011-12-29 23:59:59", "2011-12-30 09:59:59.000000+00:00"},
+                {"Pacific/Apia", "2011-12-30 00:00:00", "2011-12-30 10:00:00.000000+00:00"},
+                {"Pacific/Apia", "2011-12-30 12:00:00", "2011-12-30 22:00:00.000000+00:00"},
+                {"Pacific/Apia", "2011-12-30 12:00:00.123456", "2011-12-30 22:00:00.123456+00:00"},
+                {"Pacific/Apia", "2011-12-30 23:59:59.999999", "2011-12-31 09:59:59.999999+00:00"},
+                {"Pacific/Apia", "2011-12-31 00:00:00", "2011-12-30 10:00:00.000000+00:00"},
+                // These cases prevent a fixed one-hour correction and a change to overlap handling.
+                {"America/New_York", "2024-03-10 02:30:00.123456", "2024-03-10 07:30:00.123456+00:00"},
+                {"Australia/Lord_Howe", "2024-10-06 02:15:00.123456", "2024-10-05 15:45:00.123456+00:00"},
+                {"America/New_York", "2024-11-03 01:30:00", "2024-11-03 05:30:00.000000+00:00"}
+        };
+        ConnectContext context = new ConnectContext();
+        context.setThreadLocalInfo();
+        try {
+            for (String[] testCase : cases) {
+                context.getSessionVariable().setTimeZone(testCase[0]);
+                Assertions.assertEquals(testCase[2], TimestampTzLiteral.fromSessionTimeZone(
+                        TimeStampTzType.of(6), testCase[1]).getStringValue(), testCase[1]);
+                Assertions.assertEquals(testCase[2], TimestampTzLiteral.fromSessionTimeZone(
+                        TimeStampTzType.of(6), new DateTimeV2Literal(testCase[1])).getStringValue(), testCase[1]);
+                // The named zone must take precedence over the UTC session zone.
+                context.getSessionVariable().setTimeZone("UTC");
+                Assertions.assertEquals(testCase[2], new TimestampTzLiteral(TimeStampTzType.of(6),
+                        testCase[1] + " " + testCase[0]).getStringValue(), testCase[1]);
+            }
+        } finally {
+            ConnectContext.remove();
+        }
     }
 
     @Test

@@ -237,9 +237,11 @@ public class DateTimeLiteral extends DateLiteral {
 
         ZoneId zoneId = temporal.query(TemporalQueries.zone());
         if (zoneId != null) {
-            ZoneId targetZone = this.dataType instanceof TimeStampTzType ? ZoneId.of("UTC") : DateUtils.getTimeZone();
-            LocalDateTime localDateTime = convertTimeZone(year, month, day, hour, minute, second,
-                    zoneId, targetZone);
+            // TIMESTAMPTZ shifts a missing local time by the full gap. Other date types keep their policy.
+            LocalDateTime localDateTime = this.dataType instanceof TimeStampTzType
+                    ? TimestampTzLiteral.toUtc(LocalDateTime.of((int) year, (int) month, (int) day,
+                            (int) hour, (int) minute, (int) second), zoneId)
+                    : convertTimeZone(year, month, day, hour, minute, second, zoneId, DateUtils.getTimeZone());
             this.year = localDateTime.getYear();
             this.month = localDateTime.getMonthValue();
             this.day = localDateTime.getDayOfMonth();

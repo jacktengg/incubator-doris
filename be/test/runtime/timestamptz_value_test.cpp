@@ -130,6 +130,92 @@ TEST(TimeStampTzValueTest, ToStringRejectsUnrepresentableLocalYear) {
     }
 }
 
+static void check_timestamptz_string_casts(const std::string& input, const cctz::time_zone& zone,
+                                           const TimestampTzValue& expected) {
+    const auto utc = cctz::utc_time_zone();
+    const std::string named_input = input + " " + zone.name();
+    for (const bool strict : {false, true}) {
+        CastParameters params;
+        params.is_strict = strict;
+        TimestampTzValue parsed;
+        ASSERT_TRUE(parsed.from_string(StringRef(input), &zone, params, 6));
+        EXPECT_EQ(parsed, expected);
+        // Use a different session zone. The zone in the string must control the result.
+        ASSERT_TRUE(parsed.from_string(StringRef(named_input), &utc, params, 6));
+        EXPECT_EQ(parsed, expected);
+    }
+    // Exercise the fallback parser directly. Canonical strings normally use the first parser.
+    CastParameters params;
+    TimestampTzValue fallback;
+    ASSERT_TRUE(CastToTimestampTz::from_string_non_strict_mode_impl(StringRef(input), fallback,
+                                                                    params, &zone, 6));
+    EXPECT_EQ(fallback, expected);
+    ASSERT_TRUE(CastToTimestampTz::from_string_non_strict_mode_impl(StringRef(named_input),
+                                                                    fallback, params, &utc, 6));
+    EXPECT_EQ(fallback, expected);
+}
+
+// Apia skipped 2011-12-30. Keep the time within that day when the date moves forward.
+// The two boundary cases also check that valid local times do not move.
+TEST(TimeStampTzValueTest, CastPreservesPositionInTimeZoneGap) {
+    TimezoneUtils::load_timezones_to_cache();
+    struct TestCase {
+        const char* zone;
+        const char* input;
+        DateV2Value<DateTimeV2ValueType> local;
+        TimestampTzValue expected;
+    };
+    const TestCase cases[] = {
+            {.zone = "Pacific/Apia",
+             .input = "2011-12-29 23:59:59",
+             .local = make_datetime(2011, 12, 29, 23, 59, 59, 0),
+             .expected = make_timestamptz(2011, 12, 30, 9, 59, 59, 0)},
+            {.zone = "Pacific/Apia",
+             .input = "2011-12-30 00:00:00",
+             .local = make_datetime(2011, 12, 30, 0, 0, 0, 0),
+             .expected = make_timestamptz(2011, 12, 30, 10, 0, 0, 0)},
+            {.zone = "Pacific/Apia",
+             .input = "2011-12-30 12:00:00",
+             .local = make_datetime(2011, 12, 30, 12, 0, 0, 0),
+             .expected = make_timestamptz(2011, 12, 30, 22, 0, 0, 0)},
+            {.zone = "Pacific/Apia",
+             .input = "2011-12-30 12:00:00.123456",
+             .local = make_datetime(2011, 12, 30, 12, 0, 0, 123456),
+             .expected = make_timestamptz(2011, 12, 30, 22, 0, 0, 123456)},
+            {.zone = "Pacific/Apia",
+             .input = "2011-12-30 23:59:59.999999",
+             .local = make_datetime(2011, 12, 30, 23, 59, 59, 999999),
+             .expected = make_timestamptz(2011, 12, 31, 9, 59, 59, 999999)},
+            {.zone = "Pacific/Apia",
+             .input = "2011-12-31 00:00:00",
+             .local = make_datetime(2011, 12, 31, 0, 0, 0, 0),
+             .expected = make_timestamptz(2011, 12, 30, 10, 0, 0, 0)},
+            // These gaps last one hour and 30 minutes. Do not assume a fixed gap length.
+            {.zone = "America/New_York",
+             .input = "2024-03-10 02:30:00.123456",
+             .local = make_datetime(2024, 3, 10, 2, 30, 0, 123456),
+             .expected = make_timestamptz(2024, 3, 10, 7, 30, 0, 123456)},
+            {.zone = "Australia/Lord_Howe",
+             .input = "2024-10-06 02:15:00.123456",
+             .local = make_datetime(2024, 10, 6, 2, 15, 0, 123456),
+             .expected = make_timestamptz(2024, 10, 5, 15, 45, 0, 123456)},
+            // A repeated time must still use the offset before the clock moves back.
+            {.zone = "America/New_York",
+             .input = "2024-11-03 01:30:00",
+             .local = make_datetime(2024, 11, 3, 1, 30, 0, 0),
+             .expected = make_timestamptz(2024, 11, 3, 5, 30, 0, 0)},
+    };
+    for (const auto& test_case : cases) {
+        SCOPED_TRACE(testing::Message() << test_case.zone << ": " << test_case.input);
+        cctz::time_zone zone;
+        ASSERT_TRUE(cctz::load_time_zone(test_case.zone, &zone));
+        check_timestamptz_string_casts(test_case.input, zone, test_case.expected);
+        TimestampTzValue converted;
+        ASSERT_TRUE(converted.from_datetime(test_case.local, zone, 6, 6));
+        EXPECT_EQ(converted, test_case.expected);
+    }
+}
+
 TEST(TimeStampTzValueTest, from_string) {
     cctz::time_zone time_zone = cctz::fixed_time_zone(std::chrono::hours(8));
     TimezoneUtils::load_offsets_to_cache();

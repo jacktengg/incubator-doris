@@ -775,8 +775,9 @@ FRAC:
             res.unchecked_set_time_unit<TimeUnit::MINUTE>((uint32_t)local.minute());
             res.unchecked_set_time_unit<TimeUnit::SECOND>((uint32_t)local.second());
         } else {
-            // if timestamptz, the given time is in UTC
-            auto given = cctz::convert(cs, parsed_tz);
+            // Use the offset before the gap to preserve the position within the gap.
+            // Apia 2011-12-30 12:00 becomes 2011-12-31 12:00+14:00.
+            auto given = parsed_tz.lookup(cs).pre;
             auto utc = cctz::convert(given, cctz::utc_time_zone());
             res.unchecked_set_time_unit<TimeUnit::YEAR>((uint32_t)utc.year());
             res.unchecked_set_time_unit<TimeUnit::MONTH>((uint32_t)utc.month());
@@ -803,7 +804,8 @@ POST_PROCESS:
         cctz::civil_second cs {res.year(), res.month(),  res.day(),
                                res.hour(), res.minute(), res.second()};
 
-        auto local = cctz::convert(cs, *local_time_zone);
+        // Apply the same gap rule as the named-zone path above. Keep the fraction in res.
+        auto local = local_time_zone->lookup(cs).pre;
         auto utc = cctz::convert(local, cctz::utc_time_zone());
         res.unchecked_set_time_unit<TimeUnit::YEAR>((uint32_t)utc.year());
         res.unchecked_set_time_unit<TimeUnit::MONTH>((uint32_t)utc.month());
@@ -1059,8 +1061,8 @@ inline bool CastToDatetimeV2::from_string_non_strict_mode_internal(
             res.unchecked_set_time_unit<TimeUnit::MINUTE>((uint32_t)local.minute());
             res.unchecked_set_time_unit<TimeUnit::SECOND>((uint32_t)local.second());
         } else {
-            // if timestamptz, the given time is in UTC
-            auto given = cctz::convert(cs, parsed_tz);
+            // Use the same gap rule as the strict parser: shift by the full gap length.
+            auto given = parsed_tz.lookup(cs).pre;
             auto utc = cctz::convert(given, cctz::utc_time_zone());
             res.unchecked_set_time_unit<TimeUnit::YEAR>((uint32_t)utc.year());
             res.unchecked_set_time_unit<TimeUnit::MONTH>((uint32_t)utc.month());
@@ -1095,7 +1097,8 @@ POST_PROCESS:
         cctz::civil_second cs {res.year(), res.month(),  res.day(),
                                res.hour(), res.minute(), res.second()};
 
-        auto local = cctz::convert(cs, *local_time_zone);
+        // Keep the position within the gap, as in the named-zone path above.
+        auto local = local_time_zone->lookup(cs).pre;
         auto utc = cctz::convert(local, cctz::utc_time_zone());
         res.unchecked_set_time_unit<TimeUnit::YEAR>((uint32_t)utc.year());
         res.unchecked_set_time_unit<TimeUnit::MONTH>((uint32_t)utc.month());

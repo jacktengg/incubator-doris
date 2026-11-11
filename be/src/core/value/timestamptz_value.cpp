@@ -100,7 +100,10 @@ bool TimestampTzValue::from_datetime(const DateV2Value<DateTimeV2ValueType>& ori
 
     cctz::civil_second local_cs(dt.year(), dt.month(), dt.day(), dt.hour(), dt.minute(),
                                 dt.second());
-    cctz::time_point<cctz::seconds> local_tp = cctz::convert(local_cs, local_time_zone);
+    // Use the offset before a forward clock change. This adds the full gap to the local time.
+    // In Apia, 2011-12-30 12:00 becomes 2011-12-31 12:00, not 00:00.
+    // For valid or repeated times, pre gives the same result as cctz::convert.
+    const auto local_tp = local_time_zone.lookup(local_cs).pre;
 
     auto utc_cs = cctz::convert(local_tp, cctz::utc_time_zone());
 

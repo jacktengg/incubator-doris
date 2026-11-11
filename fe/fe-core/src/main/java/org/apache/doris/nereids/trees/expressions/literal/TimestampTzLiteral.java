@@ -18,6 +18,7 @@
 package org.apache.doris.nereids.trees.expressions.literal;
 
 import org.apache.doris.analysis.LiteralExpr;
+import org.apache.doris.common.util.TimeZoneParser;
 import org.apache.doris.nereids.exceptions.AnalysisException;
 import org.apache.doris.nereids.exceptions.NotSupportedException;
 import org.apache.doris.nereids.exceptions.UnboundException;
@@ -35,6 +36,8 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.Objects;
 
 /**
@@ -109,15 +112,19 @@ public class TimestampTzLiteral extends DateTimeLiteral {
      */
     public static TimestampTzLiteral fromTimeZone(TimeStampTzType dateType, DateTimeV2Literal literal,
             String timeZone) {
-        DateTimeV2Literal utcLiteral = literal.inTimeZone(timeZone, "UTC");
-        return new TimestampTzLiteral(dateType,
-                utcLiteral.year,
-                utcLiteral.month,
-                utcLiteral.day,
-                utcLiteral.hour,
-                utcLiteral.minute,
-                utcLiteral.second,
-                utcLiteral.microSecond);
+        LocalDateTime utc = toUtc(literal.toJavaDateType(),
+                TimeZoneParser.parse(timeZone, TimeZoneParser.Usage.SESSION));
+        return new TimestampTzLiteral(dateType, utc.getYear(), utc.getMonthValue(), utc.getDayOfMonth(),
+                utc.getHour(), utc.getMinute(), utc.getSecond(), utc.getNano() / 1000);
+    }
+
+    /**
+     * Resolve a TIMESTAMPTZ input to UTC. Move missing local times forward by the full gap.
+     * For example, Apia 2011-12-30 12:00 becomes 2011-12-31 12:00+14:00.
+     * Keep the fraction. For repeated times, use the offset before the clock moves back.
+     */
+    static LocalDateTime toUtc(LocalDateTime localDateTime, ZoneId zone) {
+        return LocalDateTime.ofInstant(localDateTime.atZone(zone).toInstant(), ZoneOffset.UTC);
     }
 
     private static String getSessionTimeZone() {
