@@ -162,12 +162,12 @@ public:
         col.resize(num_rows);
         auto* src_data = src.get_data().data();
         auto* dst_data = col.get_data().data();
+        using ResultType = typename PrimitiveTypeTraits<TResult>::CppType;
         for (size_t i = 0; i != num_rows; ++i) {
             auto& state = *reinterpret_cast<Data*>(&dst_data[sizeof(Data) * i]);
-            state.sum = {};
-            if (!null_map || !null_map[i]) {
-                state.sum = typename PrimitiveTypeTraits<TResult>::CppType(src_data[i]);
-            }
+            // Select the value before the store. A prior zero store can stall AVX2 masked
+            // loads for all-NULL batches. A NULL row needs only one zero store.
+            state.sum = null_map && null_map[i] ? ResultType {} : ResultType(src_data[i]);
         }
     }
 
