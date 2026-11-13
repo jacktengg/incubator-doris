@@ -37,6 +37,20 @@ class ProfileDurationTest(unittest.TestCase):
             operator_times('- ExecTime: avg 1sec128ms, max 1sec182ms, min 1sec37ms'),
             {'avg': 1128, 'max': 1182, 'min': 1037})
 
+    def test_fe_nanosecond_remainders(self):
+        # One recorded counter is sufficient. FE writes the remainder without
+        # zero padding: 12 ms + 75 us becomes "12.75ms", not "12.075ms".
+        # Decimal parsing would put the minimum above the reported maximum.
+        self.assertEqual(
+            operator_times('- ExecTime: avg 12.212ms, max 12.297ms, min 12.75ms'),
+            {'avg': 12.212, 'max': 12.297, 'min': 12.075})
+        for token, expected in [('121.93us', 0.121093), ('1.1ms', 1.001), ('1.750ms', 1.750)]:
+            with self.subTest(token=token):
+                values = operator_times(f'- ExecTime: avg {token}, max {token}, min {token}')
+                self.assertAlmostEqual(values['avg'], expected, places=8)
+        # BE PrettyPrinter text still uses ordinary decimal fractions.
+        self.assertEqual(duration_ms('12.75ms'), 12.75)
+
     def test_reject_truncated_or_incomplete_values(self):
         for value in ['', '1sec153msjunk', '1sec 153ms', '1', '-1ms']:
             with self.subTest(value=value), self.assertRaises(ValueError):

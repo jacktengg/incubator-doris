@@ -16,11 +16,18 @@
 # specific language governing permissions and limitations
 # under the License.
 """Compare kernel CPU time and counted heap requests; keep all repetitions."""
+import argparse
 import json
 from pathlib import Path
 import statistics as st
 
-root = Path(__file__).parent
+# Keep each measured source in a separate directory. Do not replace earlier records.
+parser = argparse.ArgumentParser()
+parser.add_argument('--input', type=Path, default=Path(__file__).parent)
+parser.add_argument('--output', type=Path, default=Path(__file__).parent)
+parser.add_argument('--prefix', default='')
+cli = parser.parse_args()
+root = cli.input
 measurements = {}
 for label in ['reference', 'migrated']:
     data = json.loads((root/f'{label}-timing.json').read_text())
@@ -51,11 +58,11 @@ for name, times in measurements['migrated'].items():
             'heap_requested_bytes_per_operation': heap['requested_bytes']/heap['operations']}
     row['change_vs_v2_pct'] = (row['migrated']['cpu_ns_mean']/row['reference-v2']['cpu_ns_mean']-1)*100
     result.append(row)
-(root/'kernel-summary.json').write_text(json.dumps(result, indent=2)+'\n')
+(cli.output/f'{cli.prefix}kernel-summary.json').write_text(json.dumps(result, indent=2)+'\n')
 lines = ['| Kernel/rows/NULL%/mode/groups | V1 us | V2 us | Migrated us [min,max] | vs V2 | Heap requests/op V2 → migrated | Heap bytes/op V2 → migrated |',
     '| --- | ---: | ---: | ---: | ---: | ---: | ---: |']
 for r in result:
     a,b,c = [r[k] for k in ['reference-v1','reference-v2','migrated']]
     lines.append(f"| {r['case']} | {a['cpu_ns_mean']/1000:.3f} | {b['cpu_ns_mean']/1000:.3f} | {c['cpu_ns_mean']/1000:.3f} [{c['cpu_ns_min']/1000:.3f},{c['cpu_ns_max']/1000:.3f}] | {r['change_vs_v2_pct']:+.1f}% | {b['heap_requests_per_operation']:g} → {c['heap_requests_per_operation']:g} | {b['heap_requested_bytes_per_operation']:g} → {c['heap_requested_bytes_per_operation']:g} |")
-(root/'kernel-summary.md').write_text('<!--\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n  http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing,\nsoftware distributed under the License is distributed on an\n"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\nKIND, either express or implied.  See the License for the\nspecific language governing permissions and limitations\nunder the License.\n-->\n\n'+'\n'.join(lines)+'\n')
+(cli.output/f'{cli.prefix}kernel-summary.md').write_text('<!--\nLicensed to the Apache Software Foundation (ASF) under one\nor more contributor license agreements.  See the NOTICE file\ndistributed with this work for additional information\nregarding copyright ownership.  The ASF licenses this file\nto you under the Apache License, Version 2.0 (the\n"License"); you may not use this file except in compliance\nwith the License.  You may obtain a copy of the License at\n\n  http://www.apache.org/licenses/LICENSE-2.0\n\nUnless required by applicable law or agreed to in writing,\nsoftware distributed under the License is distributed on an\n"AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY\nKIND, either express or implied.  See the License for the\nspecific language governing permissions and limitations\nunder the License.\n-->\n\n'+'\n'.join(lines)+'\n')
 print('Compared', len(result), 'kernels; native reader scratch is included in reference requests.')

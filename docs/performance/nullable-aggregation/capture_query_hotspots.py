@@ -32,10 +32,14 @@ p.add_argument('--v2', choices=['true','false'], default='true')
 p.add_argument('--output', type=Path, required=True)
 p.add_argument('--case',default='numeric_high_null1')
 p.add_argument('--queries-label')
+# Each worktree uses its own cluster ports and result directory.
+p.add_argument('--port', type=int, default=22901, help='FE MySQL port.')
+p.add_argument('--input', type=Path, default=Path(__file__).parent,
+               help='Directory that contains query records and receives reports.')
 a=p.parse_args()
-root=Path(__file__).parent
+root=a.input
 query=json.loads((root/((a.queries_label or a.label)+'-queries.json')).read_text())['sql'][a.case]
-c=pymysql.connect(host='127.0.0.1',port=22901,user='root',database='nullable_migration')
+c=pymysql.connect(host='127.0.0.1',port=a.port,user='root',database='nullable_migration')
 s=c.cursor()
 for setting in ['enable_profile=false','parallel_pipeline_task_num=4','agg_phase=2',
                 'enable_sql_cache=false','enable_aggregate_function_null_v2='+a.v2]:

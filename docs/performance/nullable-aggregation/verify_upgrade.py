@@ -30,13 +30,18 @@ parser = argparse.ArgumentParser()
 group = parser.add_mutually_exclusive_group()
 group.add_argument('--resume-compaction',action='store_true',help='Resume the two committed bitmap fixture inserts after a failed trigger.')
 group.add_argument('--resume-mixed-compaction',action='store_true',help='Compact previously written old/new rowsets after the bitmap phase completed.')
+# Each worktree uses its own cluster ports and result directory.
+parser.add_argument('--port', type=int, default=22901, help='FE MySQL port.')
+parser.add_argument('--be-http-port', type=int, default=21911, help='BE HTTP port for compaction requests.')
+parser.add_argument('--output', type=Path, default=Path(__file__).parent, help='Directory for validation records.')
 args = parser.parse_args()
 
-c = pymysql.connect(host='127.0.0.1', port=22901, user='root', database='nullable_migration')
+c = pymysql.connect(host='127.0.0.1', port=args.port, user='root', database='nullable_migration')
 s = c.cursor()
 s.execute('set enable_agg_state=true')
 records = {'sql': [], 'compaction': [], 'resumed_compaction': args.resume_compaction}
-result_path = Path(__file__).parent/('mixed-old-new-rowsets-compaction.json' if args.resume_mixed_compaction else 'mixed-old-schema-compaction.json')
+args.output.mkdir(parents=True, exist_ok=True)
+result_path = args.output/('mixed-old-new-rowsets-compaction.json' if args.resume_mixed_compaction else 'mixed-old-schema-compaction.json')
 atexit.register(lambda: result_path.write_text(json.dumps(records,default=str,indent=2)+'\n'))
 def sql(query):
     records['sql'].append(query)
@@ -46,7 +51,7 @@ def sql(query):
     return rows
 
 def request(path, method='GET'):
-    req = urllib.request.Request('http://127.0.0.1:21911'+path, method=method,
+    req = urllib.request.Request(f'http://127.0.0.1:{args.be_http_port}'+path, method=method,
                                  headers={'Authorization': 'Basic cm9vdDo='})
     opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
     return json.loads(opener.open(req, timeout=60).read())

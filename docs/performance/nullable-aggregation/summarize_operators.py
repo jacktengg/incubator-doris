@@ -27,18 +27,29 @@ scale = {'ns': 1e-6, 'us': 1e-3, 'ms': 1, 's': 1000, 'sec': 1000,
 duration_part = re.compile(r'([0-9]+(?:\.[0-9]+)?)(hour|min|sec|ns|us|ms|h|m|s)')
 
 
-def duration_ms(value):
-    """Parse all components emitted by BE PrettyPrinter and FE DebugUtil."""
+def duration_ms(value, *, fe_time_ns=False):
+    """Parse complete durations; select FE TIME_NS remainder notation when needed."""
     if value == '0':
         return 0.0
     parts = list(duration_part.finditer(value))
     if ''.join(part.group() for part in parts) != value or not parts:
         raise ValueError(f'Unsupported profile duration: {value!r}')
-    return sum(float(part[1]) * scale[part[2]] for part in parts)
+    total = 0.0
+    for part in parts:
+        number, unit = part[1], part[2]
+        if fe_time_ns and unit in ('ms', 'us') and '.' in number:
+            # RuntimeProfile.printCounter(TIME_NS) writes an integer remainder.
+            # For example, "12.75ms" means 12 ms + 75 us, not 12.750 ms.
+            whole, remainder = number.split('.')
+            if len(remainder) > 3:
+                raise ValueError(f'Unsupported FE time remainder: {value!r}')
+            number = int(whole) + int(remainder) / 1000
+        total += float(number) * scale[unit]
+    return total
 
 
 def operator_times(value):
-    values = {name: duration_ms(duration.strip()) for name, duration in
+    values = {name: duration_ms(duration.strip(), fe_time_ns=True) for name, duration in
               re.findall(r'(avg|max|min) ([^,]+)', value)}
     if set(values) != {'avg', 'min', 'max'}:
         raise ValueError(f'Incomplete operator times: {value!r}')

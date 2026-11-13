@@ -52,7 +52,10 @@ review: share foreach batch preparation with the legacy String writer and append
 distribute-key states at UInt64 object offsets. The accompanying report fix parses
 every component of profile durations.
 The operator summaries above were regenerated from the unchanged original tokens;
-for example, `1sec153ms` is 1153 ms. Three Python parser tests pass.
+for example, `1sec153ms` is 1153 ms. A later type-version recheck also fixes
+FE TIME_NS remainder parsing: `12.75ms` means 12 ms plus 75 us. The operator
+summaries use that FE format rule; raw tokens, query wall times, and kernel
+measurements are unchanged. Four Python parser tests pass.
 
 At this source, 407 ASAN tests / 67 suites and all 19 AGG_STATE SQL suites pass.
 RELEASE BE, clang-format 16, header hygiene and clang-tidy on all changed lines pass.
