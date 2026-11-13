@@ -50,10 +50,10 @@ public:
         return std::make_shared<AggregateStateUnion>(function, argument_types_, return_type);
     }
 
-    void set_version(const int version_) override {
-        IAggregateFunctionHelper::set_version(version_);
-        _function->set_version(version_);
-    }
+    // The inherited set_version() changes only this combinator's query version.
+    // Keep the nested codec at the input type's metadata version. Otherwise,
+    // query version 19 turns a version-20 no-input bitmap state into an empty bitmap.
+    // Merging that empty bitmap with {1} would incorrectly remove {1}.
 
     void create(AggregateDataPtr __restrict place) const override { _function->create(place); }
 

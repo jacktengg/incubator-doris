@@ -37,6 +37,8 @@
 #include "core/value/bitmap_value.h"
 #include "exprs/aggregate/aggregate_function_null_v2.h"
 #include "exprs/aggregate/aggregate_function_simple_factory.h"
+#include "exprs/aggregate/aggregate_function_state_combine.h"
+#include "exprs/aggregate/aggregate_function_state_merge.h"
 #include "exprs/aggregate/aggregate_function_state_union.h"
 #include "storage/iterator/olap_data_convertor.h"
 #include "storage/tablet/tablet_schema.h"
@@ -687,6 +689,68 @@ TEST(NullableAggregationV2Test, BitmapStateMarkerSurvivesOldSchemaCompactionCode
         function->insert_result_into(state.data(), *result);
         const auto& bitmap_result = assert_cast<const ColumnBitmap&>(*result).get_data()[0];
         EXPECT_EQ(bitmap_result.cardinality(), row == 0 ? 2 : 0);
+    }
+}
+
+TEST(NullableAggregationV2Test, StateCombinatorsKeepTheTypeVersion) {
+    // One empty state and one bitmap value are sufficient to expose a codec change.
+    // Version 20 encodes no input as [0]. Version 19 encodes it as an empty bitmap.
+    // A query version must not replace the version stored in the AGG_STATE type.
+    for (int type_version : {19, USE_UNIFIED_NULLABLE_AGGREGATION_VERSION}) {
+        for (int query_version : {19, USE_UNIFIED_NULLABLE_AGGREGATION_VERSION}) {
+            for (int combinator = 0; combinator < 3; ++combinator) {
+                SCOPED_TRACE(::testing::Message()
+                             << "type=" << type_version << ", query=" << query_version
+                             << ", combinator=" << combinator);
+                const DataTypes arguments {make_nullable(std::make_shared<DataTypeBitMap>())};
+                auto type = std::make_shared<DataTypeAggState>(arguments, false, "bitmap_intersect",
+                                                               type_version);
+                auto nested = type->get_nested_function();
+                AggregateFunctionPtr function;
+                switch (combinator) {
+                case 0:
+                    function = AggregateStateCombine::create(nested, arguments, type);
+                    break;
+                case 1:
+                    function = AggregateStateUnion::create(nested, {type}, type);
+                    break;
+                case 2:
+                    function =
+                            AggregateStateMerge::create(nested, {type}, nested->get_return_type());
+                    break;
+                }
+
+                // The pipeline sets this version after it creates the combinator.
+                function->set_version(query_version);
+                AggregateFunctionGuard empty(function.get());
+                auto serialized = function->create_serialize_column();
+                function->serialize_without_key_to_column(empty.data(), *serialized);
+                const std::string expected =
+                        type_version == 19 ? std::string("\1\1\0", 3) : std::string("\0", 1);
+                EXPECT_EQ(serialized->get_data_at(0), StringRef(expected));
+
+                // Read the state with a separate instance reconstructed from type metadata.
+                // No input must preserve {1}; a historical empty bitmap must remove {1}.
+                DataTypeAggState reader_type(arguments, false, "bitmap_intersect", type_version);
+                auto reader = reader_type.get_nested_function();
+                Arena arena;
+                AggregateFunctionGuard result(reader.get());
+                auto values = ColumnBitmap::create();
+                BitmapValue bitmap;
+                bitmap.add(1);
+                values->insert_value(bitmap);
+                auto input = ColumnNullable::create(std::move(values), ColumnUInt8::create(1, 0));
+                const IColumn* columns[] = {input.get()};
+                reader->add(result.data(), columns, 0, arena);
+                reader->deserialize_and_merge_from_column_range(result.data(), *serialized, 0, 0,
+                                                                arena);
+                auto output = reader->get_return_type()->create_column();
+                reader->insert_result_into(result.data(), *output);
+                const auto& actual = assert_cast<const ColumnBitmap&>(*output).get_data()[0];
+                EXPECT_EQ(actual.cardinality(), type_version == 19 ? 0 : 1);
+                EXPECT_EQ(actual.contains(1), type_version != 19);
+            }
+        }
     }
 }
 

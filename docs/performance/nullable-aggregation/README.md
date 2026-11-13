@@ -231,8 +231,9 @@ one; all eight numeric/bitmap/collection/Array/Map results match before and afte
 bitmap values already collapsed to empty by old serialization are irrecoverable;
 `legacy-bitmap-ambiguity.json` records that limitation.
 
-Keep FE execution version 19 until all executing/reading/compacting BEs support20.
-Only then enable20/create new state types. Type metadata controls persistent
+Keep FE execution version 19 throughout the FE and BE rolling upgrade.
+Enable20/create new state types only after every FE retains state type versions
+and all executing/reading/compacting BEs support20. Type metadata controls persistent
 codec version; setting the current query back to19 does not downgrade a version20
 type or remove markers already written into version19 schemas. A downgrade after
 those writes requires compatible metadata **and** data. There is no automatic

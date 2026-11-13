@@ -18,6 +18,7 @@
 package org.apache.doris.nereids.types;
 
 import org.apache.doris.catalog.Type;
+import org.apache.doris.common.Config;
 
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableList;
@@ -64,6 +65,7 @@ public class AggStateType extends DataType {
     private final boolean returnNullable;
     // Planning-only coercion policy; it is not part of the serialized AggState type identity.
     private final boolean looseTypeCoercionAllowed;
+    private final int beExecVersion;
 
     /**
      * Constructor for AggStateType
@@ -80,6 +82,14 @@ public class AggStateType extends DataType {
     /** Constructor with a planning-time type coercion policy. */
     public AggStateType(String functionName, List<DataType> subTypes,
             List<Boolean> subTypeNullables, boolean returnNullable, boolean looseTypeCoercionAllowed) {
+        this(functionName, subTypes, subTypeNullables, returnNullable,
+                looseTypeCoercionAllowed, Config.be_exec_version);
+    }
+
+    /** Preserve the codec version when reconstructing a stored state type. */
+    public AggStateType(String functionName, List<DataType> subTypes,
+            List<Boolean> subTypeNullables, boolean returnNullable, boolean looseTypeCoercionAllowed,
+            int beExecVersion) {
         // be only supports lowercase function names
         Objects.requireNonNull(functionName, "functionName should not be null");
         functionName = functionName.toLowerCase(Locale.ROOT);
@@ -91,6 +101,7 @@ public class AggStateType extends DataType {
                 "AggStateType' subTypes.size()!=subTypeNullables.size()");
         this.returnNullable = returnNullable;
         this.looseTypeCoercionAllowed = looseTypeCoercionAllowed;
+        this.beExecVersion = beExecVersion;
     }
 
     public List<DataType> getSubTypes() {
@@ -112,14 +123,15 @@ public class AggStateType extends DataType {
     @Override
     public Type toCatalogDataType() {
         List<Type> types = subTypes.stream().map(DataType::toCatalogDataType).collect(Collectors.toList());
-        return new org.apache.doris.catalog.AggStateType(functionName, returnNullable, types, subTypeNullables);
+        return new org.apache.doris.catalog.AggStateType(
+                functionName, returnNullable, types, subTypeNullables, beExecVersion);
     }
 
     @Override
     public DataType conversion() {
         return new AggStateType(functionName,
                 subTypes.stream().map(DataType::conversion).collect(Collectors.toList()),
-                subTypeNullables, returnNullable, looseTypeCoercionAllowed);
+                subTypeNullables, returnNullable, looseTypeCoercionAllowed, beExecVersion);
     }
 
     @Override

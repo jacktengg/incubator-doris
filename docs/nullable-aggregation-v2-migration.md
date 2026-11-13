@@ -109,6 +109,27 @@ SerDe, PB metadata reconstruction, and storage converters agree without exposing
 There is no session-switch-dependent on-disk format and no new tablet/PB field.
 Existing per-function version restrictions still apply.
 
+The query version belongs to the combinator, not to the stored state codec.
+COMBINE keeps the codec version from its return type. UNION and MERGE keep the
+codec version from their input type. Their inherited `set_version()` updates only
+the combinator. For example, a version-19 query over a version-20 bitmap state
+must encode no input as `[0]`. Encoding it as a valid empty bitmap would remove
+`{1}` from a later intersection. The unit test uses one empty state and one bitmap
+element to check both type versions, both query versions, and all three combinators.
+The SQL test `test_nullable_state_metadata_version` checks the stored-type boundary
+with one table row and an empty UNION input.
+
+New FE catalog types store `beExecVersion` in their JSON metadata. Nereids type
+conversion, query Thrift types, replica Thrift schemas, and cloud Protobuf schemas
+retain that value. A later FE configuration change does not replace it.
+Released catalog metadata from before this migration has no such field. These
+legacy types retain their previous codec selection at execution versions below
+20; at version 20 or later they select version 19. This fallback preserves the
+operator's ability to select an older per-function codec and prevents an implicit
+change to the version-20 bitmap encoding. An explicit version remains fixed.
+This fallback does not recover metadata from unreleased migration drafts that
+created version-20 types without the new catalog field.
+
 Nullable BITMAP_INTERSECT with a nonnullable final SQL result needs one byte-codec
 extension: a no-input state written at version 20 is `[0]`. A valid empty bitmap
 keeps its historical `[1,1,0]` encoding (length-prefix plus empty bitmap payload),
@@ -130,8 +151,9 @@ at least 20. Ordinary functions follow the query version; an AGG_STATE codec
 follows its type metadata version. Reading an existing marker also preserves it,
 even through version-19 schema compaction.
 
-Keep FE `be_exec_version=19` throughout the BE rolling upgrade. Advance it only
-after every BE that can execute, read or compact these states supports version 20.
+Keep FE `be_exec_version=19` throughout the FE and BE rolling upgrade. Advance it
+only after every FE retains state type versions and every BE that can execute,
+read or compact these states supports version 20.
 This controls newly created state types and ordinary state expressions; it does
 not downgrade an already existing version-20 type. Version-20 AGG_STATE metadata
 itself is rejected by older BEs, even when some payload bytes remain unchanged.
