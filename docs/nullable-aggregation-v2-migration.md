@@ -187,13 +187,17 @@ DORIS_BE_UT_SOURCE_FILTER='exprs/aggregate/|exprs/function/function_agg_state_fi
   ./run-be-ut.sh --run --filter="$(cat docs/performance/nullable-aggregation/gtest-filter.txt)" -j 32
 ```
 
-407 related ASAN UT passed after the review fixes. The new tests cover nonnullable SQL bitmap results,
+409 related ASAN UT passed after the type-version and all-NULL SUM fixes. The new tests cover nonnullable SQL bitmap results,
 old-schema marker preservation, mixed nullable variadic arguments, nullable and nonnullable
 results, four NULL ratios, native and persistent codecs, selected/nonselected
 merge, wide strings, empty batches, all-skipped batches, outer SQL NULL, bitmap
 intersection partials, legal historical SUM byte fixtures, PB type and Block
 round trips, and the storage converter boundary. Existing lifetime, UNION,
 FINALIZE, foreach and scratch tests are reused.
+
+The type-version recheck also passes 44 FE tests and all 20 AGG_STATE SQL suites.
+It includes a real FE restart. See the [review record](performance/nullable-aggregation/metadata-version-review.md)
+and the [new performance records](performance/nullable-aggregation/metadata-version-results.md).
 
 The SQL suite `datatype_p0/agg_state/test_nullable_aggregation_v2_migration`
 exercises aggregation phases, parallelism, windows, bitmap partials, STATE /

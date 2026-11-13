@@ -19,7 +19,16 @@ under the License.
 
 # Nullable aggregation migration: reproducible validation
 
-## Results
+## Latest type-version review
+
+The review fixes AGG_STATE type-version persistence and combinator version
+propagation at `c72c5cf7b8a`. The later SUM change at `219f6f095d4` skips payload
+loads for all-NULL batches. The new measurements compare the reference V1/V2
+build with the final migrated source. See the [review and correctness evidence](metadata-version-review.md)
+and [new performance and upgrade results](metadata-version-results.md).
+The results below remain measurements of the earlier sources named in each section.
+
+## Initial migration results
 
 All 550 recorded queries (150 reference V1, 185 reference V2, 215 migrated) agree across 21 cases.
 Each final kernel has five consecutive repetitions with CV below 5% (maximum 4.71%); all earlier repetitions remain included.

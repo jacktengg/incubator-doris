@@ -1,0 +1,85 @@
+{
+  "sources": {
+    "migrated_production_commit": "219f6f095d41e15feb2279c1a10557404c23d6e3",
+    "reference_commit": "e0bf4874070ba0b6837ad93f695ea63532b77a47",
+    "fe_source_commit": "c72c5cf7b8a077568a5dbf2de41492fbe1919b8d",
+    "fe_source_equivalence": "git diff c72c5cf7b8a HEAD -- fe is empty",
+    "earlier_migrated_records": "../before-sum-fix",
+    "intermediate_single_store_records": "../single-store-only",
+    "reference_records": "Reused unchanged reference measurements; copies are not new runs."
+  },
+  "archive": {
+    "file": "metadata-version-records.tar.gz",
+    "sha256": "d04992e6d8532f686f207486810d97875b1a161cef97426953c8b385712ec313",
+    "bytes": 45933823,
+    "members": 5211,
+    "hard_links": 2704,
+    "inventory": "inventory.json"
+  },
+  "binaries_sha256": {
+    "output/nullable-v2-recheck/reference-runtime/be/lib/doris_be": "e9dee26f6d2254f3b06cd6d18cdedc41a310d79b54332805c1715f9381498c86",
+    "output/nullable-v2-recheck/reference-runtime/fe/lib/doris-fe.jar": "83bf93493b725fa9b32763305509af55943aa95c0860f3982f41f0b7bf7638f6",
+    "output/nullable-v2-recheck/bin/reference-timing-benchmark": "23859ff252e5f9e1876908ed9a09e1464c7043d87b3f18c41582bd20ea9a325f",
+    "output/nullable-v2-recheck/bin/reference-allocation-benchmark": "c0f63dce2d0f1f2913ff4cdf96baa8d189b07576d6232762b4ea13af2052040e",
+    "output/nullable-v2-recheck/bin/sum-timing-benchmark": "13d6e826d12398403b2f04a31d1b43c348889bf9b40bb885bb3c4e02d7855fb0",
+    "output/nullable-v2-recheck/bin/sum-allocation-benchmark": "1d47bcefdd3ee3ef9ea091022237cfe4fe385c03f1f6f91a5681fdc1719594cd",
+    "output/nullable-v2-recheck/performance/be/lib/doris_be": "18eefb1a8dd89e8f2d9402a77e48db9e25cd2a16e2508d0150a7089de2c64f87",
+    "output/nullable-v2-recheck/performance/fe/lib/doris-fe.jar": "a23a48d60572974b46849f67caa2894de21d92c125337daaf02361ca912801c0"
+  },
+  "recorded_final_comparison_queries": {
+    "reference-v1": 325,
+    "reference-v2": 515,
+    "migrated": 260
+  },
+  "separate_paired_sql_queries": {
+    "old_then_new": {
+      "reference-v2": 55,
+      "migrated": 30
+    },
+    "new_then_old": {
+      "reference-v2": 20,
+      "migrated": 10
+    }
+  },
+  "kernel_iteration_samples_in_primary_summary": {
+    "reference": 505,
+    "migrated": 335
+  },
+  "validation": {
+    "be_asan": "409 tests in 67 suites pass",
+    "fe": "44 tests pass",
+    "sql": "20 AGG_STATE suites pass on the rebuilt final runtime",
+    "report_parser": "4 tests pass",
+    "style": "clang-format 16, header hygiene, changed-line clang-tidy, FE Checkstyle pass",
+    "final_production_build": "./build.sh --be -j12 passes; RELEASE/O3; maximum GLIBC requirement 2.10"
+  },
+  "archive_layout": {
+    "records": "Final 219 production runtime and kernels; reused reference results are unchanged.",
+    "before-sum-fix": "c72 production/runtime measurements; original slow SUM samples retained.",
+    "single-store-only": "18fb6a benchmark measurements; does not resolve the all-NULL stall.",
+    "pre-runtime-rebuild": "219 kernels but c72 SQL runtime. The 270 SQL results are diagnostics, excluded from final SQL statistics.",
+    "validation": "Build/test/style/setup logs, including failed attempts and later passing retries. sum-final logs used c72; actual-runtime logs use the rebuilt final BE.",
+    "scripts": "Measured orchestration and packaging scripts. Committed drivers are also copied under records."
+  },
+  "summary_sha256": {
+    "metadata-version-kernel-summary.json": "555f859535491e2b870b2868fde730fbd3600c526dd8ca751f1f32327403de71",
+    "metadata-version-kernel-summary.md": "213b216f8ee61d24be25e3dec8435d8a58c4ba171fc5e2da2626b9ec91f0a11d",
+    "metadata-version-operator-summary.json": "5a6fda2f72cd5b084b6c99bbdbfe33c7b14d3f8c2eb165728d462cab19764c39",
+    "metadata-version-operator-summary.md": "ad9e1ef87ac28abebff5d363d4e81d2ebfe993c71e0664e5b42b3ce36e706943",
+    "metadata-version-query-summary.json": "1f2c64228d3b22587be453443d910199952cf3bae6f7693d5121dd7098671ae5",
+    "metadata-version-query-summary.md": "a568ce3ebded4f1afe4c4c393c6df25314c53140bafc63c34a3b4062b8dd3c87"
+  },
+  "limitations": [
+    "Shared host and frequency scaling remain active.",
+    "Reference V1 TOPN final-five CV exceeds 5%; its first complete block is stable. Final migrated cases all have last-five CV below 5%.",
+    "Original private DORIS-29405 SQL and status are unverified.",
+    "Old bitmap bytes that collapsed no-input into empty cannot be recovered."
+  ],
+  "verification": {
+    "archive_file_sizes_and_sha256": "All 5,210 inventory entries match after safe extraction.",
+    "regenerated_summaries": "All six final summary files reproduce byte for byte.",
+    "operator_bounds": "All 4,284 operator records satisfy min <= avg <= max.",
+    "paired_query_results": "All 115 additional results match the original reference results.",
+    "script": "scripts/verify_packaged_evidence.py"
+  }
+}

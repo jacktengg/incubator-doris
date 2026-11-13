@@ -1,0 +1,1922 @@
+[
+  {
+    "case": "streaming/nullable_sum/4096/0/1",
+    "reference-v1": {
+      "cpu_ns_mean": 43523.48526480726,
+      "cpu_ns_median": 43528.98038232528,
+      "cpu_ns_min": 43410.151175180195,
+      "cpu_ns_max": 43622.64431212785,
+      "cv": 0.0017388765754311015,
+      "repetitions": 5,
+      "last_five_cv": 0.0017388765754311015,
+      "last_five_cpu_ns_mean": 43523.48526480726,
+      "heap_requests_per_operation": 17.0,
+      "heap_requested_bytes_per_operation": 192528.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 6421.3100686498865,
+      "cpu_ns_median": 6425.876845427035,
+      "cpu_ns_min": 6393.890455451393,
+      "cpu_ns_max": 6444.960286410277,
+      "cv": 0.0037530343866196405,
+      "repetitions": 5,
+      "last_five_cv": 0.0037530343866196405,
+      "last_five_cpu_ns_mean": 6421.3100686498865,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 1708.2627758449785,
+      "cpu_ns_median": 1662.8979903889287,
+      "cpu_ns_min": 1618.3940438598945,
+      "cpu_ns_max": 1908.2436798949498,
+      "cv": 0.055712153007321484,
+      "repetitions": 10,
+      "last_five_cv": 0.01314502215409036,
+      "last_five_cpu_ns_mean": 1643.1147238113267,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 73856.0
+    },
+    "change_vs_v2_pct": -73.39697417533134
+  },
+  {
+    "case": "streaming/nullable_sum/4096/1/1",
+    "reference-v1": {
+      "cpu_ns_mean": 43630.829263699656,
+      "cpu_ns_median": 43563.76988261869,
+      "cpu_ns_min": 43507.57975017256,
+      "cpu_ns_max": 43866.28899629651,
+      "cv": 0.0033037638092355214,
+      "repetitions": 5,
+      "last_five_cv": 0.0033037638092355214,
+      "last_five_cpu_ns_mean": 43630.829263699656,
+      "heap_requests_per_operation": 17.0,
+      "heap_requested_bytes_per_operation": 192528.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7240.530525336088,
+      "cpu_ns_median": 7251.342368148913,
+      "cpu_ns_min": 7151.49214064115,
+      "cpu_ns_max": 7300.737497414693,
+      "cv": 0.0075554315723857296,
+      "repetitions": 5,
+      "last_five_cv": 0.0075554315723857296,
+      "last_five_cpu_ns_mean": 7240.530525336088,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 1680.0836233554235,
+      "cpu_ns_median": 1644.804800675954,
+      "cpu_ns_min": 1625.8687238611396,
+      "cpu_ns_max": 1764.444030027974,
+      "cv": 0.03598410224933309,
+      "repetitions": 5,
+      "last_five_cv": 0.03598410224933309,
+      "last_five_cpu_ns_mean": 1680.0836233554235,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 73856.0
+    },
+    "change_vs_v2_pct": -76.79612540163363
+  },
+  {
+    "case": "streaming/nullable_sum/4096/50/1",
+    "reference-v1": {
+      "cpu_ns_mean": 37210.43547776726,
+      "cpu_ns_median": 37136.22600651746,
+      "cpu_ns_min": 37051.131504257275,
+      "cpu_ns_max": 37453.276411226616,
+      "cv": 0.004916779882650622,
+      "repetitions": 5,
+      "last_five_cv": 0.004916779882650622,
+      "last_five_cpu_ns_mean": 37210.43547776726,
+      "heap_requests_per_operation": 16.0,
+      "heap_requested_bytes_per_operation": 126992.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 6553.668244803701,
+      "cpu_ns_median": 6553.473419724597,
+      "cpu_ns_min": 6543.857785903678,
+      "cpu_ns_max": 6561.936008468046,
+      "cv": 0.0009926872089203035,
+      "repetitions": 5,
+      "last_five_cv": 0.0009926872089203035,
+      "last_five_cpu_ns_mean": 6553.668244803701,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 1668.6749836388212,
+      "cpu_ns_median": 1663.3333137156108,
+      "cpu_ns_min": 1634.759212874248,
+      "cpu_ns_max": 1700.009983850693,
+      "cv": 0.01583174448244678,
+      "repetitions": 5,
+      "last_five_cv": 0.01583174448244678,
+      "last_five_cpu_ns_mean": 1668.6749836388212,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 73856.0
+    },
+    "change_vs_v2_pct": -74.5383055518276
+  },
+  {
+    "case": "streaming/nullable_sum/4096/100/1",
+    "reference-v1": {
+      "cpu_ns_mean": 26666.738040707656,
+      "cpu_ns_median": 26671.883279436934,
+      "cpu_ns_min": 26490.68373597105,
+      "cpu_ns_max": 26779.50663876745,
+      "cv": 0.00429438983108768,
+      "repetitions": 5,
+      "last_five_cv": 0.00429438983108768,
+      "last_five_cpu_ns_mean": 26666.738040707656,
+      "heap_requests_per_operation": 14.0,
+      "heap_requested_bytes_per_operation": 77840.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 5224.593682486079,
+      "cpu_ns_median": 5245.953914124797,
+      "cpu_ns_min": 5114.144558562628,
+      "cpu_ns_max": 5420.07935822884,
+      "cv": 0.018002976439359795,
+      "repetitions": 10,
+      "last_five_cv": 0.009571396537773457,
+      "last_five_cpu_ns_mean": 5153.842521250552,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 999.627115503855,
+      "cpu_ns_median": 946.4640865394742,
+      "cpu_ns_min": 900.5634269805753,
+      "cpu_ns_max": 1711.8014166546357,
+      "cv": 0.14011855975494666,
+      "repetitions": 40,
+      "last_five_cv": 0.31264587775511865,
+      "last_five_cpu_ns_mean": 1136.1733258292886,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 73856.0
+    },
+    "change_vs_v2_pct": -80.866892695315
+  },
+  {
+    "case": "streaming/nullable_avg/4096/0/1",
+    "reference-v1": {
+      "cpu_ns_mean": 64155.51811369034,
+      "cpu_ns_median": 64119.72610126158,
+      "cpu_ns_min": 63862.371869858966,
+      "cpu_ns_max": 64535.156461341336,
+      "cv": 0.0041640268087867905,
+      "repetitions": 5,
+      "last_five_cv": 0.0041640268087867905,
+      "last_five_cpu_ns_mean": 64155.51811369034,
+      "heap_requests_per_operation": 18.0,
+      "heap_requested_bytes_per_operation": 323632.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 17765.194172625124,
+      "cpu_ns_median": 17762.188815117326,
+      "cpu_ns_min": 17723.21956077631,
+      "cpu_ns_max": 17820.91274259451,
+      "cv": 0.002160843380845753,
+      "repetitions": 5,
+      "last_five_cv": 0.002160843380845753,
+      "last_five_cpu_ns_mean": 17765.194172625124,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 9279.08404301875,
+      "cpu_ns_median": 9267.528345422985,
+      "cpu_ns_min": 9177.518359877453,
+      "cpu_ns_max": 9355.092946465315,
+      "cv": 0.0076877108092526965,
+      "repetitions": 5,
+      "last_five_cv": 0.0076877108092526965,
+      "last_five_cpu_ns_mean": 9279.08404301875,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -47.76818112510616
+  },
+  {
+    "case": "streaming/nullable_avg/4096/1/1",
+    "reference-v1": {
+      "cpu_ns_mean": 64315.18038061965,
+      "cpu_ns_median": 64476.41619931978,
+      "cpu_ns_min": 63399.05516226874,
+      "cpu_ns_max": 65355.62884986699,
+      "cv": 0.013215825595348377,
+      "repetitions": 5,
+      "last_five_cv": 0.013215825595348377,
+      "last_five_cpu_ns_mean": 64315.18038061965,
+      "heap_requests_per_operation": 18.0,
+      "heap_requested_bytes_per_operation": 323632.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 18271.923510955254,
+      "cpu_ns_median": 18257.197220977243,
+      "cpu_ns_min": 18221.54931842746,
+      "cpu_ns_max": 18332.951301183788,
+      "cv": 0.0023030341879533693,
+      "repetitions": 5,
+      "last_five_cv": 0.0023030341879533693,
+      "last_five_cpu_ns_mean": 18271.923510955254,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 9135.052140959524,
+      "cpu_ns_median": 9131.580715736818,
+      "cpu_ns_min": 9108.467299578058,
+      "cpu_ns_max": 9164.58558628951,
+      "cv": 0.002224039766552215,
+      "repetitions": 5,
+      "last_five_cv": 0.002224039766552215,
+      "last_five_cpu_ns_mean": 9135.052140959524,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -50.00497820887635
+  },
+  {
+    "case": "streaming/nullable_avg/4096/50/1",
+    "reference-v1": {
+      "cpu_ns_mean": 46767.99111763135,
+      "cpu_ns_median": 46873.14643905039,
+      "cpu_ns_min": 46387.14630568147,
+      "cpu_ns_max": 46958.91971192317,
+      "cv": 0.005017184566048184,
+      "repetitions": 5,
+      "last_five_cv": 0.005017184566048184,
+      "last_five_cpu_ns_mean": 46767.99111763135,
+      "heap_requests_per_operation": 17.0,
+      "heap_requested_bytes_per_operation": 192560.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 16621.413080228613,
+      "cpu_ns_median": 16616.28875667008,
+      "cpu_ns_min": 16554.281461019073,
+      "cpu_ns_max": 16694.758983803193,
+      "cv": 0.00301201101199384,
+      "repetitions": 5,
+      "last_five_cv": 0.00301201101199384,
+      "last_five_cpu_ns_mean": 16621.413080228613,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 6459.1215361542745,
+      "cpu_ns_median": 6461.696642652746,
+      "cpu_ns_min": 6445.898635531389,
+      "cpu_ns_max": 6468.52934573592,
+      "cv": 0.0013226633224564454,
+      "repetitions": 5,
+      "last_five_cv": 0.0013226633224564454,
+      "last_five_cpu_ns_mean": 6459.1215361542745,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -61.13975686076003
+  },
+  {
+    "case": "streaming/nullable_avg/4096/100/1",
+    "reference-v1": {
+      "cpu_ns_mean": 27433.90209149302,
+      "cpu_ns_median": 27422.721878426895,
+      "cpu_ns_min": 27352.01037913207,
+      "cpu_ns_max": 27507.14190036045,
+      "cv": 0.0021623344215006266,
+      "repetitions": 5,
+      "last_five_cv": 0.0021623344215006266,
+      "last_five_cpu_ns_mean": 27433.90209149302,
+      "heap_requests_per_operation": 14.0,
+      "heap_requested_bytes_per_operation": 77872.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 14188.94841455545,
+      "cpu_ns_median": 14123.594440858513,
+      "cpu_ns_min": 14065.824612715749,
+      "cpu_ns_max": 14407.31698805884,
+      "cv": 0.009892644320307576,
+      "repetitions": 5,
+      "last_five_cv": 0.009892644320307576,
+      "last_five_cpu_ns_mean": 14188.94841455545,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3460.8904760735845,
+      "cpu_ns_median": 3462.772587352147,
+      "cpu_ns_min": 3448.404473530475,
+      "cpu_ns_max": 3471.7416919096486,
+      "cv": 0.002784303142027617,
+      "repetitions": 5,
+      "last_five_cv": 0.002784303142027617,
+      "last_five_cpu_ns_mean": 3460.8904760735845,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -75.60854846351194
+  },
+  {
+    "case": "merge/nullable_sum/4096/0/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 6703.394012012165,
+      "cpu_ns_median": 6659.080815702439,
+      "cpu_ns_min": 6606.848861658433,
+      "cpu_ns_max": 6809.26470085213,
+      "cv": 0.013376408274460468,
+      "repetitions": 5,
+      "last_five_cv": 0.013376408274460468,
+      "last_five_cpu_ns_mean": 6703.394012012165,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 4358.55221881212,
+      "cpu_ns_median": 4319.946217049173,
+      "cpu_ns_min": 4305.953217390187,
+      "cpu_ns_max": 4431.563109232327,
+      "cv": 0.014667297588500388,
+      "repetitions": 5,
+      "last_five_cv": 0.014667297588500388,
+      "last_five_cpu_ns_mean": 4358.55221881212,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3914.5624024094855,
+      "cpu_ns_median": 3811.382584302814,
+      "cpu_ns_min": 3739.5990550994957,
+      "cpu_ns_max": 4138.855081792954,
+      "cv": 0.04925227721815793,
+      "repetitions": 5,
+      "last_five_cv": 0.04925227721815793,
+      "last_five_cpu_ns_mean": 3914.5624024094855,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -10.186635242921094
+  },
+  {
+    "case": "merge/nullable_sum/4096/0/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 13674.550798241542,
+      "cpu_ns_median": 13628.234922103997,
+      "cpu_ns_min": 13552.291126792918,
+      "cpu_ns_max": 13873.576102884592,
+      "cv": 0.009157565320977445,
+      "repetitions": 5,
+      "last_five_cv": 0.009157565320977445,
+      "last_five_cpu_ns_mean": 13674.550798241542,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 11795.26372308709,
+      "cpu_ns_median": 11811.950993706501,
+      "cpu_ns_min": 11689.297913216209,
+      "cpu_ns_max": 11941.444981781953,
+      "cv": 0.008827039560709703,
+      "repetitions": 5,
+      "last_five_cv": 0.008827039560709703,
+      "last_five_cpu_ns_mean": 11795.26372308709,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 10845.349041521142,
+      "cpu_ns_median": 10856.528242142056,
+      "cpu_ns_min": 10779.9258051999,
+      "cpu_ns_max": 10904.613255723658,
+      "cv": 0.0042778404126002185,
+      "repetitions": 5,
+      "last_five_cv": 0.0042778404126002185,
+      "last_five_cpu_ns_mean": 10845.349041521142,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -8.053356871594675
+  },
+  {
+    "case": "merge/nullable_sum/4096/1/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 6784.540326550156,
+      "cpu_ns_median": 6734.991285991436,
+      "cpu_ns_min": 6702.634021649937,
+      "cpu_ns_max": 6953.541619144802,
+      "cv": 0.015011512336579531,
+      "repetitions": 5,
+      "last_five_cv": 0.015011512336579531,
+      "last_five_cpu_ns_mean": 6784.540326550156,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 4405.660861082146,
+      "cpu_ns_median": 4423.82342427163,
+      "cpu_ns_min": 4320.885225435411,
+      "cpu_ns_max": 4520.298581690951,
+      "cv": 0.018102643636692135,
+      "repetitions": 5,
+      "last_five_cv": 0.018102643636692135,
+      "last_five_cpu_ns_mean": 4405.660861082146,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3600.3426080741024,
+      "cpu_ns_median": 3585.541484082847,
+      "cpu_ns_min": 3550.529840154982,
+      "cpu_ns_max": 3673.8578746723783,
+      "cv": 0.012920396908119565,
+      "repetitions": 5,
+      "last_five_cv": 0.012920396908119565,
+      "last_five_cpu_ns_mean": 3600.3426080741024,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -18.27917033110524
+  },
+  {
+    "case": "merge/nullable_sum/4096/1/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 13709.630636226244,
+      "cpu_ns_median": 13697.906013933152,
+      "cpu_ns_min": 13582.400117508603,
+      "cpu_ns_max": 13844.562090817506,
+      "cv": 0.008441169466313922,
+      "repetitions": 5,
+      "last_five_cv": 0.008441169466313922,
+      "last_five_cpu_ns_mean": 13709.630636226244,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 12083.222407010844,
+      "cpu_ns_median": 12020.882122524867,
+      "cpu_ns_min": 11785.184733356518,
+      "cpu_ns_max": 12448.45872960532,
+      "cv": 0.025080679402895056,
+      "repetitions": 5,
+      "last_five_cv": 0.025080679402895056,
+      "last_five_cpu_ns_mean": 12083.222407010844,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 10996.667338373785,
+      "cpu_ns_median": 10985.292491236907,
+      "cpu_ns_min": 10850.651173391576,
+      "cpu_ns_max": 11170.393876043418,
+      "cv": 0.010400923638482025,
+      "repetitions": 5,
+      "last_five_cv": 0.010400923638482025,
+      "last_five_cpu_ns_mean": 10996.667338373785,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -8.992262428328935
+  },
+  {
+    "case": "merge/nullable_sum/4096/50/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 5814.315500373767,
+      "cpu_ns_median": 5739.454699840768,
+      "cpu_ns_min": 5700.528821464634,
+      "cpu_ns_max": 6084.854381317653,
+      "cv": 0.026954021291926727,
+      "repetitions": 5,
+      "last_five_cv": 0.026954021291926727,
+      "last_five_cpu_ns_mean": 5814.315500373767,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 4467.3658310349965,
+      "cpu_ns_median": 4421.660398345186,
+      "cpu_ns_min": 4371.706392777179,
+      "cpu_ns_max": 4594.271140136361,
+      "cv": 0.022178690588879026,
+      "repetitions": 5,
+      "last_five_cv": 0.022178690588879026,
+      "last_five_cpu_ns_mean": 4467.3658310349965,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 2803.7553474169754,
+      "cpu_ns_median": 2738.171952589978,
+      "cpu_ns_min": 2570.179293723883,
+      "cpu_ns_max": 3271.0590426468216,
+      "cv": 0.08402581195689715,
+      "repetitions": 10,
+      "last_five_cv": 0.09457147395068517,
+      "last_five_cpu_ns_mean": 2841.006119759865,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -37.23918180286114
+  },
+  {
+    "case": "merge/nullable_sum/4096/50/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 12960.718500189672,
+      "cpu_ns_median": 13023.109523723662,
+      "cpu_ns_min": 12721.531128650746,
+      "cpu_ns_max": 13065.53974389079,
+      "cv": 0.010694525847455633,
+      "repetitions": 5,
+      "last_five_cv": 0.010694525847455633,
+      "last_five_cpu_ns_mean": 12960.718500189672,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 12050.552393962316,
+      "cpu_ns_median": 12109.448064760954,
+      "cpu_ns_min": 11649.62851842484,
+      "cpu_ns_max": 12284.037541107846,
+      "cv": 0.020824909802082105,
+      "repetitions": 5,
+      "last_five_cv": 0.020824909802082105,
+      "last_five_cpu_ns_mean": 12050.552393962316,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 9862.434580582758,
+      "cpu_ns_median": 9895.639454814474,
+      "cpu_ns_min": 9703.94284941948,
+      "cpu_ns_max": 10041.997723651302,
+      "cv": 0.013604222692973043,
+      "repetitions": 5,
+      "last_five_cv": 0.013604222692973043,
+      "last_five_cpu_ns_mean": 9862.434580582758,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -18.15782166530283
+  },
+  {
+    "case": "merge/nullable_sum/4096/100/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 3543.6273574671445,
+      "cpu_ns_median": 3494.915955331921,
+      "cpu_ns_min": 3409.564402994179,
+      "cpu_ns_max": 3820.722557368964,
+      "cv": 0.04497506905468047,
+      "repetitions": 5,
+      "last_five_cv": 0.04497506905468047,
+      "last_five_cpu_ns_mean": 3543.6273574671445,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 4417.267498118703,
+      "cpu_ns_median": 4390.765275156326,
+      "cpu_ns_min": 4348.326505310636,
+      "cpu_ns_max": 4554.895686071292,
+      "cv": 0.018420704755676264,
+      "repetitions": 5,
+      "last_five_cv": 0.018420704755676264,
+      "last_five_cpu_ns_mean": 4417.267498118703,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 1551.7747759368622,
+      "cpu_ns_median": 1520.267308250221,
+      "cpu_ns_min": 1497.9509404097296,
+      "cpu_ns_max": 1676.0930843095166,
+      "cv": 0.045036929259921366,
+      "repetitions": 10,
+      "last_five_cv": 0.026059363845914077,
+      "last_five_cpu_ns_mean": 1524.97269739286,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -64.87025572714904
+  },
+  {
+    "case": "merge/nullable_sum/4096/100/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 10332.547872510224,
+      "cpu_ns_median": 10313.143578360825,
+      "cpu_ns_min": 10174.050064557483,
+      "cpu_ns_max": 10513.822010416154,
+      "cv": 0.012061648061797367,
+      "repetitions": 5,
+      "last_five_cv": 0.012061648061797367,
+      "last_five_cpu_ns_mean": 10332.547872510224,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 11935.572870323722,
+      "cpu_ns_median": 11906.053866800945,
+      "cpu_ns_min": 11722.533199127694,
+      "cpu_ns_max": 12263.214410333792,
+      "cv": 0.016685769251352334,
+      "repetitions": 5,
+      "last_five_cv": 0.016685769251352334,
+      "last_five_cpu_ns_mean": 11935.572870323722,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 4096.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 8289.70737449293,
+      "cpu_ns_median": 8252.604954627457,
+      "cpu_ns_min": 8231.071904237118,
+      "cpu_ns_max": 8461.62594086338,
+      "cv": 0.01169864575860787,
+      "repetitions": 5,
+      "last_five_cv": 0.01169864575860787,
+      "last_five_cpu_ns_mean": 8289.70737449293,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -30.546212866713518
+  },
+  {
+    "case": "merge/nullable_avg/4096/0/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 12252.81114029743,
+      "cpu_ns_median": 12220.893328694541,
+      "cpu_ns_min": 12197.955831956111,
+      "cpu_ns_max": 12392.214647299204,
+      "cv": 0.00659794700797239,
+      "repetitions": 5,
+      "last_five_cv": 0.00659794700797239,
+      "last_five_cpu_ns_mean": 12252.81114029743,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7473.571235998295,
+      "cpu_ns_median": 7447.009329096946,
+      "cpu_ns_min": 7391.433696012456,
+      "cpu_ns_max": 7566.098757903559,
+      "cv": 0.010547820565761052,
+      "repetitions": 5,
+      "last_five_cv": 0.010547820565761052,
+      "last_five_cpu_ns_mean": 7473.571235998295,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 7133.5809769641155,
+      "cpu_ns_median": 7115.829627781909,
+      "cpu_ns_min": 7063.0991930935015,
+      "cpu_ns_max": 7278.172638931008,
+      "cv": 0.011806330883517376,
+      "repetitions": 5,
+      "last_five_cv": 0.011806330883517376,
+      "last_five_cpu_ns_mean": 7133.5809769641155,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -4.549234205416186
+  },
+  {
+    "case": "merge/nullable_avg/4096/0/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 23401.757442590504,
+      "cpu_ns_median": 23369.059672888932,
+      "cpu_ns_min": 23176.034858748368,
+      "cpu_ns_max": 23691.362795308505,
+      "cv": 0.008166635357461425,
+      "repetitions": 5,
+      "last_five_cv": 0.008166635357461425,
+      "last_five_cpu_ns_mean": 23401.757442590504,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20388.82535260019,
+      "cpu_ns_median": 20303.63791064577,
+      "cpu_ns_min": 20199.201320988926,
+      "cpu_ns_max": 20689.271437223924,
+      "cv": 0.009519592387847664,
+      "repetitions": 5,
+      "last_five_cv": 0.009519592387847664,
+      "last_five_cpu_ns_mean": 20388.82535260019,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 17324.865765989038,
+      "cpu_ns_median": 17313.04504214168,
+      "cpu_ns_min": 17103.902702032818,
+      "cpu_ns_max": 17573.091596430375,
+      "cv": 0.009613287068432909,
+      "repetitions": 5,
+      "last_five_cv": 0.009613287068432909,
+      "last_five_cpu_ns_mean": 17324.865765989038,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -15.027641532180791
+  },
+  {
+    "case": "merge/nullable_avg/4096/1/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 12184.985399080328,
+      "cpu_ns_median": 12131.726854711354,
+      "cpu_ns_min": 12010.952937341171,
+      "cpu_ns_max": 12509.96583968157,
+      "cv": 0.015880077837450473,
+      "repetitions": 5,
+      "last_five_cv": 0.015880077837450473,
+      "last_five_cpu_ns_mean": 12184.985399080328,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7746.208205858931,
+      "cpu_ns_median": 7702.662663341288,
+      "cpu_ns_min": 7631.923699302279,
+      "cpu_ns_max": 7899.130178942702,
+      "cv": 0.013704308160504724,
+      "repetitions": 5,
+      "last_five_cv": 0.013704308160504724,
+      "last_five_cpu_ns_mean": 7746.208205858931,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 7036.154788318996,
+      "cpu_ns_median": 7062.341913337718,
+      "cpu_ns_min": 6925.801641709328,
+      "cpu_ns_max": 7094.405840505411,
+      "cv": 0.00939855800984324,
+      "repetitions": 5,
+      "last_five_cv": 0.00939855800984324,
+      "last_five_cpu_ns_mean": 7036.154788318996,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -9.166464399999974
+  },
+  {
+    "case": "merge/nullable_avg/4096/1/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 23071.1706271605,
+      "cpu_ns_median": 23056.437135802513,
+      "cpu_ns_min": 22963.094551440743,
+      "cpu_ns_max": 23183.310189300075,
+      "cv": 0.0038833636050800884,
+      "repetitions": 5,
+      "last_five_cv": 0.0038833636050800884,
+      "last_five_cpu_ns_mean": 23071.1706271605,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20342.32564746667,
+      "cpu_ns_median": 20383.13030171808,
+      "cpu_ns_min": 20160.098917280062,
+      "cpu_ns_max": 20454.450931139094,
+      "cv": 0.005774472360952823,
+      "repetitions": 5,
+      "last_five_cv": 0.005774472360952823,
+      "last_five_cpu_ns_mean": 20342.32564746667,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 17152.30657992023,
+      "cpu_ns_median": 17208.920819163224,
+      "cpu_ns_min": 16983.383212578206,
+      "cpu_ns_max": 17216.29321307127,
+      "cv": 0.00578079387319734,
+      "repetitions": 5,
+      "last_five_cv": 0.00578079387319734,
+      "last_five_cpu_ns_mean": 17152.30657992023,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -15.681683219655406
+  },
+  {
+    "case": "merge/nullable_avg/4096/50/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 9630.183453410827,
+      "cpu_ns_median": 9530.425007365533,
+      "cpu_ns_min": 9431.949647802427,
+      "cpu_ns_max": 9890.531965610327,
+      "cv": 0.021867890539155842,
+      "repetitions": 5,
+      "last_five_cv": 0.021867890539155842,
+      "last_five_cpu_ns_mean": 9630.183453410827,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7560.162184171678,
+      "cpu_ns_median": 7518.729003707526,
+      "cpu_ns_min": 7334.768456807242,
+      "cpu_ns_max": 7812.14795448221,
+      "cv": 0.025899508554029754,
+      "repetitions": 5,
+      "last_five_cv": 0.025899508554029754,
+      "last_five_cpu_ns_mean": 7560.162184171678,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 4357.628092281478,
+      "cpu_ns_median": 4354.015181397536,
+      "cpu_ns_min": 4303.443937180427,
+      "cpu_ns_max": 4432.871676406142,
+      "cv": 0.011371438639356605,
+      "repetitions": 5,
+      "last_five_cv": 0.011371438639356605,
+      "last_five_cpu_ns_mean": 4357.628092281478,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -42.36065330179266
+  },
+  {
+    "case": "merge/nullable_avg/4096/50/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 20202.178530267644,
+      "cpu_ns_median": 20216.437667598937,
+      "cpu_ns_min": 20013.84697894654,
+      "cpu_ns_max": 20293.81927882653,
+      "cv": 0.0056357816682270495,
+      "repetitions": 5,
+      "last_five_cv": 0.0056357816682270495,
+      "last_five_cpu_ns_mean": 20202.178530267644,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20392.012446476278,
+      "cpu_ns_median": 20284.0361937278,
+      "cpu_ns_min": 20250.89703159357,
+      "cpu_ns_max": 20659.78434209006,
+      "cv": 0.009097868581090449,
+      "repetitions": 5,
+      "last_five_cv": 0.009097868581090449,
+      "last_five_cpu_ns_mean": 20392.012446476278,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 14766.460007141168,
+      "cpu_ns_median": 14773.706118333936,
+      "cpu_ns_min": 14706.399886580763,
+      "cpu_ns_max": 14858.175757703168,
+      "cv": 0.004274403460080817,
+      "repetitions": 5,
+      "last_five_cv": 0.004274403460080817,
+      "last_five_cpu_ns_mean": 14766.460007141168,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -27.587039062969975
+  },
+  {
+    "case": "merge/nullable_avg/4096/100/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 6746.247091971785,
+      "cpu_ns_median": 6711.555552382612,
+      "cpu_ns_min": 6678.337531174523,
+      "cpu_ns_max": 6837.234622194339,
+      "cv": 0.009804451424605247,
+      "repetitions": 5,
+      "last_five_cv": 0.009804451424605247,
+      "last_five_cpu_ns_mean": 6746.247091971785,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7558.814085123129,
+      "cpu_ns_median": 7527.984690083586,
+      "cpu_ns_min": 7254.903077293363,
+      "cpu_ns_max": 7803.446721490531,
+      "cv": 0.02989612114515735,
+      "repetitions": 5,
+      "last_five_cv": 0.02989612114515735,
+      "last_five_cpu_ns_mean": 7558.814085123129,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 2720.4149122052313,
+      "cpu_ns_median": 2363.9009720910917,
+      "cpu_ns_min": 1898.5650031371715,
+      "cpu_ns_max": 4729.510310059232,
+      "cv": 0.35262744006915075,
+      "repetitions": 10,
+      "last_five_cv": 0.2905491518298746,
+      "last_five_cpu_ns_mean": 3375.0516297045933,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -64.01003012417765
+  },
+  {
+    "case": "merge/nullable_avg/4096/100/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 17280.198366653953,
+      "cpu_ns_median": 17082.739718408713,
+      "cpu_ns_min": 16686.069548927608,
+      "cpu_ns_max": 18200.06656324085,
+      "cv": 0.03298643445903493,
+      "repetitions": 5,
+      "last_five_cv": 0.03298643445903493,
+      "last_five_cpu_ns_mean": 17280.198366653953,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20429.550804518134,
+      "cpu_ns_median": 20404.91885489757,
+      "cpu_ns_min": 20225.4938613976,
+      "cpu_ns_max": 20722.99072709969,
+      "cv": 0.00886033834638689,
+      "repetitions": 5,
+      "last_five_cv": 0.00886033834638689,
+      "last_five_cpu_ns_mean": 20429.550804518134,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 11819.575869680515,
+      "cpu_ns_median": 11830.267124108092,
+      "cpu_ns_min": 11745.376636265566,
+      "cpu_ns_max": 11910.648021081022,
+      "cv": 0.005760777061632397,
+      "repetitions": 5,
+      "last_five_cv": 0.005760777061632397,
+      "last_five_cpu_ns_mean": 11819.575869680515,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -42.14470997048777
+  },
+  {
+    "case": "streaming/nullable_decimal_sum/4096/0/1",
+    "reference-v1": {
+      "cpu_ns_mean": 50786.59359999961,
+      "cpu_ns_median": 49988.938000001326,
+      "cpu_ns_min": 49482.91489999974,
+      "cpu_ns_max": 52319.76909999787,
+      "cv": 0.02722358892771966,
+      "repetitions": 5,
+      "last_five_cv": 0.02722358892771966,
+      "last_five_cpu_ns_mean": 50786.59359999961,
+      "heap_requests_per_operation": 18.0,
+      "heap_requested_bytes_per_operation": 323616.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 10318.499900567427,
+      "cpu_ns_median": 10367.059835058837,
+      "cpu_ns_min": 10232.325524945802,
+      "cpu_ns_max": 10381.287594315092,
+      "cv": 0.00717662361475917,
+      "repetitions": 5,
+      "last_five_cv": 0.00717662361475917,
+      "last_five_cpu_ns_mean": 10318.499900567427,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 237696.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3392.8092281491513,
+      "cpu_ns_median": 3390.129440403367,
+      "cpu_ns_min": 3365.3437776622964,
+      "cpu_ns_max": 3422.02587268593,
+      "cv": 0.006137698895267567,
+      "repetitions": 5,
+      "last_five_cv": 0.006137698895267567,
+      "last_five_cpu_ns_mean": 3392.8092281491513,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "change_vs_v2_pct": -67.1191620793389
+  },
+  {
+    "case": "streaming/nullable_decimal_sum/4096/1/1",
+    "reference-v1": {
+      "cpu_ns_mean": 50749.54653999952,
+      "cpu_ns_median": 50372.13139999892,
+      "cpu_ns_min": 50280.99399999916,
+      "cpu_ns_max": 51581.27249999893,
+      "cv": 0.011841132417079134,
+      "repetitions": 5,
+      "last_five_cv": 0.011841132417079134,
+      "last_five_cpu_ns_mean": 50749.54653999952,
+      "heap_requests_per_operation": 18.0,
+      "heap_requested_bytes_per_operation": 323616.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 11084.011074072245,
+      "cpu_ns_median": 11042.157102073934,
+      "cpu_ns_min": 10963.294647588858,
+      "cpu_ns_max": 11268.84125681665,
+      "cv": 0.010609924674022872,
+      "repetitions": 5,
+      "last_five_cv": 0.010609924674022872,
+      "last_five_cpu_ns_mean": 11084.011074072245,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 237696.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3399.4661732461464,
+      "cpu_ns_median": 3397.920955371919,
+      "cpu_ns_min": 3349.3888989956577,
+      "cpu_ns_max": 3463.2444298694604,
+      "cv": 0.012795534021447617,
+      "repetitions": 5,
+      "last_five_cv": 0.012795534021447617,
+      "last_five_cpu_ns_mean": 3399.4661732461464,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "change_vs_v2_pct": -69.33000020905618
+  },
+  {
+    "case": "streaming/nullable_decimal_sum/4096/50/1",
+    "reference-v1": {
+      "cpu_ns_mean": 41226.03865401224,
+      "cpu_ns_median": 41132.171009490565,
+      "cpu_ns_min": 40851.897670405444,
+      "cpu_ns_max": 42040.78124820289,
+      "cv": 0.01172759533664371,
+      "repetitions": 5,
+      "last_five_cv": 0.01172759533664371,
+      "last_five_cpu_ns_mean": 41226.03865401224,
+      "heap_requests_per_operation": 17.0,
+      "heap_requested_bytes_per_operation": 192544.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 9395.876018995883,
+      "cpu_ns_median": 9356.088073270168,
+      "cpu_ns_min": 9265.509972862896,
+      "cpu_ns_max": 9612.352510176142,
+      "cv": 0.013866002168395276,
+      "repetitions": 5,
+      "last_five_cv": 0.013866002168395276,
+      "last_five_cpu_ns_mean": 9395.876018995883,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 237696.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3617.1407002546043,
+      "cpu_ns_median": 3613.207162066782,
+      "cpu_ns_min": 3604.42118556542,
+      "cpu_ns_max": 3635.4900708639575,
+      "cv": 0.0032188596762870877,
+      "repetitions": 5,
+      "last_five_cv": 0.0032188596762870877,
+      "last_five_cpu_ns_mean": 3617.1407002546043,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "change_vs_v2_pct": -61.50289027929128
+  },
+  {
+    "case": "streaming/nullable_decimal_sum/4096/100/1",
+    "reference-v1": {
+      "cpu_ns_mean": 26936.215338904218,
+      "cpu_ns_median": 26943.636991643132,
+      "cpu_ns_min": 26265.70421541282,
+      "cpu_ns_max": 27759.9042154134,
+      "cv": 0.020297188285270593,
+      "repetitions": 5,
+      "last_five_cv": 0.020297188285270593,
+      "last_five_cpu_ns_mean": 26936.215338904218,
+      "heap_requests_per_operation": 14.0,
+      "heap_requested_bytes_per_operation": 77856.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7597.004041804472,
+      "cpu_ns_median": 7613.011538871735,
+      "cpu_ns_min": 7488.238754398937,
+      "cpu_ns_max": 7679.939618214746,
+      "cv": 0.009633250419583345,
+      "repetitions": 5,
+      "last_five_cv": 0.009633250419583345,
+      "last_five_cpu_ns_mean": 7597.004041804472,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 237696.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 1979.9369825395167,
+      "cpu_ns_median": 1979.5870544158322,
+      "cpu_ns_min": 1974.6864146745436,
+      "cpu_ns_max": 1988.859668836519,
+      "cv": 0.0028134855413693947,
+      "repetitions": 5,
+      "last_five_cv": 0.0028134855413693947,
+      "last_five_cpu_ns_mean": 1979.9369825395167,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 139392.0
+    },
+    "change_vs_v2_pct": -73.93792379674404
+  },
+  {
+    "case": "streaming/nullable_decimal_avg/4096/0/1",
+    "reference-v1": {
+      "cpu_ns_mean": 64764.53686518116,
+      "cpu_ns_median": 64621.35266715369,
+      "cpu_ns_min": 64281.17162952172,
+      "cpu_ns_max": 65611.5835769092,
+      "cv": 0.00822116255364443,
+      "repetitions": 5,
+      "last_five_cv": 0.00822116255364443,
+      "last_five_cpu_ns_mean": 64764.53686518116,
+      "heap_requests_per_operation": 18.0,
+      "heap_requested_bytes_per_operation": 323632.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 17978.36350010231,
+      "cpu_ns_median": 17969.926386330975,
+      "cpu_ns_min": 17949.460916717697,
+      "cpu_ns_max": 18024.457745037922,
+      "cv": 0.0015766831333976984,
+      "repetitions": 5,
+      "last_five_cv": 0.0015766831333976984,
+      "last_five_cpu_ns_mean": 17978.36350010231,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 9112.590807078677,
+      "cpu_ns_median": 9121.366364570295,
+      "cpu_ns_min": 9085.741818039856,
+      "cpu_ns_max": 9134.08635104742,
+      "cv": 0.002153563642198807,
+      "repetitions": 5,
+      "last_five_cv": 0.002153563642198807,
+      "last_five_cpu_ns_mean": 9112.590807078677,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -49.31356901852152
+  },
+  {
+    "case": "streaming/nullable_decimal_avg/4096/1/1",
+    "reference-v1": {
+      "cpu_ns_mean": 64393.031051964725,
+      "cpu_ns_median": 64615.745428210925,
+      "cpu_ns_min": 63507.64493934445,
+      "cpu_ns_max": 65084.18042730428,
+      "cv": 0.009385109494708378,
+      "repetitions": 5,
+      "last_five_cv": 0.009385109494708378,
+      "last_five_cpu_ns_mean": 64393.031051964725,
+      "heap_requests_per_operation": 18.0,
+      "heap_requested_bytes_per_operation": 323632.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 19287.052385243347,
+      "cpu_ns_median": 19142.12364490267,
+      "cpu_ns_min": 19065.662106442058,
+      "cpu_ns_max": 19717.175336555927,
+      "cv": 0.013933678565666342,
+      "repetitions": 5,
+      "last_five_cv": 0.013933678565666342,
+      "last_five_cpu_ns_mean": 19287.052385243347,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 9090.965888974148,
+      "cpu_ns_median": 9081.386900970941,
+      "cpu_ns_min": 9065.325162145778,
+      "cpu_ns_max": 9124.522908353541,
+      "cv": 0.0029007614729737157,
+      "repetitions": 5,
+      "last_five_cv": 0.0029007614729737157,
+      "last_five_cpu_ns_mean": 9090.965888974148,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -52.86492872322104
+  },
+  {
+    "case": "streaming/nullable_decimal_avg/4096/50/1",
+    "reference-v1": {
+      "cpu_ns_mean": 48450.32458426341,
+      "cpu_ns_median": 48781.50061190581,
+      "cpu_ns_min": 47269.35850550738,
+      "cpu_ns_max": 49388.13303578046,
+      "cv": 0.020693208114032063,
+      "repetitions": 5,
+      "last_five_cv": 0.020693208114032063,
+      "last_five_cpu_ns_mean": 48450.32458426341,
+      "heap_requests_per_operation": 17.0,
+      "heap_requested_bytes_per_operation": 192560.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 17003.374770532053,
+      "cpu_ns_median": 16909.531380652636,
+      "cpu_ns_min": 16852.691167283698,
+      "cpu_ns_max": 17282.419169589746,
+      "cv": 0.010887616450778452,
+      "repetitions": 5,
+      "last_five_cv": 0.010887616450778452,
+      "last_five_cpu_ns_mean": 17003.374770532053,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 6377.084903852172,
+      "cpu_ns_median": 6387.2532534416105,
+      "cpu_ns_min": 6313.040339987946,
+      "cpu_ns_max": 6425.8764722214355,
+      "cv": 0.007479677985516361,
+      "repetitions": 5,
+      "last_five_cv": 0.007479677985516361,
+      "last_five_cpu_ns_mean": 6377.084903852172,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -62.495181163070804
+  },
+  {
+    "case": "streaming/nullable_decimal_avg/4096/100/1",
+    "reference-v1": {
+      "cpu_ns_mean": 27671.06977639827,
+      "cpu_ns_median": 27719.46469131903,
+      "cpu_ns_min": 27506.00432271088,
+      "cpu_ns_max": 27755.851141588522,
+      "cv": 0.0036884785256056287,
+      "repetitions": 5,
+      "last_five_cv": 0.0036884785256056287,
+      "last_five_cpu_ns_mean": 27671.06977639827,
+      "heap_requests_per_operation": 14.0,
+      "heap_requested_bytes_per_operation": 77872.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 15483.947108647495,
+      "cpu_ns_median": 15476.710753880665,
+      "cpu_ns_min": 15435.396629711422,
+      "cpu_ns_max": 15558.51873614191,
+      "cv": 0.0032336497054601294,
+      "repetitions": 5,
+      "last_five_cv": 0.0032336497054601294,
+      "last_five_cpu_ns_mean": 15483.947108647495,
+      "heap_requests_per_operation": 7.0,
+      "heap_requested_bytes_per_operation": 434304.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3516.0138308997934,
+      "cpu_ns_median": 3522.077737218922,
+      "cpu_ns_min": 3462.8002493865624,
+      "cpu_ns_max": 3590.463994811155,
+      "cv": 0.015220741718115854,
+      "repetitions": 5,
+      "last_five_cv": 0.015220741718115854,
+      "last_five_cpu_ns_mean": 3516.0138308997934,
+      "heap_requests_per_operation": 5.0,
+      "heap_requested_bytes_per_operation": 270464.0
+    },
+    "change_vs_v2_pct": -77.29252233794983
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/0/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 9389.311977161093,
+      "cpu_ns_median": 9322.002350285675,
+      "cpu_ns_min": 9207.733793652951,
+      "cpu_ns_max": 9621.987053511835,
+      "cv": 0.017859341719425655,
+      "repetitions": 5,
+      "last_five_cv": 0.017859341719425655,
+      "last_five_cpu_ns_mean": 9389.311977161093,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 5899.667228459692,
+      "cpu_ns_median": 5865.645933424054,
+      "cpu_ns_min": 5841.698036294015,
+      "cpu_ns_max": 6049.93944454437,
+      "cv": 0.014395096428000314,
+      "repetitions": 5,
+      "last_five_cv": 0.014395096428000314,
+      "last_five_cpu_ns_mean": 5899.667228459692,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 5828.100744875732,
+      "cpu_ns_median": 5708.416240364987,
+      "cpu_ns_min": 5614.851932183435,
+      "cpu_ns_max": 6099.608179807215,
+      "cv": 0.04127314464507697,
+      "repetitions": 5,
+      "last_five_cv": 0.04127314464507697,
+      "last_five_cpu_ns_mean": 5828.100744875732,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -1.2130596661236503
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/0/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 17213.125457407,
+      "cpu_ns_median": 17190.14944422548,
+      "cpu_ns_min": 17125.990532165768,
+      "cpu_ns_max": 17308.677847727864,
+      "cv": 0.004766701767235297,
+      "repetitions": 5,
+      "last_five_cv": 0.004766701767235297,
+      "last_five_cpu_ns_mean": 17213.125457407,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 14502.040248322903,
+      "cpu_ns_median": 14527.908378816703,
+      "cpu_ns_min": 14369.523332361845,
+      "cpu_ns_max": 14553.070017916116,
+      "cv": 0.005198733096245672,
+      "repetitions": 5,
+      "last_five_cv": 0.005198733096245672,
+      "last_five_cpu_ns_mean": 14502.040248322903,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 13246.963508379924,
+      "cpu_ns_median": 13256.636405959378,
+      "cpu_ns_min": 12976.607374301899,
+      "cpu_ns_max": 13523.988230912115,
+      "cv": 0.015935742762114395,
+      "repetitions": 5,
+      "last_five_cv": 0.015935742762114395,
+      "last_five_cpu_ns_mean": 13246.963508379924,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -8.6544839102079
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/1/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 9237.214189206781,
+      "cpu_ns_median": 9285.008307467226,
+      "cpu_ns_min": 9064.409126477067,
+      "cpu_ns_max": 9323.541693836529,
+      "cv": 0.011253791639572821,
+      "repetitions": 5,
+      "last_five_cv": 0.011253791639572821,
+      "last_five_cpu_ns_mean": 9237.214189206781,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 5959.780362981282,
+      "cpu_ns_median": 5906.531735837512,
+      "cpu_ns_min": 5880.0235954492155,
+      "cpu_ns_max": 6112.180156135663,
+      "cv": 0.016508609853356063,
+      "repetitions": 5,
+      "last_five_cv": 0.016508609853356063,
+      "last_five_cpu_ns_mean": 5959.780362981282,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 5952.137500701856,
+      "cpu_ns_median": 6120.953861085872,
+      "cpu_ns_min": 5643.700875131507,
+      "cpu_ns_max": 6173.8759896364945,
+      "cv": 0.04444794063037223,
+      "repetitions": 5,
+      "last_five_cv": 0.04444794063037223,
+      "last_five_cpu_ns_mean": 5952.137500701856,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -0.12824067019145957
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/1/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 17521.645498165188,
+      "cpu_ns_median": 17558.085828651514,
+      "cpu_ns_min": 17093.04387652918,
+      "cpu_ns_max": 17834.206784183807,
+      "cv": 0.017016401612703264,
+      "repetitions": 5,
+      "last_five_cv": 0.017016401612703264,
+      "last_five_cpu_ns_mean": 17521.645498165188,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 14513.849612204524,
+      "cpu_ns_median": 14564.860927718237,
+      "cpu_ns_min": 14336.307907612663,
+      "cpu_ns_max": 14682.940025212863,
+      "cv": 0.011172706874416512,
+      "repetitions": 5,
+      "last_five_cv": 0.011172706874416512,
+      "last_five_cpu_ns_mean": 14513.849612204524,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 13008.245254989002,
+      "cpu_ns_median": 13004.021249076477,
+      "cpu_ns_min": 12974.719992609113,
+      "cpu_ns_max": 13039.95846267549,
+      "cv": 0.001992015873740799,
+      "repetitions": 5,
+      "last_five_cv": 0.001992015873740799,
+      "last_five_cpu_ns_mean": 13008.245254989002,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -10.373570055111204
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/50/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 6866.645391778247,
+      "cpu_ns_median": 6863.844283497295,
+      "cpu_ns_min": 6817.258834414233,
+      "cpu_ns_max": 6929.810109832828,
+      "cv": 0.006020145577089308,
+      "repetitions": 5,
+      "last_five_cv": 0.006020145577089308,
+      "last_five_cpu_ns_mean": 6866.645391778247,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 5938.263453255546,
+      "cpu_ns_median": 5975.457025313969,
+      "cpu_ns_min": 5848.110633474738,
+      "cpu_ns_max": 5985.984937659686,
+      "cv": 0.010218410607814728,
+      "repetitions": 5,
+      "last_five_cv": 0.010218410607814728,
+      "last_five_cpu_ns_mean": 5938.263453255546,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 3711.197411460165,
+      "cpu_ns_median": 3753.1230221457236,
+      "cpu_ns_min": 3580.572497020067,
+      "cpu_ns_max": 3813.975731160208,
+      "cv": 0.02953217155828628,
+      "repetitions": 5,
+      "last_five_cv": 0.02953217155828628,
+      "last_five_cpu_ns_mean": 3711.197411460165,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -37.503658423481234
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/50/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 14763.218996947919,
+      "cpu_ns_median": 14793.103769694368,
+      "cpu_ns_min": 14487.67617338948,
+      "cpu_ns_max": 15179.315763424656,
+      "cv": 0.018286437195071736,
+      "repetitions": 5,
+      "last_five_cv": 0.018286437195071736,
+      "last_five_cpu_ns_mean": 14763.218996947919,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 14668.929028279357,
+      "cpu_ns_median": 14683.994119460192,
+      "cpu_ns_min": 14512.631970751581,
+      "cpu_ns_max": 14801.824574926935,
+      "cv": 0.00910045166508035,
+      "repetitions": 5,
+      "last_five_cv": 0.00910045166508035,
+      "last_five_cpu_ns_mean": 14668.929028279357,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 10871.653429825243,
+      "cpu_ns_median": 10832.580198629666,
+      "cpu_ns_min": 10759.87025945043,
+      "cpu_ns_max": 10973.466317653181,
+      "cv": 0.008805402475313908,
+      "repetitions": 5,
+      "last_five_cv": 0.008805402475313908,
+      "last_five_cpu_ns_mean": 10871.653429825243,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -25.886522398012644
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/100/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 4808.877838896002,
+      "cpu_ns_median": 4818.393206225802,
+      "cpu_ns_min": 4764.306712436306,
+      "cpu_ns_max": 4835.4263892909385,
+      "cv": 0.006090728884132439,
+      "repetitions": 5,
+      "last_five_cv": 0.006090728884132439,
+      "last_five_cpu_ns_mean": 4808.877838896002,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 6005.565006765784,
+      "cpu_ns_median": 6005.2266374188,
+      "cpu_ns_min": 5909.152004908683,
+      "cpu_ns_max": 6087.033466965868,
+      "cv": 0.011886832330986034,
+      "repetitions": 5,
+      "last_five_cv": 0.011886832330986034,
+      "last_five_cpu_ns_mean": 6005.565006765784,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 1513.73125010742,
+      "cpu_ns_median": 1508.0474569861992,
+      "cpu_ns_min": 1502.9854242939416,
+      "cpu_ns_max": 1533.3034320803347,
+      "cv": 0.007976013347781656,
+      "repetitions": 5,
+      "last_five_cv": 0.007976013347781656,
+      "last_five_cpu_ns_mean": 1513.73125010742,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -74.79452393901204
+  },
+  {
+    "case": "merge/nullable_decimal_sum/4096/100/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 11852.47835672829,
+      "cpu_ns_median": 11820.744307725528,
+      "cpu_ns_min": 11722.423772237433,
+      "cpu_ns_max": 12013.643416447767,
+      "cv": 0.009915986406333116,
+      "repetitions": 5,
+      "last_five_cv": 0.009915986406333116,
+      "last_five_cpu_ns_mean": 11852.47835672829,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 14538.12230325836,
+      "cpu_ns_median": 14541.365157744547,
+      "cpu_ns_min": 14484.187620091092,
+      "cpu_ns_max": 14596.053346005488,
+      "cv": 0.0028562210767748585,
+      "repetitions": 5,
+      "last_five_cv": 0.0028562210767748585,
+      "last_five_cpu_ns_mean": 14538.12230325836,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 8192.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 8397.725197657648,
+      "cpu_ns_median": 8411.690369864333,
+      "cpu_ns_min": 8316.72647256365,
+      "cpu_ns_max": 8446.171982702877,
+      "cv": 0.005777119537274675,
+      "repetitions": 5,
+      "last_five_cv": 0.005777119537274675,
+      "last_five_cpu_ns_mean": 8397.725197657648,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -42.23652117869784
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/0/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 12259.796121779344,
+      "cpu_ns_median": 12306.626306977256,
+      "cpu_ns_min": 12060.341146723036,
+      "cpu_ns_max": 12493.120344426396,
+      "cv": 0.014799160517323775,
+      "repetitions": 5,
+      "last_five_cv": 0.014799160517323775,
+      "last_five_cpu_ns_mean": 12259.796121779344,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7309.034971576548,
+      "cpu_ns_median": 7299.18601136884,
+      "cpu_ns_min": 7258.0596120440105,
+      "cpu_ns_max": 7377.865675017604,
+      "cv": 0.005942565304524739,
+      "repetitions": 5,
+      "last_five_cv": 0.005942565304524739,
+      "last_five_cpu_ns_mean": 7309.034971576548,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 7121.375906142094,
+      "cpu_ns_median": 7108.579126396513,
+      "cpu_ns_min": 7029.479646810736,
+      "cpu_ns_max": 7233.208817508649,
+      "cv": 0.011822296757361293,
+      "repetitions": 5,
+      "last_five_cv": 0.011822296757361293,
+      "last_five_cpu_ns_mean": 7121.375906142094,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -2.5674944252452536
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/0/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 23406.905302344065,
+      "cpu_ns_median": 23318.53295099999,
+      "cpu_ns_min": 23240.860113357936,
+      "cpu_ns_max": 23647.4437401484,
+      "cv": 0.007216840723999928,
+      "repetitions": 5,
+      "last_five_cv": 0.007216840723999928,
+      "last_five_cpu_ns_mean": 23406.905302344065,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20300.04592614262,
+      "cpu_ns_median": 20281.56085243022,
+      "cpu_ns_min": 20229.976412202737,
+      "cpu_ns_max": 20450.69011823149,
+      "cv": 0.004340639824356617,
+      "repetitions": 5,
+      "last_five_cv": 0.004340639824356617,
+      "last_five_cpu_ns_mean": 20300.04592614262,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 20137.51803941225,
+      "cpu_ns_median": 20883.629863193964,
+      "cpu_ns_min": 17575.30978192796,
+      "cpu_ns_max": 22927.33885256047,
+      "cv": 0.10475580309437195,
+      "repetitions": 10,
+      "last_five_cv": 0.027386242970963537,
+      "last_five_cpu_ns_mean": 21949.26496643378,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -0.8006281725750353
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/1/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 12252.335391427388,
+      "cpu_ns_median": 12297.20435706753,
+      "cpu_ns_min": 12035.735175344944,
+      "cpu_ns_max": 12408.57477860344,
+      "cv": 0.012323854425684342,
+      "repetitions": 5,
+      "last_five_cv": 0.012323854425684342,
+      "last_five_cpu_ns_mean": 12252.335391427388,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7422.152945239201,
+      "cpu_ns_median": 7348.789879348873,
+      "cpu_ns_min": 7268.53617432212,
+      "cpu_ns_max": 8532.461411238763,
+      "cv": 0.035308229716083175,
+      "repetitions": 25,
+      "last_five_cv": 0.004884554277632524,
+      "last_five_cpu_ns_mean": 7335.80341619263,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 7946.644653525929,
+      "cpu_ns_median": 7167.379319246431,
+      "cpu_ns_min": 6854.423278501888,
+      "cpu_ns_max": 13530.254833739013,
+      "cv": 0.2219854415421493,
+      "repetitions": 40,
+      "last_five_cv": 0.004594482208151489,
+      "last_five_cpu_ns_mean": 6907.657876443657,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": 7.066571009199607
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/1/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 23672.996642717397,
+      "cpu_ns_median": 23376.3749958614,
+      "cpu_ns_min": 23171.996622852872,
+      "cpu_ns_max": 25214.442936131032,
+      "cv": 0.03671778670189442,
+      "repetitions": 5,
+      "last_five_cv": 0.03671778670189442,
+      "last_five_cpu_ns_mean": 23672.996642717397,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20425.069158878563,
+      "cpu_ns_median": 20378.272276078664,
+      "cpu_ns_min": 20298.034480756058,
+      "cpu_ns_max": 20633.19219829354,
+      "cv": 0.0063976527997879834,
+      "repetitions": 5,
+      "last_five_cv": 0.0063976527997879834,
+      "last_five_cpu_ns_mean": 20425.069158878563,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 17396.76719671056,
+      "cpu_ns_median": 17437.986724129343,
+      "cpu_ns_min": 17299.00572150384,
+      "cpu_ns_max": 17467.90053004364,
+      "cv": 0.004794801668587882,
+      "repetitions": 5,
+      "last_five_cv": 0.004794801668587882,
+      "last_five_cpu_ns_mean": 17396.76719671056,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -14.826397593134377
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/50/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 9528.534918808296,
+      "cpu_ns_median": 9554.788942354533,
+      "cpu_ns_min": 9442.646970727043,
+      "cpu_ns_max": 9617.650201766412,
+      "cv": 0.007979311461612638,
+      "repetitions": 5,
+      "last_five_cv": 0.007979311461612638,
+      "last_five_cpu_ns_mean": 9528.534918808296,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7422.160592401748,
+      "cpu_ns_median": 7429.793656399013,
+      "cpu_ns_min": 7275.978075732605,
+      "cpu_ns_max": 7544.378414307198,
+      "cv": 0.014162612941929791,
+      "repetitions": 5,
+      "last_five_cv": 0.014162612941929791,
+      "last_five_cpu_ns_mean": 7422.160592401748,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 4307.3168367476255,
+      "cpu_ns_median": 4276.724292101311,
+      "cpu_ns_min": 4255.43565131742,
+      "cpu_ns_max": 4414.534567682941,
+      "cv": 0.015444848762846453,
+      "repetitions": 5,
+      "last_five_cv": 0.015444848762846453,
+      "last_five_cpu_ns_mean": 4307.3168367476255,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -41.96680625373245
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/50/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 20230.867800316693,
+      "cpu_ns_median": 20217.743058551994,
+      "cpu_ns_min": 20079.61176809066,
+      "cpu_ns_max": 20471.825550281923,
+      "cv": 0.007595821073610555,
+      "repetitions": 5,
+      "last_five_cv": 0.007595821073610555,
+      "last_five_cpu_ns_mean": 20230.867800316693,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20293.371560480522,
+      "cpu_ns_median": 20285.72994575379,
+      "cpu_ns_min": 20205.174428670216,
+      "cpu_ns_max": 20448.89193790528,
+      "cv": 0.004777434447752121,
+      "repetitions": 5,
+      "last_five_cv": 0.004777434447752121,
+      "last_five_cpu_ns_mean": 20293.371560480522,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 14933.34959922389,
+      "cpu_ns_median": 14930.706737259574,
+      "cpu_ns_min": 14798.197540499867,
+      "cpu_ns_max": 15057.774341883305,
+      "cv": 0.006940705755345009,
+      "repetitions": 5,
+      "last_five_cv": 0.006940705755345009,
+      "last_five_cpu_ns_mean": 14933.34959922389,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -26.412673445031597
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/100/1/64",
+    "reference-v1": {
+      "cpu_ns_mean": 6797.200151285893,
+      "cpu_ns_median": 6785.135226347212,
+      "cpu_ns_min": 6768.218385119481,
+      "cpu_ns_max": 6854.159868498074,
+      "cv": 0.004893358175926627,
+      "repetitions": 5,
+      "last_five_cv": 0.004893358175926627,
+      "last_five_cpu_ns_mean": 6797.200151285893,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 7389.995381946206,
+      "cpu_ns_median": 7368.857336627741,
+      "cpu_ns_min": 7265.346921822952,
+      "cpu_ns_max": 7650.247621050507,
+      "cv": 0.021240574999672548,
+      "repetitions": 5,
+      "last_five_cv": 0.021240574999672548,
+      "last_five_cpu_ns_mean": 7389.995381946206,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 1531.8250274627092,
+      "cpu_ns_median": 1540.0809449754877,
+      "cpu_ns_min": 1507.2232814808542,
+      "cpu_ns_max": 1559.886108394783,
+      "cv": 0.014620363566427201,
+      "repetitions": 5,
+      "last_five_cv": 0.014620363566427201,
+      "last_five_cpu_ns_mean": 1531.8250274627092,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -79.27163755467338
+  },
+  {
+    "case": "merge/nullable_decimal_avg/4096/100/1/4096",
+    "reference-v1": {
+      "cpu_ns_mean": 16880.38158711847,
+      "cpu_ns_median": 16885.705442030594,
+      "cpu_ns_min": 16817.198883191468,
+      "cpu_ns_max": 16970.380917996903,
+      "cv": 0.0036062804939713446,
+      "repetitions": 5,
+      "last_five_cv": 0.0036062804939713446,
+      "last_five_cpu_ns_mean": 16880.38158711847,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "reference-v2": {
+      "cpu_ns_mean": 20436.341070859533,
+      "cpu_ns_median": 20457.814583151023,
+      "cpu_ns_min": 20223.2642110451,
+      "cpu_ns_max": 20581.831204934577,
+      "cv": 0.006943911367180037,
+      "repetitions": 5,
+      "last_five_cv": 0.006943911367180037,
+      "last_five_cpu_ns_mean": 20436.341070859533,
+      "heap_requests_per_operation": 0.0625,
+      "heap_requested_bytes_per_operation": 12288.0
+    },
+    "migrated": {
+      "cpu_ns_mean": 11555.853816602106,
+      "cpu_ns_median": 11563.019889449199,
+      "cpu_ns_min": 11470.15357183393,
+      "cpu_ns_max": 11658.436400771585,
+      "cv": 0.006300453369590629,
+      "repetitions": 5,
+      "last_five_cv": 0.006300453369590629,
+      "last_five_cpu_ns_mean": 11555.853816602106,
+      "heap_requests_per_operation": 0.0,
+      "heap_requested_bytes_per_operation": 0.0
+    },
+    "change_vs_v2_pct": -43.45438952827148
+  }
+]
