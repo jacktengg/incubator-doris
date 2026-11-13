@@ -303,6 +303,27 @@ TEST(NullableAggregationV2Test, NativeUnaryAndStableStateCodecs) {
     }
 }
 
+TEST(NullableAggregationV2Test, AllNullNativeSumClearsAReusedOutputState) {
+    auto function = nullable_function("sum", {make_nullable(std::make_shared<DataTypeInt64>())});
+    auto serialized = function->create_serialize_column();
+    Arena arena;
+    // Use one row in two batches. First write 7. Then write NULL with the same hidden
+    // payload. The all-NULL path must replace the old state with zero and retain the
+    // NULL mark. The separate streaming benchmark checks the masked-load slowdown.
+    for (UInt8 is_null : {0, 1}) {
+        auto input = nullable_ints({7}, {is_null});
+        const IColumn* columns[] = {input.get()};
+        function->streaming_agg_serialize_to_column(columns, serialized, 1, arena);
+        const auto& nullable = assert_cast<const ColumnNullable&>(*serialized);
+        ASSERT_EQ(nullable.size(), 1);
+        EXPECT_EQ(nullable.get_null_map_data()[0], is_null);
+        const auto& payload =
+                assert_cast<const ColumnFixedLengthObject&>(nullable.get_nested_column());
+        ASSERT_EQ(payload.item_size(), sizeof(Int64));
+        EXPECT_EQ(reinterpret_cast<const Int64*>(payload.get_data().data())[0], is_null ? 0 : 7);
+    }
+}
+
 TEST(NullableAggregationV2Test, DistributeKeyStreamingAppendsWholeFixedLengthStates) {
     auto type = make_nullable(std::make_shared<DataTypeInt64>());
     auto function = nullable_function("multi_distinct_count_distribute_key", {type}, false);

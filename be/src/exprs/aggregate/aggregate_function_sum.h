@@ -22,6 +22,7 @@
 
 #include <stddef.h>
 
+#include <algorithm>
 #include <memory>
 #include <type_traits>
 #include <vector>
@@ -36,6 +37,7 @@
 #include "core/field.h"
 #include "core/types.h"
 #include "exprs/aggregate/aggregate_function.h"
+#include "util/simd/bits.h"
 
 namespace doris {
 class Arena;
@@ -162,11 +164,17 @@ public:
         col.resize(num_rows);
         auto* src_data = src.get_data().data();
         auto* dst_data = col.get_data().data();
+        if (null_map && !simd::contain_zero(null_map, num_rows)) {
+            // A fully masked load can still be slow. For an all-NULL batch, write
+            // empty states without loading the input values. For example, NULL
+            // with a hidden payload of 7 must produce a zero SUM state.
+            std::fill_n(reinterpret_cast<Data*>(dst_data), num_rows, Data {});
+            return;
+        }
         using ResultType = typename PrimitiveTypeTraits<TResult>::CppType;
         for (size_t i = 0; i != num_rows; ++i) {
             auto& state = *reinterpret_cast<Data*>(&dst_data[sizeof(Data) * i]);
-            // Select the value before the store. A prior zero store can stall AVX2 masked
-            // loads for all-NULL batches. A NULL row needs only one zero store.
+            // Select the value before the store. Each row needs one output store.
             state.sum = null_map && null_map[i] ? ResultType {} : ResultType(src_data[i]);
         }
     }
