@@ -60,6 +60,7 @@ import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.Collections2;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
+import com.google.common.math.LongMath;
 import com.google.gson.annotations.SerializedName;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -1143,7 +1144,8 @@ public class BackupJob extends AbstractJob implements GsonPostProcessable {
         }
 
         // Avoid loading expired meta.
-        long expiredAt = createTime + timeoutMs;
+        // A long timeout can exceed the remaining timestamp range. Keep its deadline in the future.
+        long expiredAt = LongMath.saturatedAdd(createTime, timeoutMs);
         if (System.currentTimeMillis() >= expiredAt) {
             return new Snapshot(label, null, null, expiredAt, commitSeq);
         }

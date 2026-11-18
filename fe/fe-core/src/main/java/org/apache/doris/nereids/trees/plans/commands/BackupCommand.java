@@ -184,7 +184,11 @@ public class BackupCommand extends Command implements ForwardWithSync {
                         "Invalid timeout format: " + copiedProperties.get(PROP_TIMEOUT));
             }
 
-            if (timeoutMs * 1000 < MIN_TIMEOUT_MS) {
+            // Check seconds before scaling. For example, (2^61 + 600) * 1000 wraps to 600000.
+            if (timeoutMs > Long.MAX_VALUE / 1000) {
+                ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR, "timeout exceeds millisecond range");
+            }
+            if (timeoutMs < MIN_TIMEOUT_MS / 1000) {
                 ErrorReport.reportAnalysisException(ErrorCode.ERR_COMMON_ERROR, "timeout must be at least 10 min");
             }
 

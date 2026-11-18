@@ -27,6 +27,7 @@
 #include <ostream>
 #include <string>
 #include <unordered_map>
+#include <utility>
 
 #include "common/cast_set.h"
 #include "common/logging.h"
@@ -174,12 +175,22 @@ Status MetaScanner::_fill_block_with_remote_data(const std::vector<MutableColumn
                     break;
                 }
                 case TYPE_TINYINT: {
-                    int8_t data = (int8_t)cell.intVal;
+                    // Older coordinators can send a partition value outside the slot range.
+                    if (!std::in_range<int8_t>(cell.intVal)) {
+                        return Status::InvalidArgument("Metadata value {} does not fit {}",
+                                                       cell.intVal, slot_desc->type()->get_name());
+                    }
+                    auto data = static_cast<int8_t>(cell.intVal);
                     assert_cast<ColumnInt8*>(col_ptr)->insert_value(data);
                     break;
                 }
                 case TYPE_SMALLINT: {
-                    int16_t data = (int16_t)cell.intVal;
+                    // Older coordinators can send a partition value outside the slot range.
+                    if (!std::in_range<int16_t>(cell.intVal)) {
+                        return Status::InvalidArgument("Metadata value {} does not fit {}",
+                                                       cell.intVal, slot_desc->type()->get_name());
+                    }
+                    auto data = static_cast<int16_t>(cell.intVal);
                     assert_cast<ColumnInt16*>(col_ptr)->insert_value(data);
                     break;
                 }
@@ -281,7 +292,7 @@ Status MetaScanner::_fetch_metadata(const TMetaScanRange& meta_scan_range) {
     request.metada_table_params.__set_columns_name(filter_columns);
 
     // _state->execution_timeout() is seconds, change to milliseconds
-    int time_out = _state->execution_timeout() * 1000;
+    int time_out = timeout_ms_for_int32(_state->execution_timeout());
     TNetworkAddress master_addr = ExecEnv::GetInstance()->cluster_info()->master_fe_addr;
     TFetchSchemaTableDataResult result;
     RETURN_IF_ERROR(ThriftRpcHelper::rpc<FrontendServiceClient>(

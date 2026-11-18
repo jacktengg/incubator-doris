@@ -765,7 +765,7 @@ bool VectorizedFnCall::equals(const VExpr& other) {
     if (get_num_children() != other_ptr->get_num_children()) {
         return false;
     }
-    for (uint16_t i = 0; i < get_num_children(); i++) {
+    for (int32_t i = 0; i < get_num_children(); i++) {
         if (!this->get_child(i)->equals(*other_ptr->get_child(i))) {
             return false;
         }
@@ -877,7 +877,7 @@ void VectorizedFnCall::prepare_ann_range_search(
     // Identify the slot ref child and the constant query array child (ArrayLiteral or CAST to array)
     Int32 idx_of_slot_ref = -1;
     Int32 idx_of_array_expr = -1;
-    auto classify_child = [&](const VExprSPtr& child, UInt16 index) {
+    auto classify_child = [&](const VExprSPtr& child, int32_t index) {
         if (idx_of_slot_ref == -1 && std::dynamic_pointer_cast<VSlotRef>(child) != nullptr) {
             idx_of_slot_ref = index;
             return;
@@ -889,7 +889,7 @@ void VectorizedFnCall::prepare_ann_range_search(
         }
     };
 
-    for (UInt16 i = 0; i < function_call->get_num_children(); ++i) {
+    for (int32_t i = 0; i < function_call->get_num_children(); ++i) {
         classify_child(function_call->get_child(i), i);
     }
 
@@ -898,13 +898,12 @@ void VectorizedFnCall::prepare_ann_range_search(
         return;
     }
 
-    auto slot_ref = std::dynamic_pointer_cast<VSlotRef>(
-            function_call->get_child(static_cast<UInt16>(idx_of_slot_ref)));
+    auto slot_ref = std::dynamic_pointer_cast<VSlotRef>(function_call->get_child(idx_of_slot_ref));
     range_search_runtime.src_col_idx = slot_ref->column_id();
     range_search_runtime.dst_col_idx = vir_slot_ref == nullptr ? -1 : vir_slot_ref->column_id();
 
     // Materialize the constant array expression and validate its shape and types
-    auto array_expr = function_call->get_child(static_cast<UInt16>(idx_of_array_expr));
+    auto array_expr = function_call->get_child(idx_of_array_expr);
     auto extract_result = extract_query_vector(array_expr);
     if (!extract_result.has_value()) {
         mark_unsuitable("Failed to extract query vector from constant array expression.");

@@ -574,7 +574,7 @@ Status DescriptorTbl::create(ObjectPool* pool, const TDescriptorTable& thrift_tb
             DCHECK(false) << "invalid table type: " << tdesc.tableType;
         }
 
-        (*tbl)->_tbl_desc_map[static_cast<int32_t>(tdesc.id)] = desc;
+        (*tbl)->_tbl_desc_map[tdesc.id] = desc;
     }
 
     for (const auto& tdesc : thrift_tbl.tupleDescriptors) {
@@ -582,8 +582,26 @@ Status DescriptorTbl::create(ObjectPool* pool, const TDescriptorTable& thrift_tb
 
         // fix up table pointer
         if (tdesc.__isset.tableId) {
-            desc->_table_desc = (*tbl)->get_table_descriptor(static_cast<int32_t>(tdesc.tableId));
-            DCHECK(desc->_table_desc != nullptr);
+            // An out-of-i32 reference already proves that the sender preserved its high bits.
+            if ((thrift_tbl.__isset.full_width_table_ids && thrift_tbl.full_width_table_ids) ||
+                tdesc.tableId < INT32_MIN || tdesc.tableId > INT32_MAX) {
+                desc->_table_desc = (*tbl)->get_table_descriptor(tdesc.tableId);
+            } else {
+                // Older FEs sent only the signed low 32 bits in each tuple reference.
+                // For IDs 1 and 4294967297, the reference 1 is ambiguous even on an exact hit.
+                for (const auto& [id, table] : (*tbl)->_tbl_desc_map) {
+                    if (static_cast<int32_t>(id) == tdesc.tableId) {
+                        if (desc->_table_desc != nullptr) {
+                            return Status::InvalidArgument("Ambiguous truncated table ID {}",
+                                                           tdesc.tableId);
+                        }
+                        desc->_table_desc = table;
+                    }
+                }
+            }
+            if (desc->_table_desc == nullptr) {
+                return Status::InvalidArgument("Unknown table ID {}", tdesc.tableId);
+            }
         }
 
         (*tbl)->_tuple_desc_map[tdesc.id] = desc;

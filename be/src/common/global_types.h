@@ -17,6 +17,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 namespace doris {
 
 // for now, these are simply ints; if we find we need to generate ids in the
@@ -24,7 +26,8 @@ namespace doris {
 // assignment-incompatible
 typedef int TupleId;
 typedef int SlotId;
-typedef int TableId;
+// TTableId is an i64 in both table and tuple descriptors.
+using TableId = int64_t;
 typedef int PlanNodeId;
 
 }; // namespace doris

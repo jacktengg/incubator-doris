@@ -974,3 +974,19 @@ TEST(VExprExecuteColumnTest, CorrectColumnPasses) {
     EXPECT_TRUE(st.ok());
     EXPECT_EQ(result->size(), 1U);
 }
+
+TEST(TEST_VEXPR, ChildCountMatchesI32Protocol) {
+    using namespace doris;
+    auto type = std::make_shared<DataTypeInt32>();
+    VSlotRef expression(1, 0, 1, type, "parent");
+    auto first = std::make_shared<VSlotRef>(2, 0, 2, type, "first");
+    auto last = std::make_shared<VSlotRef>(3, 0, 3, type, "last");
+    // Reuse one child object to cross the old 16-bit boundary with minimal allocation.
+    for (int i = 0; i < 65536; ++i) {
+        expression.add_child(first);
+    }
+    EXPECT_EQ(expression.get_num_children(), 65536);
+    EXPECT_EQ(expression.clone_texpr_node().num_children, 65536);
+    expression.add_child(last);
+    EXPECT_EQ(expression.get_child(65536), last);
+}

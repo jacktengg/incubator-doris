@@ -488,13 +488,13 @@ Status KafkaDataConsumer::get_latest_offsets_for_partitions(
     for (int32_t partition_id : partition_ids) {
         int64_t low = 0;
         int64_t high = 0;
-        auto timeout_ms = timeout - static_cast<int>(watch.elapsed_time() / 1000 / 1000);
+        auto timeout_ms = timeout - watch.elapsed_time() / 1000 / 1000;
         if (UNLIKELY(timeout_ms <= 0)) {
             return Status::InternalError("get kafka latest offsets for partitions timeout");
         }
 
-        RdKafka::ErrorCode err =
-                _k_consumer->query_watermark_offsets(_topic, partition_id, &low, &high, timeout_ms);
+        RdKafka::ErrorCode err = _k_consumer->query_watermark_offsets(
+                _topic, partition_id, &low, &high, static_cast<int>(timeout_ms));
         if (UNLIKELY(err != RdKafka::ERR_NO_ERROR)) {
             std::stringstream ss;
             ss << "failed to get latest offset for partition: " << partition_id
@@ -532,13 +532,13 @@ Status KafkaDataConsumer::get_real_offsets_for_partitions(
 
         int64_t low = 0;
         int64_t high = 0;
-        auto timeout_ms = timeout - static_cast<int>(watch.elapsed_time() / 1000 / 1000);
+        auto timeout_ms = timeout - watch.elapsed_time() / 1000 / 1000;
         if (UNLIKELY(timeout_ms <= 0)) {
             return Status::InternalError("get kafka real offsets for partitions timeout");
         }
 
-        RdKafka::ErrorCode err =
-                _k_consumer->query_watermark_offsets(_topic, entry.key(), &low, &high, timeout_ms);
+        RdKafka::ErrorCode err = _k_consumer->query_watermark_offsets(
+                _topic, entry.key(), &low, &high, static_cast<int>(timeout_ms));
         if (UNLIKELY(err != RdKafka::ERR_NO_ERROR)) {
             std::stringstream ss;
             ss << "failed to get latest offset for partition: " << entry.key()

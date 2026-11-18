@@ -136,7 +136,7 @@ Status VRowDistribution::automatic_create_partition() {
         } else {
             master_addr = _vpartition->get_master_address();
         }
-        int time_out = _state->execution_timeout() * 1000;
+        int time_out = timeout_ms_for_int32(_state->execution_timeout());
         RETURN_IF_ERROR(ThriftRpcHelper::rpc<FrontendServiceClient>(
                 master_addr->hostname, master_addr->port,
                 [&request, &result](FrontendServiceConnection& client) {
@@ -238,7 +238,7 @@ Status VRowDistribution::_replace_overwriting_partition() {
         } else {
             master_addr = _vpartition->get_master_address();
         }
-        int time_out = _state->execution_timeout() * 1000;
+        int time_out = timeout_ms_for_int32(_state->execution_timeout());
         RETURN_IF_ERROR(ThriftRpcHelper::rpc<FrontendServiceClient>(
                 master_addr->hostname, master_addr->port,
                 [&request, &result](FrontendServiceConnection& client) {

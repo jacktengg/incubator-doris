@@ -329,4 +329,44 @@ TEST_F(SlotDescriptorTest, AccessPathsPreservedThroughProtobuf) {
               g_Descriptors_constants.TCOLUMN_ACCESS_PATH_VERSION_LEGACY);
 }
 
+TEST(TupleDescriptorTest, FullWidthTableIdsAndLegacyTuple) {
+    // Two descriptors with equal low 32 bits used to overwrite one another.
+    TDescriptorTable thrift_table;
+    thrift_table.__set_full_width_table_ids(true);
+    for (int64_t id : {int64_t {1}, int64_t {4294967297}}) {
+        TTableDescriptor table;
+        table.__set_id(id);
+        table.__set_tableType(TTableType::OLAP_TABLE);
+        thrift_table.tableDescriptors.push_back(table);
+        TTupleDescriptor tuple;
+        tuple.__set_id(static_cast<int>(thrift_table.tupleDescriptors.size()));
+        tuple.__set_tableId(id);
+        thrift_table.tupleDescriptors.push_back(tuple);
+    }
+    ObjectPool pool;
+    DescriptorTbl* table = nullptr;
+    ASSERT_TRUE(DescriptorTbl::create(&pool, thrift_table, &table).ok());
+    EXPECT_EQ(table->get_tuple_descriptor(0)->table_desc()->table_id(), 1);
+    EXPECT_EQ(table->get_tuple_descriptor(1)->table_desc()->table_id(), 4294967297LL);
+
+    // The same low ID is ambiguous for a legacy sender, even though it has an exact match.
+    thrift_table.__isset.full_width_table_ids = false;
+    EXPECT_FALSE(DescriptorTbl::create(&pool, thrift_table, &table).ok());
+    // An older FE truncated only the tuple reference. A unique full ID remains recoverable.
+    thrift_table.tableDescriptors.erase(thrift_table.tableDescriptors.begin());
+    thrift_table.tupleDescriptors.resize(1);
+    thrift_table.tupleDescriptors[0].__set_tableId(4294967297LL);
+    // A full-width reference is unambiguous even when the optional flag is absent.
+    ASSERT_TRUE(DescriptorTbl::create(&pool, thrift_table, &table).ok());
+    EXPECT_EQ(table->get_tuple_descriptor(0)->table_desc()->table_id(), 4294967297LL);
+    thrift_table.tupleDescriptors[0].__set_tableId(1);
+    ASSERT_TRUE(DescriptorTbl::create(&pool, thrift_table, &table).ok());
+    EXPECT_EQ(table->get_tuple_descriptor(0)->table_desc()->table_id(), 4294967297LL);
+
+    TTableDescriptor collision = thrift_table.tableDescriptors[0];
+    collision.__set_id(8589934593LL);
+    thrift_table.tableDescriptors.push_back(collision);
+    EXPECT_FALSE(DescriptorTbl::create(&pool, thrift_table, &table).ok());
+}
+
 } // namespace doris

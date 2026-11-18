@@ -239,9 +239,9 @@ const std::string& VMatchPredicate::function_name() const {
 std::string VMatchPredicate::debug_string() const {
     std::stringstream out;
     out << "MatchPredicate(" << children()[0]->debug_string() << ",[";
-    uint16_t num_children = get_num_children();
+    int32_t num_children = get_num_children();
 
-    for (uint16_t i = 1; i < num_children; ++i) {
+    for (int32_t i = 1; i < num_children; ++i) {
         out << (i == 1 ? "" : " ") << children()[i]->debug_string();
     }
 

@@ -553,4 +553,9 @@ struct TDescriptorTable {
 
   // all table descriptors referenced by tupleDescriptors
   3: optional list<TTableDescriptor> tableDescriptors;
+
+  // Older FEs narrowed tuple table IDs to i32. This flag distinguishes exact references
+  // from legacy references when two table IDs have the same low 32 bits.
+  4: optional bool full_width_table_ids;
+
 }

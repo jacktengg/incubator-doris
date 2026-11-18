@@ -1201,12 +1201,13 @@ Status StorageEngine::_do_sweep(const std::string& scan_root, const time_t& loca
                 continue;
             }
 
-            int32_t actual_expire = expire;
+            // TSnapshotRequest carries an i64 timeout, also stored in the directory name.
+            int64_t actual_expire = expire;
             // try get timeout in dir name, the old snapshot dir does not contain timeout
             // eg: 20190818221123.3.86400, the 86400 is timeout, in second
             size_t pos = dir_name.find('.', str_time.size() + 1);
             if (pos != string::npos) {
-                actual_expire = std::stoi(dir_name.substr(pos + 1));
+                actual_expire = std::stoll(dir_name.substr(pos + 1));
             }
             VLOG_TRACE << "get actual expire time " << actual_expire << " of dir: " << dir_name;
 

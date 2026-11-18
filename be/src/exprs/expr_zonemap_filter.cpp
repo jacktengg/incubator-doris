@@ -428,7 +428,7 @@ bool collect_unique_metadata_probe(const VExprSPtr& expr, bool zonemap,
     if (expr == nullptr) {
         return true;
     }
-    for (uint16_t child_idx = 0; child_idx < expr->get_num_children(); ++child_idx) {
+    for (int32_t child_idx = 0; child_idx < expr->get_num_children(); ++child_idx) {
         const auto& child = expr->get_child(child_idx);
         if (child == nullptr || child->is_literal()) {
             continue;

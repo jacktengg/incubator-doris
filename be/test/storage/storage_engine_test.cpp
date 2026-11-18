@@ -198,4 +198,14 @@ TEST_F(StorageEngineTest, TestAsyncPublish) {
     EXPECT_EQ(_storage_engine->_async_publish_tasks.size(), 0);
 }
 
+TEST_F(StorageEngineTest, SweepAcceptsI64SnapshotTimeout) {
+    // A single empty snapshot directory reproduces the old stoi failure.
+    const auto directory = _engine_data_path + "/snapshots";
+    const auto snapshot = directory + "/20000101000000.0.2147483648";
+    ASSERT_TRUE(std::filesystem::create_directories(snapshot));
+    const auto status = _storage_engine->_do_sweep(directory, 1000000000, 0);
+    EXPECT_TRUE(status.ok()) << status;
+    EXPECT_TRUE(std::filesystem::exists(snapshot));
+}
+
 } // namespace doris

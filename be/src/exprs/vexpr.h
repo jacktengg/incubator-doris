@@ -310,10 +310,10 @@ public:
     TExprOpcode::type op() const { return _opcode; }
 
     void add_child(const VExprSPtr& expr) { _children.push_back(expr); }
-    VExprSPtr get_child(uint16_t i) const { return _children[i]; }
-    // Expr's children number is restricted by org.apache.doris.common.Config#expr_children_limit, 10000 default. and strongly not recommend to change.
-    // There's little to worry about it. uint16 is enough.
-    uint16_t get_num_children() const { return static_cast<uint16_t>(_children.size()); }
+    VExprSPtr get_child(size_t i) const { return _children[i]; }
+    // TExprNode stores the child count in an i32. A configured limit above 65535
+    // must not turn 65536 children into zero during comparison or serialization.
+    int32_t get_num_children() const { return static_cast<int32_t>(_children.size()); }
 
     virtual bool is_rf_wrapper() const {
         return std::ranges::any_of(_children.begin(), _children.end(),

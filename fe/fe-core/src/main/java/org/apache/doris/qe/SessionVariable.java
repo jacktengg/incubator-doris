@@ -3137,6 +3137,7 @@ public class SessionVariable implements Serializable, Writable {
     public String flussUnionReadMode = "";
 
     @VarAttrDef.VarAttr(name = MINIMUM_OPERATOR_MEMORY_REQUIRED_KB, needForward = true,
+            checker = "checkMinimumOperatorMemoryRequiredKB",
             description = "The minimum memory required to be used by an operator, if not meet, the operator will not "
                     + "run")
     public int minimumOperatorMemoryRequiredKB = 32000;
@@ -4516,6 +4517,10 @@ public class SessionVariable implements Serializable, Writable {
                             + ", you set value is: " + value);
         }
         return val;
+    }
+
+    public void checkMinimumOperatorMemoryRequiredKB(String value) throws Exception {
+        checkFieldValue(MINIMUM_OPERATOR_MEMORY_REQUIRED_KB, 0, value);
     }
 
     private static int checkFieldValue(String variableName, int minValue, String value) throws Exception {

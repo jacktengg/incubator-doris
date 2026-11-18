@@ -201,13 +201,14 @@ public class DescriptorToThriftConverterTest {
     public void testTupleDescriptorWithTable() {
         TupleDescriptor tupleDesc = new TupleDescriptor(new TupleId(6));
         TableIf mockTable = Mockito.mock(TableIf.class);
-        Mockito.when(mockTable.getId()).thenReturn(12345L);
+        // External table IDs can exceed 32 bits. The tuple must retain the complete ID.
+        Mockito.when(mockTable.getId()).thenReturn(4294967297L);
         tupleDesc.setTable(mockTable);
 
         TTupleDescriptor result = DescriptorToThriftConverter.toThrift(tupleDesc);
 
         Assertions.assertTrue(result.isSetTableId());
-        Assertions.assertEquals(12345, result.getTableId());
+        Assertions.assertEquals(4294967297L, result.getTableId());
     }
 
     @Test
@@ -309,6 +310,7 @@ public class DescriptorToThriftConverterTest {
 
         Assertions.assertNotNull(result);
         Assertions.assertEquals(1, result.getTupleDescriptors().size());
+        Assertions.assertTrue(result.isFullWidthTableIds());
         Assertions.assertEquals(100, result.getTupleDescriptors().get(0).getTableId());
         Assertions.assertNotNull(result.getTableDescriptors());
         Assertions.assertEquals(1, result.getTableDescriptors().size());

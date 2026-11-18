@@ -115,7 +115,8 @@ public final class DescriptorToThriftConverter {
     public static TTupleDescriptor toThrift(TupleDescriptor tupleDesc) {
         TTupleDescriptor tTupleDesc = new TTupleDescriptor(tupleDesc.getId().asInt(), 0, 0);
         if (tupleDesc.getTable() != null && tupleDesc.getTable().getId() >= 0) {
-            tTupleDesc.setTableId((int) tupleDesc.getTable().getId());
+            // TTableId is an i64. External tables can use all 63 positive bits.
+            tTupleDesc.setTableId(tupleDesc.getTable().getId());
         }
         return tTupleDesc;
     }
@@ -125,6 +126,7 @@ public final class DescriptorToThriftConverter {
      */
     public static TDescriptorTable toThrift(DescriptorTable descTable) {
         TDescriptorTable result = new TDescriptorTable();
+        result.setFullWidthTableIds(true);
         Map<Long, TableIf> referencedTbls = Maps.newHashMap();
         for (TupleDescriptor tupleD : descTable.getTupleDescs()) {
             result.addToTupleDescriptors(toThrift(tupleD));

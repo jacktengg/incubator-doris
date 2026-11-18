@@ -2061,15 +2061,15 @@ public class MetadataGenerator {
                     trow.addToColumnValue(new TCell().setLongVal(partition.getRowCount())); // TABLE_ROWS (PARTITION)
                     trow.addToColumnValue(new TCell().setLongVal(partition.getAvgRowLength())); // AVG_ROW_LENGTH
                     trow.addToColumnValue(new TCell().setLongVal(partition.getDataLength())); // DATA_LENGTH
-                    trow.addToColumnValue(new TCell().setIntVal(0)); // MAX_DATA_LENGTH (not available)
-                    trow.addToColumnValue(new TCell().setIntVal(0)); // INDEX_LENGTH (not available)
-                    trow.addToColumnValue(new TCell().setIntVal(0)); // DATA_FREE (not available)
-                    trow.addToColumnValue(new TCell().setStringVal("NULL")); // CREATE_TIME (not available)
+                    trow.addToColumnValue(new TCell().setLongVal(0)); // MAX_DATA_LENGTH (not available)
+                    trow.addToColumnValue(new TCell().setLongVal(0)); // INDEX_LENGTH (not available)
+                    trow.addToColumnValue(new TCell().setLongVal(0)); // DATA_FREE (not available)
+                    trow.addToColumnValue(new TCell().setLongVal(0)); // CREATE_TIME (not available)
                     // UPDATE_TIME
                     trow.addToColumnValue(new TCell().setStringVal(
                             TimeUtils.longToTimeStringWithTimeZone(partition.getVisibleVersionTime(), timeZone)));
                     trow.addToColumnValue(new TCell().setStringVal("NULL")); // CHECK_TIME (not available)
-                    trow.addToColumnValue(new TCell().setIntVal(0)); // CHECKSUM (not available)
+                    trow.addToColumnValue(new TCell().setLongVal(0)); // CHECKSUM (not available)
                     trow.addToColumnValue(new TCell().setStringVal("")); // PARTITION_COMMENT (not available)
                     trow.addToColumnValue(new TCell().setStringVal("")); // NODEGROUP (not available)
                     trow.addToColumnValue(new TCell().setStringVal("")); // TABLESPACE_NAME (not available)
@@ -2300,8 +2300,14 @@ public class MetadataGenerator {
                         case BOOLEAN:
                             trow.addToColumnValue(new TCell().setBoolVal(Boolean.valueOf(partitionValue)));
                             break;
+                        // TCell carries all three types in intVal. Parse the declared type so
+                        // an external TINYINT partition named 128 cannot appear as -128.
                         case TINYINT:
+                            trow.addToColumnValue(new TCell().setIntVal(Byte.parseByte(partitionValue)));
+                            break;
                         case SMALLINT:
+                            trow.addToColumnValue(new TCell().setIntVal(Short.parseShort(partitionValue)));
+                            break;
                         case INT:
                             trow.addToColumnValue(new TCell().setIntVal(Integer.valueOf(partitionValue)));
                             break;
