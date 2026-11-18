@@ -329,6 +329,56 @@ TEST_F(SlotDescriptorTest, AccessPathsPreservedThroughProtobuf) {
               g_Descriptors_constants.TCOLUMN_ACCESS_PATH_VERSION_LEGACY);
 }
 
+TEST(TupleDescriptorTest, CollidingExternalTableIds) {
+    // Util.genIdByName("hive", "default", name) generates these IDs in the FE.
+    // DescriptorToThriftConverterTest verifies the names against the real ID generator.
+    // Both IDs have signed low 32 bits of -1916665440. An int32 map key merges them.
+    constexpr int64_t table_ids[] = {789217397117682080LL, 7889889164609585568LL};
+    const char* table_names[] = {"orders_25394", "orders_47299"};
+
+    // Two table descriptors and two tuple references reproduce the binding error.
+    // No slots, rows, or Hive service are needed. Both tables belong to the same plan.
+    TDescriptorTable thrift_table;
+    thrift_table.__set_full_width_table_ids(true);
+    for (int i = 0; i < 2; ++i) {
+        TTableDescriptor table;
+        table.__set_id(table_ids[i]);
+        table.__set_tableType(TTableType::HIVE_TABLE);
+        table.__set_tableName(table_names[i]);
+        table.__set_dbName("default");
+        thrift_table.tableDescriptors.push_back(table);
+        TTupleDescriptor tuple;
+        tuple.__set_id(i);
+        tuple.__set_tableId(table_ids[i]);
+        thrift_table.tupleDescriptors.push_back(tuple);
+    }
+
+    ObjectPool pool;
+    DescriptorTbl* descriptors = nullptr;
+    ASSERT_TRUE(DescriptorTbl::create(&pool, thrift_table, &descriptors).ok());
+    for (int i = 0; i < 2; ++i) {
+        const auto* tuple = descriptors->get_tuple_descriptor(i);
+        ASSERT_NE(tuple, nullptr);
+        const auto* table = tuple->table_desc();
+        ASSERT_NE(table, nullptr);
+        EXPECT_EQ(table->table_id(), table_ids[i]);
+        EXPECT_EQ(table->name(), table_names[i]);
+    }
+    EXPECT_NE(descriptors->get_tuple_descriptor(0)->table_desc(),
+              descriptors->get_tuple_descriptor(1)->table_desc());
+
+    // An old FE sends -1916665440 for both references. Reject this ambiguous input.
+    // Choosing either table would bind at least one tuple to the wrong table.
+    thrift_table.__isset.full_width_table_ids = false;
+    for (auto& tuple : thrift_table.tupleDescriptors) {
+        tuple.__set_tableId(static_cast<int32_t>(tuple.tableId));
+    }
+    auto status = DescriptorTbl::create(&pool, thrift_table, &descriptors);
+    EXPECT_FALSE(status.ok());
+    EXPECT_NE(status.to_string().find("Ambiguous truncated table ID -1916665440"),
+              std::string::npos);
+}
+
 TEST(TupleDescriptorTest, FullWidthTableIdsAndLegacyTuple) {
     // Two descriptors with equal low 32 bits used to overwrite one another.
     TDescriptorTable thrift_table;

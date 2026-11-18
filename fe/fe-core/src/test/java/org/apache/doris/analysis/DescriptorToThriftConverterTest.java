@@ -21,12 +21,14 @@ import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.TableIf;
 import org.apache.doris.catalog.Type;
 import org.apache.doris.common.Config;
+import org.apache.doris.common.util.Util;
 import org.apache.doris.thrift.DescriptorsConstants;
 import org.apache.doris.thrift.TAccessPathType;
 import org.apache.doris.thrift.TColumnAccessPath;
 import org.apache.doris.thrift.TDescriptorTable;
 import org.apache.doris.thrift.TSlotDescriptor;
 import org.apache.doris.thrift.TTableDescriptor;
+import org.apache.doris.thrift.TTableType;
 import org.apache.doris.thrift.TTupleDescriptor;
 
 import org.junit.jupiter.api.Assertions;
@@ -315,6 +317,46 @@ public class DescriptorToThriftConverterTest {
         Assertions.assertNotNull(result.getTableDescriptors());
         Assertions.assertEquals(1, result.getTableDescriptors().size());
         Mockito.verify(mockTable).toThrift();
+    }
+
+    @Test
+    public void testDescriptorTableWithCollidingExternalTableIds() {
+        // ExternalDatabase uses these three names to generate each external table ID.
+        // These two real hash results have the same signed low 32 bits: -1916665440.
+        String[] tableNames = {"orders_25394", "orders_47299"};
+        long[] tableIds = {
+                Util.genIdByName("hive", "default", tableNames[0]),
+                Util.genIdByName("hive", "default", tableNames[1])
+        };
+        Assertions.assertEquals(789217397117682080L, tableIds[0]);
+        Assertions.assertEquals(7889889164609585568L, tableIds[1]);
+        Assertions.assertEquals(-1916665440, (int) tableIds[0]);
+        Assertions.assertEquals((int) tableIds[0], (int) tableIds[1]);
+
+        // A plan that scans both tables sends both references in one TDescriptorTable.
+        // Only table metadata is mocked. The ID generator and converter run real code.
+        // No slots or rows are needed to reproduce the loss of the table ID's high bits.
+        DescriptorTable descTable = new DescriptorTable();
+        TTableDescriptor[] tables = new TTableDescriptor[2];
+        for (int i = 0; i < tableIds.length; i++) {
+            tables[i] = new TTableDescriptor(tableIds[i], TTableType.HIVE_TABLE,
+                    0, 0, tableNames[i], "default");
+            TableIf table = Mockito.mock(TableIf.class);
+            Mockito.when(table.getId()).thenReturn(tableIds[i]);
+            Mockito.when(table.toThrift()).thenReturn(tables[i]);
+            descTable.createTupleDescriptor().setTable(table);
+        }
+
+        TDescriptorTable result = DescriptorToThriftConverter.toThrift(descTable);
+
+        Assertions.assertTrue(result.isFullWidthTableIds());
+        Assertions.assertEquals(2, result.getTableDescriptorsSize());
+        Assertions.assertTrue(result.getTableDescriptors().containsAll(Arrays.asList(tables)));
+        Assertions.assertEquals(2, result.getTupleDescriptorsSize());
+        // Match by tuple ID. The descriptor collection does not promise iteration order.
+        for (TTupleDescriptor tuple : result.getTupleDescriptors()) {
+            Assertions.assertEquals(tableIds[tuple.getId()], tuple.getTableId());
+        }
     }
 
     // ==================== ColumnAccessPath conversion tests ====================
