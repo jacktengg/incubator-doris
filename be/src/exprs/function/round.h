@@ -22,6 +22,7 @@
 
 #include <cmath>
 #include <cstddef>
+#include <limits>
 #include <memory>
 
 #include "common/exception.h"
@@ -286,6 +287,25 @@ inline double roundWithMode(double x, RoundingMode mode) {
     __builtin_unreachable();
 }
 
+template <TieBreakingMode tie_breaking_mode>
+inline long double roundWithMode(long double x, RoundingMode mode) {
+    switch (mode) {
+    case RoundingMode::Round:
+        if constexpr (tie_breaking_mode == TieBreakingMode::Bankers) {
+            return std::nearbyint(x);
+        } else {
+            return std::round(x);
+        }
+    case RoundingMode::Floor:
+        return std::floor(x);
+    case RoundingMode::Ceil:
+        return std::ceil(x);
+    case RoundingMode::Trunc:
+        return std::trunc(x);
+    }
+    throw doris::Exception(ErrorCode::INTERNAL_ERROR, "roundWithMode invalid mode ", mode);
+}
+
 template <typename T, TieBreakingMode tie_breaking_mode>
 class BaseFloatRoundingComputation {
 public:
@@ -322,7 +342,8 @@ public:
             return;
         }
         if constexpr (scale_mode == ScaleMode::Positive) {
-            // A factor or product above the floating range cannot change a fractional digit.
+            // Large positive precisions use decimal units in apply_positive below.
+            // With a finite factor, an overflowing product cannot change a fractional digit.
             if (!std::isfinite(scale) || !std::isfinite(val * scale)) {
                 Base::store(out, val);
                 return;
@@ -383,7 +404,40 @@ private:
     using ColumnType = ColumnVector<Type>;
     using Container = typename ColumnType::Container;
 
+    static long double decimal_unit(Int32 precision) {
+        // At 324 places for DOUBLE, or 46 for FLOAT, one decimal unit is less
+        // than half the smallest representable value. Rounding keeps the input.
+        constexpr int unchanged_precision =
+                std::numeric_limits<T>::max_digits10 - std::numeric_limits<T>::min_exponent10;
+        return precision >= unchanged_precision ? 0 : std::pow(10.0L, -precision);
+    }
+
+    static T round_decimal_unit(T value, long double unit) {
+        if (unit == 0 || !std::isfinite(value)) {
+            return value;
+        }
+        // For example, round(1e-310, 309) is zero although 10^309 overflows DOUBLE.
+        // A small decimal unit keeps the requested precision available for subnormal inputs.
+        auto scaled = static_cast<long double>(value) / unit;
+        if (!std::isfinite(scaled)) {
+            // The input's spacing already exceeds the unit when the quotient overflows.
+            return value;
+        }
+        return static_cast<T>(roundWithMode<tie_breaking_mode>(scaled, rounding_mode) * unit);
+    }
+
 public:
+    static void apply_large_positive_scale(const Container& in, Int32 precision, Container& out) {
+        auto unit = decimal_unit(precision);
+        for (size_t i = 0; i < in.size(); ++i) {
+            out[i] = round_decimal_unit(in[i], unit);
+        }
+    }
+
+    static void apply_large_positive_scale(const T& in, Int32 precision, T& out) {
+        out = round_decimal_unit(in, decimal_unit(precision));
+    }
+
     static NO_INLINE void apply(const Container& in, T scale, Container& out) {
         auto mm_scale = Op::prepare(scale);
 
@@ -510,6 +564,21 @@ struct Dispatcher {
                     FloatRoundingImpl<T, rounding_mode, scale_mode, tie_breaking_mode>,
                     IntegerRoundingImpl<T, rounding_mode, scale_mode, tie_breaking_mode>>>;
 
+    template <typename Input, typename Output>
+    static void apply_positive(const Input& in, Int32 precision, Output& out) {
+        if constexpr (is_float_or_double(T) || T == TYPE_TIMEV2) {
+            using Value = typename PrimitiveTypeTraits<T>::CppType;
+            if (precision > std::numeric_limits<Value>::max_exponent10) {
+                // Do not lose the precision by passing an infinite factor to the scalar path.
+                FunctionRoundingImpl<ScaleMode::Positive>::apply_large_positive_scale(in, precision,
+                                                                                      out);
+                return;
+            }
+        }
+        auto scale = scale_factor(precision);
+        FunctionRoundingImpl<ScaleMode::Positive>::apply(in, scale, out);
+    }
+
     static auto scale_factor(Int32 exponent) {
         if constexpr (is_float_or_double(T) || T == TYPE_TIMEV2) {
             // Keep the table lookup for common scales. 10^20 no longer fits in uint64,
@@ -540,9 +609,7 @@ struct Dispatcher {
                     size_t scale = 1;
                     FunctionRoundingImpl<ScaleMode::Zero>::apply(col->get_data(), scale, vec_res);
                 } else if (scale_arg > 0) {
-                    auto scale = scale_factor(scale_arg);
-                    FunctionRoundingImpl<ScaleMode::Positive>::apply(col->get_data(), scale,
-                                                                     vec_res);
+                    apply_positive(col->get_data(), scale_arg, vec_res);
                 } else {
                     auto scale = scale_factor(-scale_arg);
                     FunctionRoundingImpl<ScaleMode::Negative>::apply(col->get_data(), scale,
@@ -611,9 +678,7 @@ struct Dispatcher {
                     FunctionRoundingImpl<ScaleMode::Zero>::apply(col->get_data()[i], scale,
                                                                  vec_res[i]);
                 } else if (scale_arg > 0) {
-                    auto scale = scale_factor(scale_arg);
-                    FunctionRoundingImpl<ScaleMode::Positive>::apply(col->get_data()[i], scale,
-                                                                     vec_res[i]);
+                    apply_positive(col->get_data()[i], scale_arg, vec_res[i]);
                 } else {
                     auto scale = scale_factor(-scale_arg);
                     FunctionRoundingImpl<ScaleMode::Negative>::apply(col->get_data()[i], scale,
@@ -717,9 +782,7 @@ struct Dispatcher {
                     size_t scale = 1;
                     FunctionRoundingImpl<ScaleMode::Zero>::apply(general_val, scale, vec_res[i]);
                 } else if (scale_arg > 0) {
-                    auto scale = scale_factor(col_scale_i32.get_data()[i]);
-                    FunctionRoundingImpl<ScaleMode::Positive>::apply(general_val, scale,
-                                                                     vec_res[i]);
+                    apply_positive(general_val, scale_arg, vec_res[i]);
                 } else {
                     auto scale = scale_factor(-col_scale_i32.get_data()[i]);
                     FunctionRoundingImpl<ScaleMode::Negative>::apply(general_val, scale,

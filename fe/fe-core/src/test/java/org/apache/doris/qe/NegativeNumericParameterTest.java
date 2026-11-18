@@ -92,6 +92,27 @@ public class NegativeNumericParameterTest {
     }
 
     @Test
+    public void testPositiveCountsRejectZeroAndAuditTimeoutKeepsItsUpperBound() {
+        SessionVariable session = new SessionVariable();
+        // These counts require at least one item. Rejection happens before global persistence.
+        Assertions.assertThrows(DdlException.class,
+                () -> set(session, SetType.SESSION, SessionVariable.RUNTIME_BLOOM_FILTER_SIZE, "0"));
+        for (String name : new String[] {GlobalVariable.PARTITION_ANALYZE_BATCH_SIZE,
+                SessionVariable.HUGE_TABLE_DEFAULT_SAMPLE_ROWS}) {
+            Assertions.assertThrows(DdlException.class, () -> set(session, SetType.GLOBAL, name, "0"));
+        }
+        int originalMaximum = Config.max_stream_load_timeout_second;
+        try {
+            Config.max_stream_load_timeout_second = 600;
+            Assertions.assertDoesNotThrow(() -> GlobalVariable.checkAuditPluginLoadTimeout("600"));
+            Assertions.assertThrows(DdlException.class,
+                    () -> set(session, SetType.GLOBAL, GlobalVariable.AUDIT_PLUGIN_LOAD_TIMEOUT, "601"));
+        } finally {
+            Config.max_stream_load_timeout_second = originalMaximum;
+        }
+    }
+
+    @Test
     public void testScanRatioBoundsKeepOriginalValue() throws Exception {
         SessionVariable session = new SessionVariable();
         set(session, SetType.SESSION, SessionVariable.MAX_SCAN_MEM_RATIO, "1");

@@ -886,6 +886,21 @@ TEST(ExprZonemapFilterTest, EqualityBloomAcceptsStructAndListLeafAccessors) {
               equals.evaluate_bloom_filter(bloom_ctx, {nested_leaf, make_int_literal(2)}));
 }
 
+TEST(ExprZonemapFilterTest, MetadataProbeAfterOldChildCountLimit) {
+    // Reuse one literal in 65535 positions. Only the last child refers to a column.
+    // The old uint16 child count became zero for this 65536-child expression.
+    auto root =
+            std::make_shared<VCompoundPred>(make_compound_node(TExprOpcode::COMPOUND_AND, 65536));
+    auto literal = make_int_literal(1);
+    for (int i = 0; i < 65535; ++i) {
+        root->add_child(literal);
+    }
+    root->add_child(std::make_shared<MetadataBloomPredicateExpr>(make_slot(7, int_type())));
+    auto probe = expr_zonemap::extract_bloom_filter_predicate_probe(root);
+    ASSERT_TRUE(probe.has_value());
+    EXPECT_EQ(probe->slot_index, 7);
+}
+
 TEST(ExprZonemapFilterTest, CompoundBloomProbeRequiresOneUniqueNestedLeaf) {
     const auto make_accessor = [](const DataTypePtr& struct_type, const DataTypePtr& leaf_type,
                                   std::string field_name) {

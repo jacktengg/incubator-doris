@@ -56,6 +56,7 @@
 #include "exprs/function/cast/cast_to_date_or_datetime_impl.hpp"
 #include "exprs/function/cast/cast_to_datetimev2_impl.hpp"
 #include "exprs/function/cast/cast_to_datev2_impl.hpp"
+#include "exprs/vectorized_fn_call.h"
 #include "exprs/vexpr_context.h"
 #include "exprs/vliteral.h"
 #include "exprs/vslot_ref.h"
@@ -989,4 +990,26 @@ TEST(TEST_VEXPR, ChildCountMatchesI32Protocol) {
     EXPECT_EQ(expression.clone_texpr_node().num_children, 65536);
     expression.add_child(last);
     EXPECT_EQ(expression.get_child(65536), last);
+}
+
+TEST(TEST_VEXPR, FunctionEqualityChecksTheLastChildBeyondOldCountLimit) {
+    using namespace doris;
+    auto type = std::make_shared<DataTypeInt32>();
+    auto first = std::make_shared<VSlotRef>(1, 0, 1, type, "first");
+    auto last = std::make_shared<VSlotRef>(2, 0, 2, type, "last");
+    TExprNode node = first->clone_texpr_node();
+    node.__set_node_type(TExprNodeType::FUNCTION_CALL);
+    node.fn.name.function_name = "coalesce";
+    node.__isset.fn = true;
+    VectorizedFnCall left(node);
+    VectorizedFnCall right(node);
+    // 65536 is the smallest count that narrowed to zero. Reuse two slot objects;
+    // only the final child differs, and no data rows or function execution are needed.
+    for (int i = 0; i < 65535; ++i) {
+        left.add_child(first);
+        right.add_child(first);
+    }
+    left.add_child(first);
+    right.add_child(last);
+    EXPECT_FALSE(left.equals(right));
 }

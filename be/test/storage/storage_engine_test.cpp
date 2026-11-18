@@ -33,6 +33,7 @@
 #include "gtest/gtest_pred_impl.h"
 #include "io/fs/local_file_system.h"
 #include "storage/data_dir.h"
+#include "storage/schema_change/schema_change.h"
 #include "storage/tablet/tablet_manager.h"
 #include "storage/tablet/tablet_meta_manager.h"
 #include "util/threadpool.h"
@@ -206,6 +207,18 @@ TEST_F(StorageEngineTest, SweepAcceptsI64SnapshotTimeout) {
     const auto status = _storage_engine->_do_sweep(directory, 1000000000, 0);
     EXPECT_TRUE(status.ok()) << status;
     EXPECT_TRUE(std::filesystem::exists(snapshot));
+}
+
+TEST_F(StorageEngineTest, SchemaChangeRejectsInvalidQueryOptions) {
+    // The local schema-change entry must reject the same old-FE request as Cloud.
+    // Empty tablet IDs and no rows keep the test before schema or data processing.
+    TAlterTabletReqV2 request;
+    TQueryOptions options;
+    options.__set_data_queue_max_blocks(-1);
+    request.__set_query_options(options);
+    SchemaChangeJob job(*_storage_engine, request, "invalid-query-option");
+    const auto status = job.process_alter_tablet(request);
+    EXPECT_NE(status.to_string().find("data_queue_max_blocks"), std::string::npos);
 }
 
 } // namespace doris

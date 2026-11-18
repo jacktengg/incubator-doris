@@ -211,4 +211,102 @@ TEST(FunctionParameterBoundaryTest, FloatingNegativeRoundingScale) {
     DataSet underflow = {{{1e-300, Int32(-308)}, 1e308}};
     check_function_all_arg_comb<DataTypeFloat64, true>("ceil", types, underflow);
 }
+
+TEST(FunctionParameterBoundaryTest, FloatingPositiveRoundingScale) {
+    // A single subnormal value distinguishes a decimal unit from an infinite factor.
+    // Enumerate constant/column arguments so all three dispatcher paths execute.
+    InputTypeSet types = {PrimitiveType::TYPE_DOUBLE, PrimitiveType::TYPE_INT};
+    for (const std::string function : {"round", "round_bankers", "truncate"}) {
+        for (double value : {1e-310, -1e-310}) {
+            check_function_all_arg_comb<DataTypeFloat64, true>(function, types,
+                                                               {{{value, Int32(309)}, double(0)}});
+        }
+    }
+    check_function_all_arg_comb<DataTypeFloat64, true>("ceil", types,
+                                                       {{{1e-310, Int32(309)}, 1e-309}});
+    check_function_all_arg_comb<DataTypeFloat64, true>("floor", types,
+                                                       {{{-1e-310, Int32(309)}, -1e-309}});
+    // The last decimal place that can change the smallest DOUBLE is 323.
+    const auto smallest = std::numeric_limits<double>::denorm_min();
+    check_function_all_arg_comb<DataTypeFloat64, true>("round", types,
+                                                       {{{smallest, Int32(323)}, double(0)}});
+    check_function_all_arg_comb<DataTypeFloat64, true>("ceil", types,
+                                                       {{{smallest, Int32(323)}, 1e-323}});
+    for (Int32 precision : {Int32(324), Int32(32767)}) {
+        for (const std::string function : {"round", "round_bankers", "truncate", "floor", "ceil"}) {
+            check_function_all_arg_comb<DataTypeFloat64, true>(function, types,
+                                                               {{{smallest, precision}, smallest}});
+        }
+    }
+}
+
+TEST(FunctionParameterBoundaryTest, WidthBucketIndependentNullArguments) {
+    // One NULL argument is enough. Checking all-NULL rows would not detect a missing
+    // null map for the second or third argument. Each case uses only one input row.
+    InputTypeSet types = {PrimitiveType::TYPE_BIGINT, PrimitiveType::TYPE_BIGINT,
+                          PrimitiveType::TYPE_BIGINT, PrimitiveType::TYPE_BIGINT};
+    for (const DataSet& rows : {DataSet {{{Null(), Int64(-1), Int64(0), Int64(2)}, Null()}},
+                                DataSet {{{Int64(-1), Null(), Int64(0), Int64(2)}, Null()}},
+                                DataSet {{{Int64(-1), Int64(-1), Null(), Int64(2)}, Null()}}}) {
+        check_function_all_arg_comb<DataTypeInt64, true>("width_bucket", types, rows);
+    }
+    // The largest valid count must still leave room for the upper out-of-range bucket.
+    DataSet upper = {{{Int64(0), Int64(-1), Int64(0), std::numeric_limits<Int64>::max() - 1},
+                      std::numeric_limits<Int64>::max()}};
+    ASSERT_TRUE(check_function<DataTypeInt64>("width_bucket", types, upper).ok());
+}
+
+TEST(FunctionParameterBoundaryTest, WidthBucketKeepsSignedPhysicalTypes) {
+    // Use physical columns, so FE coercion cannot hide a narrow integer or FLOAT path.
+    // A unit-wide negative interval needs two distinct buckets even for integer input.
+    const auto check = []<typename T>(PrimitiveType type, T value) {
+        InputTypeSet types = {Notnull {type}, Notnull {type}, Notnull {type},
+                              ConstedNotnull {PrimitiveType::TYPE_BIGINT}};
+        DataSet rows = {{{value, value, T(0), Int64(2)}, Int64(1)}};
+        ASSERT_TRUE(check_function<DataTypeInt64>("width_bucket", types, rows).ok());
+    };
+    check(PrimitiveType::TYPE_TINYINT, Int8(-1));
+    check(PrimitiveType::TYPE_SMALLINT, Int16(-1));
+    check(PrimitiveType::TYPE_INT, Int32(-1));
+    check(PrimitiveType::TYPE_BIGINT, Int64(-1));
+    check(PrimitiveType::TYPE_FLOAT, float(-1));
+    check(PrimitiveType::TYPE_DOUBLE, double(-1));
+}
+
+TEST(FunctionParameterBoundaryTest, NegativeRoundingDirection) {
+    InputTypeSet doubles = {PrimitiveType::TYPE_DOUBLE, PrimitiveType::TYPE_INT};
+    // Negative directed rounding must choose the adjacent negative unit, even when
+    // the quotient underflows. CEIL of the same value must choose zero.
+    check_function_all_arg_comb<DataTypeFloat64, true>("floor", doubles,
+                                                       {{{-1e-300, Int32(-308)}, -1e308}});
+    check_function_all_arg_comb<DataTypeFloat64, true>("ceil", doubles,
+                                                       {{{double(-1), Int32(-309)}, double(0)}});
+    check_function_all_arg_comb<DataTypeFloat64, true>("floor", doubles,
+                                                       {{{double(1), Int32(-309)}, double(0)}});
+    const auto status = check_function<DataTypeFloat64, true>(
+            "floor", doubles, {{{double(-1), Int32(-309)}, double(0)}}, -1, -1, true);
+    EXPECT_NE(status.to_string().find("Arithmetic overflow"), std::string::npos);
+}
+
+TEST(FunctionParameterBoundaryTest, WidthBucketFloatingBounds) {
+    InputTypeSet types = {PrimitiveType::TYPE_DOUBLE, PrimitiveType::TYPE_DOUBLE,
+                          PrimitiveType::TYPE_DOUBLE, PrimitiveType::TYPE_BIGINT};
+    // A finite value with either nonfinite bound must fail before bucket conversion.
+    for (double bound :
+         {std::numeric_limits<double>::infinity(), std::numeric_limits<double>::quiet_NaN()}) {
+        for (const DataSet& rows :
+             {DataSet {{{double(-1), bound, double(0), Int64(2)}, Int64(0)}},
+              DataSet {{{double(-1), double(-1), bound, Int64(2)}, Int64(0)}}}) {
+            auto status = check_function<DataTypeInt64>("width_bucket", types, rows, -1, -1, true);
+            EXPECT_NE(status.to_string().find("values and bounds must be finite"),
+                      std::string::npos);
+        }
+    }
+    // The value is below the upper bound, even if division rounds the ratio to 1.
+    // It must stay in bucket 2 instead of the upper out-of-range bucket 3.
+    DataSet inside = {{{-std::numeric_limits<double>::denorm_min(),
+                        -std::numeric_limits<double>::max(), double(0), Int64(2)},
+                       Int64(2)}};
+    check_function_all_arg_comb<DataTypeInt64>("width_bucket", types, inside);
+}
 } // namespace doris

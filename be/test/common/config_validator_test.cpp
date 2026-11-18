@@ -251,11 +251,25 @@ TEST_F(ConfigValidatorTest, OptionalZeroAndTimeoutBoundaries) {
 
 TEST_F(ConfigValidatorTest, DefaultCapacitySentinels) {
     // -1 selects the existing default. Zero is not a usable capacity.
-    EXPECT_TRUE(accepts32("brpc_heavy_work_pool_threads", -1));
-    EXPECT_FALSE(accepts32("brpc_heavy_work_pool_threads", 0));
+    for (const char* name :
+         {"brpc_heavy_work_pool_threads", "brpc_peer_fetch_pool_threads",
+          "brpc_light_work_pool_threads", "brpc_heavy_work_pool_max_queue_size",
+          "brpc_peer_fetch_pool_max_queue_size", "brpc_light_work_pool_max_queue_size",
+          "brpc_arrow_flight_work_pool_threads", "brpc_arrow_flight_work_pool_max_queue_size"}) {
+        EXPECT_TRUE(accepts32(name, -1)) << name;
+        EXPECT_FALSE(accepts32(name, 0)) << name;
+        EXPECT_TRUE(accepts32(name, 1)) << name;
+    }
     EXPECT_TRUE(accepts64("compaction_batch_size", -1));
     EXPECT_FALSE(accepts64("compaction_batch_size", 0));
+    EXPECT_TRUE(accepts64("compaction_batch_size", 2147483647));
     EXPECT_FALSE(accepts64("compaction_batch_size", 2147483648LL));
+    // The retry path doubles this value. Check both sides without sleeping.
+    EXPECT_TRUE(
+            accepts64("thrift_client_retry_interval_ms", std::numeric_limits<int64_t>::max() / 2));
+    EXPECT_FALSE(accepts64("thrift_client_retry_interval_ms",
+                           std::numeric_limits<int64_t>::max() / 2 + 1));
+    EXPECT_FALSE(accepts32("storage_page_cache_shard_size", 0));
 }
 
 TEST_F(ConfigValidatorTest, CompressionAndParquetBoundaries) {

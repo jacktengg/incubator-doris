@@ -161,10 +161,20 @@ public class ConstantFunctionArgumentTest {
             assertAnalysisError("select " + function + "(null, -1)", "element must be between 0");
             assertAnalysisError("select " + function + "(null, -18446744073709551615)",
                     "element must be between 0");
+            assertAnalysisError("select " + function + "(null, 9223372036854775808)",
+                    "element must be between 0");
         }
         assertAnalysisError("select window_funnel_v2(-1, 'default',"
                 + " cast('2024-01-01' as datetime), false)", "window must be a nonnegative BIGINT");
         assertAnalysisError("select topn_weighted(1, -1, 1)", "weight must be a nonnegative BIGINT");
+        // The first value above BIGINT must fail before a cast changes its sign.
+        assertAnalysisError("select topn_weighted(1, 9223372036854775808, 1)",
+                "weight must be a nonnegative BIGINT");
+        // WINDOW_FUNNEL_V2 rejects LARGEINT at its type check, before the value check.
+        assertAnalysisError("select window_funnel_v2(9223372036854775808, 'default',"
+                + " cast('2024-01-01' as datetime), false)", "must be integer");
+        assertAnalysisError("select ngram_search('a', 'a', 2147483648)",
+                "gram_num must be a positive constant");
         // -2^64 + 7 must not become the valid sketch precision 7.
         assertAnalysisError("select datasketches_hll_union_agg('', -18446744073709551609)",
                 "requires lg_max_k to be between");
@@ -175,6 +185,11 @@ public class ConstantFunctionArgumentTest {
         // No rows are needed. The constant and NULL paths must reject the same scales as BE.
         for (String function : new String[] {"round", "round_bankers", "truncate", "floor", "ceil",
                 "dround", "dfloor", "dceil"}) {
+            // Analyze both legal endpoints. Do not evaluate a large precision in the FE.
+            for (String scale : new String[] {"-32768", "32767"}) {
+                Assertions.assertDoesNotThrow(() -> analyze("select " + function
+                        + "(cast(1 as double), " + scale + ")", BoundFunction.class));
+            }
             for (String scale : new String[] {"-32769", "32768", "-18446744073709551616"}) {
                 assertAnalysisError("select " + function + "(cast(1 as double), " + scale + ")",
                         "Scale argument for function");

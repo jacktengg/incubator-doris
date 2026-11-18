@@ -20,6 +20,8 @@
 #include <aws/core/client/ClientConfiguration.h>
 #include <bthread/countdown_event.h>
 
+#include <cstdio>
+#include <fstream>
 #include <stdexcept>
 #include <string>
 #include <string_view>
@@ -52,6 +54,31 @@ int main(int argc, char** argv) {
 
     ::testing::InitGoogleTest(&argc, argv);
     return RUN_ALL_TESTS();
+}
+
+namespace doris::cloud::config {
+// Read the published value from inside the callback. Failed validation must not expose -1.
+static int64_t published_candidate_value = 0;
+DEFINE_FIELD(int64_t, ut_candidate_visibility, "5", true);
+DEFINE_VALIDATOR(ut_candidate_visibility, [](int64_t value) {
+    published_candidate_value = ut_candidate_visibility;
+    return value >= 0;
+});
+} // namespace doris::cloud::config
+
+TEST(ConfigTest, RejectInvalidFileCandidateBeforePublishing) {
+    // A one-line file covers startup loading separately from dynamic SET.
+    const char* path = "ut_candidate_visibility.conf";
+    std::ofstream(path) << "ut_candidate_visibility=-1\n";
+    const bool accepted = config::init(path, false, true, false);
+    std::remove(path);
+    EXPECT_FALSE(accepted);
+    EXPECT_EQ(config::ut_candidate_visibility, 5);
+    EXPECT_EQ(config::published_candidate_value, 5);
+    auto result = config::set_config({{"ut_candidate_visibility", "-1"}}, false, "");
+    EXPECT_FALSE(result.first);
+    EXPECT_EQ(config::ut_candidate_visibility, 5);
+    EXPECT_EQ(config::published_candidate_value, 5);
 }
 
 TEST(ConfigTest, RejectInvalidCandidate) {

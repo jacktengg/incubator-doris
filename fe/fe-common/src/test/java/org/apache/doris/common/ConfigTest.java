@@ -308,6 +308,80 @@ public class ConfigTest {
         }
     }
 
+    @Test
+    public void testZeroSeparatesPositiveAndNonnegativeConfigBounds() throws Exception {
+        Config config = new Config();
+        // Check zero independently of -1. A zero pool or batch cannot make progress.
+        for (String name : new String[] {
+                "group_commit_interval_ms_default_value",
+                "group_commit_data_bytes_default_value",
+                "report_resend_batch_task_num_per_rpc",
+                "backup_restore_batch_task_num_per_rpc",
+                "publish_thread_pool_num",
+                "publish_queue_size",
+                "tablet_report_thread_pool_num",
+                "tablet_report_queue_size",
+                "heartbeat_mgr_threads_num",
+                "heartbeat_mgr_blocking_queue_size",
+                "fe_session_mgr_threads_num",
+                "fe_session_mgr_blocking_queue_size",
+                "max_agent_task_threads_num",
+                "external_scan_split_threads",
+                "external_scan_metadata_threads",
+                "external_scan_task_queue_capacity",
+                "max_external_cache_loader_thread_pool_size",
+                "backup_upload_snapshot_batch_size",
+                "restore_download_snapshot_batch_size",
+                "cloud_restore_create_tablet_batch_size",
+                "cloud_txn_tablet_batch_size",
+                "restore_task_concurrency_per_be",
+                "query_colocate_join_memory_limit_penalty_factor",
+                "min_bytes_per_broker_scanner",
+                "max_bytes_per_broker_scanner",
+                "max_broker_concurrency",
+                "file_cache_query_limit_max_percent"}) {
+            Field field = Config.class.getField(name);
+            Object original = field.get(null);
+            Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> config.init(configFile(name + "=0\n").toString()), name);
+            Assertions.assertEquals(original, field.get(null), name);
+        }
+        // Zero is a valid timeout, disabled capacity, or empty cache for these settings.
+        // Parse one property at a time. Do not construct the resource that it controls.
+        for (String name : new String[] {
+                "stream_load_default_timeout_second",
+                "stream_load_default_precommit_timeout_second",
+                "min_load_timeout_second",
+                "max_load_timeout_second",
+                "max_stream_load_timeout_second",
+                "publish_version_timeout_second",
+                "max_get_kafka_meta_timeout_second",
+                "remote_fragment_exec_timeout_ms",
+                "streaming_cdc_light_rpc_timeout_sec",
+                "streaming_cdc_heavy_rpc_timeout_sec",
+                "dictionary_rpc_timeout_seconds",
+                "point_query_timeout_ms",
+                "min_clone_task_timeout_sec",
+                "max_clone_task_timeout_sec",
+                "routine_load_task_timeout_multiplier",
+                "routine_load_task_min_timeout_sec",
+                "max_routine_load_task_num_per_be",
+                "max_routine_load_task_concurrent_num",
+                "stats_cache_size",
+                "max_external_table_row_count_cache_num",
+                "backup_job_default_timeout_ms",
+                "agent_task_be_unavailable_heartbeat_timeout_second"}) {
+            Field field = Config.class.getField(name);
+            Object original = field.get(null);
+            try {
+                config.init(configFile(name + "=0\n").toString());
+                Assertions.assertEquals(0, ((Number) field.get(null)).longValue(), name);
+            } finally {
+                field.set(null, original);
+            }
+        }
+    }
+
     private static Path configFile(String contents) throws Exception {
         Path file = Files.createTempFile("fe_ut_options_", ".conf");
         file.toFile().deleteOnExit();

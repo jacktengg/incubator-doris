@@ -1889,7 +1889,8 @@ TEST_F(NewParquetReaderTest, LargeMiBLimitsDoNotWrapToZero) {
         config::parquet_rowgroup_max_buffer_mb = old_group;
         config::parquet_column_max_buffer_mb = old_column;
     }};
-    // 4096 << 20 is zero in int32 arithmetic. The old header limit rejects this tiny file.
+    // Keep the ordinary plaintext read valid with large limits. The encryption test
+    // separately checks prefetch reads and a header that cannot pass a zero byte limit.
     config::parquet_header_max_size_mb = 4096;
     config::parquet_rowgroup_max_buffer_mb = 4096;
     config::parquet_column_max_buffer_mb = 4096;

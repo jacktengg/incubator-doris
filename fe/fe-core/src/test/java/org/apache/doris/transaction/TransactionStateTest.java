@@ -78,6 +78,25 @@ public class TransactionStateTest {
         }
     }
 
+    @Test
+    public void testLargePublishTimeoutAndProlongation() {
+        int original = Config.publish_version_timeout_second;
+        try {
+            TransactionState state = new TransactionState();
+            Config.publish_version_timeout_second = 2147484;
+            Deencapsulation.setField(state, "lastPublishVersionTime", System.currentTimeMillis());
+            Assertions.assertFalse(state.isPublishTimeout());
+            // Use a timestamp 1.5 intervals ago, away from either deadline. No clock wait is needed.
+            Deencapsulation.setField(state, "lastPublishVersionTime",
+                    System.currentTimeMillis() - 3221226000L);
+            Assertions.assertTrue(state.isPublishTimeout());
+            state.prolongPublishTimeout();
+            Assertions.assertFalse(state.isPublishTimeout());
+        } finally {
+            Config.publish_version_timeout_second = original;
+        }
+    }
+
     @AfterEach
     public void tearDown() {
         new File(fileName).delete();

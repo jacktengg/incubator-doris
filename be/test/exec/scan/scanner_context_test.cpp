@@ -37,8 +37,11 @@
 #include "common/logging.h"
 #include "common/object_pool.h"
 #include "core/block/block.h"
+#include "core/column/column_nullable.h"
+#include "core/data_type/data_type_number.h"
 #include "exec/operator/olap_scan_operator.h"
 #include "exec/pipeline/dependency.h"
+#include "exec/scan/meta_scanner.h"
 #include "exec/scan/mock_simplified_scan_scheduler.h"
 #include "exec/scan/olap_scanner.h"
 #include "exec/scan/scan_node.h"
@@ -51,6 +54,7 @@
 #include "storage/storage_engine.h"
 #include "storage/tablet/tablet.h"
 #include "storage/tablet/tablet_meta.h"
+#include "testutil/desc_tbl_builder.h"
 #include "testutil/mock/mock_runtime_state.h"
 #include "util/countdown_latch.h"
 #include "util/debug_points.h"
@@ -142,6 +146,35 @@ public:
         output_tuple_desc = descs->get_tuple_descriptor(0);
     }
 
+    // Check one remote cell. Values just outside the target type must fail before conversion.
+    void check_metadata_integer_cell(ScanLocalStateBase* local, int32_t value, int32_t maximum) {
+        // Keep the range alive: MetaScanner stores a reference to it.
+        TScanRangeParams range;
+        MetaScanner scanner(state.get(), local, 0, range, -1, profile.get(), {});
+        ASSERT_TRUE(scanner.init(state.get(), {}).ok());
+        TCell cell;
+        cell.__set_intVal(value);
+        TRow row;
+        row.__set_column_value({cell});
+        scanner._batch_data = {row};
+        Block block;
+        bool eof = false;
+        auto status = scanner._get_block_impl(state.get(), &block, &eof);
+        if (value < -maximum - 1 || value > maximum) {
+            EXPECT_FALSE(status.ok());
+            EXPECT_NE(status.to_string().find("does not fit"), std::string::npos);
+        } else {
+            ASSERT_TRUE(status.ok()) << status;
+            ASSERT_EQ(block.rows(), 1);
+            // MetaScanner returns nullable metadata columns, even for a non-null cell.
+            const auto& column = block.get_by_position(0).column;
+            const auto* nullable = check_and_get_column<ColumnNullable>(*column);
+            ASSERT_NE(nullable, nullptr);
+            ASSERT_FALSE(nullable->is_null_at(0));
+            EXPECT_EQ(nullable->get_nested_column().get_int(0), value);
+        }
+    }
+
 private:
     class MockBlock : public Block {
         MockBlock() = default;
@@ -187,6 +220,24 @@ private:
             std::make_unique<ThreadPoolSimplifiedScanScheduler>("ForTest", cgroup_cpu_ctl);
     std::atomic<int64_t> shared_limit {-1};
 };
+
+TEST_F(ScannerContextTest, MetadataIntegersAreCheckedBeforeNarrowing) {
+    // One Thrift cell is the smallest remote result. No FE connection or stored row is needed.
+    for (const auto& type : std::vector<DataTypePtr> {std::make_shared<DataTypeInt8>(),
+                                                      std::make_shared<DataTypeInt16>()}) {
+        DescriptorTblBuilder builder(obj_pool.get());
+        builder.declare_tuple() << TupleDescBuilder::SlotType {type, "p"};
+        auto* numeric_descs = builder.build();
+        state->set_desc_tbl(numeric_descs);
+        auto op = std::make_unique<OlapScanOperatorX>(obj_pool.get(), tnode, 0, *descs, 1,
+                                                      TQueryCacheParam {});
+        auto local = OlapScanLocalState::create_unique(state.get(), op.get());
+        const int32_t maximum = type->get_primitive_type() == TYPE_TINYINT ? 127 : 32767;
+        for (int32_t value : {-maximum - 2, -maximum - 1, maximum, maximum + 1}) {
+            check_metadata_integer_cell(local.get(), value, maximum);
+        }
+    }
+}
 
 TEST_F(ScannerContextTest, test_init) {
     const int parallel_tasks = 1;

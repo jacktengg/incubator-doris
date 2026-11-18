@@ -40,7 +40,7 @@ public:
 TEST_F(JsonFunctionTest, array_index_must_fit_int) {
     // These paths formerly became index 0 and the internal no-index marker -1.
     // Parsing the path is sufficient; the test needs no input rows.
-    for (const std::string path : {"$.a[4294967296]", "$.a[4294967295]"}) {
+    for (const std::string path : {"$.a[4294967296]", "$.a[4294967295]", "$.a[2147483648]"}) {
         std::vector<JsonPath> parsed;
         EXPECT_THROW(JsonFunctions::parse_json_paths(path, &parsed), Exception);
     }

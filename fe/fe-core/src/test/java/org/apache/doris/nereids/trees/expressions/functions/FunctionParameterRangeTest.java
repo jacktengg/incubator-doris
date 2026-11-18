@@ -42,6 +42,8 @@ class FunctionParameterRangeTest {
         Assertions.assertTrue(new BigIntLiteral(Long.MIN_VALUE).isValueInRange(Long.MIN_VALUE, Long.MAX_VALUE));
         Assertions.assertTrue(new BigIntLiteral(Long.MAX_VALUE).isValueInRange(0, Long.MAX_VALUE));
         Assertions.assertTrue(new IntegerLiteral(0).isValueInRange(0, 0));
+        Assertions.assertFalse(new LargeIntLiteral(new BigInteger("9223372036854775808"))
+                .isValueInRange(0, Long.MAX_VALUE));
     }
 
     @Test
@@ -51,5 +53,8 @@ class FunctionParameterRangeTest {
                 new IntegerLiteral(7));
         Assertions.assertThrows(AnalysisException.class, stack::getOutputColumnCount);
         Assertions.assertEquals(1, new Stack(new IntegerLiteral(1), new IntegerLiteral(7)).getOutputColumnCount());
+        // Only derive the output schema. No rows or large arrays are created.
+        Stack aboveMaximum = new Stack(new BigIntLiteral(2147483648L), new IntegerLiteral(7));
+        Assertions.assertThrows(AnalysisException.class, aboveMaximum::getOutputColumnCount);
     }
 }

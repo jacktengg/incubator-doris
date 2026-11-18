@@ -419,4 +419,30 @@ TEST(TupleDescriptorTest, FullWidthTableIdsAndLegacyTuple) {
     EXPECT_FALSE(DescriptorTbl::create(&pool, thrift_table, &table).ok());
 }
 
+TEST(TupleDescriptorTest, UnknownTableIdsDoNotUseFullWidthFallback) {
+    // One table is sufficient. A full-width sender's reference 1 is unknown even
+    // though it matches the low bits of 4294967297. Only a legacy sender may recover it.
+    TDescriptorTable thrift_table;
+    TTableDescriptor table;
+    table.__set_id(4294967297LL);
+    table.__set_tableType(TTableType::OLAP_TABLE);
+    thrift_table.tableDescriptors.push_back(table);
+    TTupleDescriptor tuple;
+    tuple.__set_id(0);
+    tuple.__set_tableId(1);
+    thrift_table.tupleDescriptors.push_back(tuple);
+    ObjectPool pool;
+    DescriptorTbl* descriptors = nullptr;
+    thrift_table.__set_full_width_table_ids(true);
+    auto status = DescriptorTbl::create(&pool, thrift_table, &descriptors);
+    EXPECT_NE(status.to_string().find("Unknown table ID 1"), std::string::npos);
+    // An absent reference must fail for both sender versions, rather than bind null.
+    thrift_table.tupleDescriptors[0].__set_tableId(2);
+    for (bool full_width : {false, true}) {
+        thrift_table.__isset.full_width_table_ids = full_width;
+        status = DescriptorTbl::create(&pool, thrift_table, &descriptors);
+        EXPECT_NE(status.to_string().find("Unknown table ID 2"), std::string::npos);
+    }
+}
+
 } // namespace doris

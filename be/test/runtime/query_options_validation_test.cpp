@@ -126,6 +126,8 @@ TEST(QueryOptionsValidationTest, LocalExchangeAndScanRatioRanges) {
         options.__set_max_scan_mem_ratio(value);
         EXPECT_FALSE(validate_query_options(options).ok());
     }
+    options.__set_max_scan_mem_ratio(0.0);
+    EXPECT_TRUE(validate_query_options(options).ok());
     options.__set_max_scan_mem_ratio(1.0);
     EXPECT_TRUE(validate_query_options(options).ok());
 }
@@ -139,6 +141,8 @@ TEST(QueryOptionsValidationTest, CacheAndBloomSentinels) {
     }
     options.__set_file_cache_query_limit_percent(-1);
     EXPECT_TRUE(validate_query_options(options).ok());
+    options.__set_file_cache_query_limit_percent(1);
+    EXPECT_TRUE(validate_query_options(options).ok());
     options.__set_file_cache_query_limit_percent(100);
     // These negative values keep their documented default or unlimited meanings.
     options.__set_mem_limit(-1);
@@ -150,6 +154,8 @@ TEST(QueryOptionsValidationTest, CacheAndBloomSentinels) {
     options.__set_runtime_bloom_filter_min_size(0);
     EXPECT_TRUE(validate_query_options(options).ok());
     options.__set_runtime_bloom_filter_max_size(-1);
+    EXPECT_FALSE(validate_query_options(options).ok());
+    options.__set_runtime_bloom_filter_max_size(0);
     EXPECT_FALSE(validate_query_options(options).ok());
     options.__set_runtime_bloom_filter_max_size(1);
     EXPECT_TRUE(validate_query_options(options).ok());
