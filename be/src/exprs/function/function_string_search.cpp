@@ -261,7 +261,8 @@ public:
 
             auto delimiter = delimiter_col->get_data_at(i);
             auto delimiter_str = delimiter_col->get_data_at(i).to_string();
-            auto part_number = part_num_col_data[i];
+            // A negative number counts from the end. Widen before negating INT_MIN.
+            int64_t part_number = part_num_col_data[i];
             auto str = str_col->get_data_at(i);
             if (delimiter.size == 0) {
                 StringOP::push_empty_string(i, res_chars, res_offsets);
@@ -497,7 +498,8 @@ public:
                     }
                 }
             } else {
-                int neg_part_number = -part_number;
+                // INT_MIN has magnitude 2147483648. Keep that value when counting from the end.
+                int64_t neg_part_number = -static_cast<int64_t>(part_number);
                 auto str_str = str.to_string();
                 int32_t offset = str.size;
                 int32_t pre_offset = offset;
@@ -807,9 +809,14 @@ private:
                     src_column_string.get_data_at(index_check_const<src_const>(i));
             const StringRef pattern_ref =
                     pattern_column.get_data_at(index_check_const<pattern_const>(i));
-            // 1-based index
-            int32_t start_pos =
-                    start_pos_column.get_element(index_check_const<start_pos_const>(i)) - 1;
+            int32_t start_pos = start_pos_column.get_element(index_check_const<start_pos_const>(i));
+            // Nonpositive positions return zero matches. Check before subtracting one,
+            // because INT_MIN - 1 cannot fit int32.
+            if (start_pos <= 0) {
+                dest_column_data[i] = 0;
+                continue;
+            }
+            --start_pos; // Convert the valid one-based index to a zero-based index.
 
             const char* p = str_ref.begin();
             const char* end = str_ref.end();
@@ -817,9 +824,10 @@ private:
             for (size_t j = 0; j < start_pos && p < end; ++j, p += char_size) {
                 char_size = UTF8_BYTE_LENGTH[static_cast<uint8_t>(*p)];
             }
-            const auto start_byte_len = p - str_ref.begin();
+            // The cursor only moves forward, so the byte distance is nonnegative.
+            const auto start_byte_len = static_cast<size_t>(p - str_ref.begin());
 
-            if (start_pos < 0 || start_byte_len >= str_ref.size) {
+            if (start_byte_len >= str_ref.size) {
                 dest_column_data[i] = 0;
             } else {
                 dest_column_data[i] =

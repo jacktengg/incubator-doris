@@ -54,6 +54,20 @@ int main(int argc, char** argv) {
     return RUN_ALL_TESTS();
 }
 
+TEST(ConfigTest, RejectInvalidCandidate) {
+    const auto original = config::s3_get_bucket_tokens;
+    // Only one integer is needed. The old updater validated the old value, accepted -1,
+    // and then rejected the next valid update because the published value was invalid.
+    auto result = config::set_config({{"s3_get_bucket_tokens", "-1"}}, false, "");
+    EXPECT_FALSE(result.first);
+    EXPECT_EQ(config::s3_get_bucket_tokens, original);
+    result = config::set_config({{"s3_get_bucket_tokens", "1"}}, false, "");
+    EXPECT_TRUE(result.first) << result.second;
+    EXPECT_EQ(config::s3_get_bucket_tokens, 1);
+    result = config::set_config({{"s3_get_bucket_tokens", std::to_string(original)}}, false, "");
+    EXPECT_TRUE(result.first) << result.second;
+}
+
 TEST(StringUtilTest, test_string_strip) {
     // clang-format off
     //                       str         expect          to_drop

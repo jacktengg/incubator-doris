@@ -1502,6 +1502,11 @@ private:
     void execute_single(uint64_t bit, const StringRef& on, const StringRef& off,
                         const StringRef& separator, int8_t num_of_bits,
                         ColumnString& res_col) const {
+        // Zero bits produce an empty string. Do not convert the separator count -1 to size_t.
+        if (num_of_bits == 0) {
+            res_col.insert_default();
+            return;
+        }
         ColumnString::Chars data;
         data.reserve(std::max(on.size, off.size) * num_of_bits +
                      separator.size * (num_of_bits - 1));

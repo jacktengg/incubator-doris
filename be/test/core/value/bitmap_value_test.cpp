@@ -890,6 +890,26 @@ TEST(BitmapValueTest, sub_range_limit) {
     config::enable_set_in_bitmap_value = false;
 }
 
+TEST(BitmapValueTest, offset_limit_minimum_negative) {
+    // A singleton must use the same -1 offset as the multi-element representations.
+    BitmapValue singleton(7);
+    BitmapValue last;
+    EXPECT_EQ(singleton.offset_limit(-1, 1, &last), 1);
+    EXPECT_EQ(last.to_string(), "7");
+    const bool previous = config::enable_set_in_bitmap_value;
+    for (bool use_set : {false, true}) {
+        config::enable_set_in_bitmap_value = use_set;
+        // Two elements select SET or BITMAP without extra input data.
+        BitmapValue pair({1, 2});
+        BitmapValue out;
+        EXPECT_EQ(pair.offset_limit(std::numeric_limits<int64_t>::min(), 1, &out), 0);
+        EXPECT_TRUE(out.empty());
+        EXPECT_EQ(pair.offset_limit(-1, 1, &out), 1);
+        EXPECT_EQ(out.to_string(), "2");
+    }
+    config::enable_set_in_bitmap_value = previous;
+}
+
 TEST(BitmapValueTest, offset_limit_negative_cardinality_for_set) {
     config::enable_set_in_bitmap_value = true;
 

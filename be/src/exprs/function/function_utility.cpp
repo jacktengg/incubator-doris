@@ -79,6 +79,15 @@ public:
                 block.get_by_position(arguments[0]).column->convert_to_full_column_if_const();
 
         auto res_column = ColumnUInt8::create(input_rows_count, 0);
+        const auto sleep_for_seconds = [](int seconds) {
+            // A negative duration must not report a successful wait. Zero is a valid no-op.
+            if (seconds < 0) {
+                return Status::InvalidArgument("sleep duration must be nonnegative, but was {}",
+                                               seconds);
+            }
+            std::this_thread::sleep_for(std::chrono::seconds(seconds));
+            return Status::OK();
+        };
 
         if (auto* nullable_column = check_and_get_column<ColumnNullable>(*argument_column)) {
             auto null_map_column = ColumnUInt8::create();
@@ -91,7 +100,7 @@ public:
                     null_map_column->insert(Field::create_field<TYPE_BOOLEAN>(1));
                 } else {
                     int seconds = data_column->get_data()[i];
-                    std::this_thread::sleep_for(std::chrono::seconds(seconds));
+                    RETURN_IF_ERROR(sleep_for_seconds(seconds));
                     null_map_column->insert(Field::create_field<TYPE_BOOLEAN>(0));
                 }
             }
@@ -103,7 +112,7 @@ public:
 
             for (int i = 0; i < input_rows_count; i++) {
                 int seconds = data_column->get_element(i);
-                std::this_thread::sleep_for(std::chrono::seconds(seconds));
+                RETURN_IF_ERROR(sleep_for_seconds(seconds));
             }
 
             block.replace_by_position(result, std::move(res_column));

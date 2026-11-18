@@ -137,6 +137,54 @@ public class ConstantFunctionArgumentTest {
     }
 
     @Test
+    public void testNegativeAndWideFunctionParameters() {
+        // Invalid waits fail during analysis. No positive delay is used in these tests.
+        for (String duration : new String[] {"-1", "-2147483648", "-18446744073709551616", "2147483648"}) {
+            assertAnalysisError("select sleep(" + duration + ")", "sleep duration must be between");
+        }
+        // -2^64 wraps to zero in longValue. No table is needed to reproduce the FE check.
+        assertAnalysisError("select now(-18446744073709551616)", "Precision of NOW must be between");
+        assertAnalysisError("select utc_timestamp(-18446744073709551616)",
+                "Precision of UTC_TIMESTAMP must be between");
+        assertAnalysisError("select utc_time(-18446744073709551616)", "scale must be between 0 and 6");
+        // This negative LARGEINT wraps to 1. The original value must fail before signature coercion.
+        assertAnalysisError("select ngram_search('a', 'a', -18446744073709551615)",
+                "gram_num must be a positive constant");
+        assertAnalysisError("select ntile(-18446744073709551615) over ()",
+                "within the range of BIGINT");
+        assertAnalysisError("select width_bucket(-1, -1, 0, -18446744073709551615)",
+                "number of buckets must be between");
+        assertAnalysisError("select width_bucket(0, -1, 0, 9223372036854775807)",
+                "number of buckets must be between");
+        // A NULL bitmap must not remove a known invalid element argument during folding.
+        for (String function : new String[] {"bitmap_contains", "bitmap_remove"}) {
+            assertAnalysisError("select " + function + "(null, -1)", "element must be between 0");
+            assertAnalysisError("select " + function + "(null, -18446744073709551615)",
+                    "element must be between 0");
+        }
+        assertAnalysisError("select window_funnel_v2(-1, 'default',"
+                + " cast('2024-01-01' as datetime), false)", "window must be a nonnegative BIGINT");
+        assertAnalysisError("select topn_weighted(1, -1, 1)", "weight must be a nonnegative BIGINT");
+        // -2^64 + 7 must not become the valid sketch precision 7.
+        assertAnalysisError("select datasketches_hll_union_agg('', -18446744073709551609)",
+                "requires lg_max_k to be between");
+    }
+
+    @Test
+    public void testRoundingScaleMatchesBackendRange() {
+        // No rows are needed. The constant and NULL paths must reject the same scales as BE.
+        for (String function : new String[] {"round", "round_bankers", "truncate", "floor", "ceil",
+                "dround", "dfloor", "dceil"}) {
+            for (String scale : new String[] {"-32769", "32768", "-18446744073709551616"}) {
+                assertAnalysisError("select " + function + "(cast(1 as double), " + scale + ")",
+                        "Scale argument for function");
+                assertAnalysisError("select " + function + "(null, " + scale + ")",
+                        "Scale argument for function");
+            }
+        }
+    }
+
+    @Test
     public void testScalarFunctionArgumentsAreNotFoldedByAnalysis() {
         // only the rewrite folds an argument whose value the signature does not depend on
         assertFoldedByRewrite("select sha2('abc', 200 + 56)", Sha2.class, 1);

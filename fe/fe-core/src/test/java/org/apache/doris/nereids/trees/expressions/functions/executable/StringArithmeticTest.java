@@ -37,6 +37,19 @@ import org.junit.jupiter.api.Test;
 class StringArithmeticTest {
 
     @Test
+    void testMinimumNegativeStringArguments() {
+        // One separator is enough to reach the old split_part array-index failure.
+        IntegerLiteral minimum = new IntegerLiteral(Integer.MIN_VALUE);
+        Assertions.assertEquals(new NullLiteral(new StringLiteral("a,").getDataType()),
+                StringArithmetic.splitPart(new StringLiteral("a,"), new StringLiteral(","), minimum));
+        // An excessive negative count selects the whole string for substring_index.
+        Assertions.assertEquals(new StringLiteral("a"),
+                StringArithmetic.substringIndex(new StringLiteral("a"), new StringLiteral(","), minimum));
+        // right has a different contract: a position before the string returns empty.
+        Assertions.assertEquals(new StringLiteral(""), StringArithmetic.right(new StringLiteral("a"), minimum));
+    }
+
+    @Test
     void testFieldMatchesFloatNaN() {
         IntegerLiteral result = (IntegerLiteral) StringArithmetic.fieldFloat(new FloatLiteral(Float.NaN),
                 new FloatLiteral(Float.NaN));

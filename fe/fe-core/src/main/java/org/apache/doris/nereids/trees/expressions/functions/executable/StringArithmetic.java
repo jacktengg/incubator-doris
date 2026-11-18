@@ -817,6 +817,8 @@ public class StringArithmetic {
      */
     @ExecFunction(name = "split_part")
     public static Expression splitPart(StringLikeLiteral first, StringLikeLiteral chr, IntegerLiteral number) {
+        // Negative positions count from the end. INT_MIN has magnitude 2147483648, not a negative index.
+        long magnitude = Math.abs((long) number.getValue());
         if (number.getValue() == 0) {
             return new NullLiteral(first.getDataType());
         }
@@ -827,7 +829,7 @@ public class StringArithmetic {
             return new NullLiteral(first.getDataType());
         }
         if (first.getValue().equals(chr.getValue())) {
-            if (Math.abs(number.getValue()) == 1 || Math.abs(number.getValue()) == 2) {
+            if (magnitude == 1 || magnitude == 2) {
                 return castStringLikeLiteral(first, "");
             } else {
                 return new NullLiteral(first.getDataType());
@@ -847,10 +849,10 @@ public class StringArithmetic {
             parts = first.getValue().split(Pattern.quote(separator), -1);
         }
 
-        if (parts.length < Math.abs(number.getValue())) {
+        if (parts.length < magnitude) {
             return new NullLiteral(first.getDataType());
         } else if (number.getValue() < 0) {
-            StringBuilder result = new StringBuilder(parts[Math.abs(number.getValue()) - 1]);
+            StringBuilder result = new StringBuilder(parts[(int) magnitude - 1]);
             return castStringLikeLiteral(first, result.reverse().toString());
         } else {
             return castStringLikeLiteral(first, parts[number.getValue() - 1]);
@@ -866,7 +868,8 @@ public class StringArithmetic {
             return chr;
         }
         String[] parts = first.getValue().split(Pattern.quote(chr.getValue()), -1);
-        if (Math.abs(number.getValue()) >= parts.length) {
+        // Widen before abs. A count of INT_MIN exceeds every valid part count and returns the full string.
+        if (Math.abs((long) number.getValue()) >= parts.length) {
             return first;
         }
         int leftIndex;

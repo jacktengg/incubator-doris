@@ -18,9 +18,12 @@
 package org.apache.doris.nereids.trees.expressions.functions.scalar;
 
 import org.apache.doris.catalog.FunctionSignature;
+import org.apache.doris.nereids.exceptions.AnalysisException;
+import org.apache.doris.nereids.rules.expression.rules.FoldConstantRuleOnFE;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.functions.ExplicitlyCastableSignature;
 import org.apache.doris.nereids.trees.expressions.functions.PropagateNullable;
+import org.apache.doris.nereids.trees.expressions.literal.IntegerLikeLiteral;
 import org.apache.doris.nereids.trees.expressions.shape.UnaryExpression;
 import org.apache.doris.nereids.trees.expressions.visitor.ExpressionVisitor;
 import org.apache.doris.nereids.types.BooleanType;
@@ -60,6 +63,17 @@ public class Sleep extends ScalarFunction
     public Sleep withChildren(List<Expression> children) {
         Preconditions.checkArgument(children.size() == 1);
         return new Sleep(getFunctionParams(children));
+    }
+
+    @Override
+    public void checkLegalityBeforeTypeCoercion() {
+        // Check the original duration. For example, -2^64 must not become a zero-second wait.
+        Expression duration = FoldConstantRuleOnFE.evaluateWithoutContext(getArgument(0));
+        if (duration instanceof IntegerLikeLiteral
+                && !((IntegerLikeLiteral) duration).isValueInRange(0, Integer.MAX_VALUE)) {
+            throw new AnalysisException("sleep duration must be between 0 and " + Integer.MAX_VALUE
+                    + ", but was " + duration.toSql());
+        }
     }
 
     @Override

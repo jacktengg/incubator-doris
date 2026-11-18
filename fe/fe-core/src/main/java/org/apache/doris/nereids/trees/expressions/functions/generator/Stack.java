@@ -114,12 +114,13 @@ public class Stack extends TableGeneratingFunction implements CustomSignature, C
             throw new AnalysisException("The first argument of stack must be a positive constant integer, but got: "
                     + numRowsArgument.toSql());
         }
-        long numRowsValue = ((IntegerLikeLiteral) evaluated).getLongValue();
-        if (numRowsValue <= 0 || numRowsValue > Integer.MAX_VALUE) {
+        // The row count determines output columns. Check LARGEINT before narrowing to int.
+        IntegerLikeLiteral numRowsValue = (IntegerLikeLiteral) evaluated;
+        if (!numRowsValue.isValueInRange(1, Integer.MAX_VALUE)) {
             throw new AnalysisException("The first argument of stack must be in (0, " + Integer.MAX_VALUE
-                    + "], but got: " + numRowsValue);
+                    + "], but got: " + numRowsValue.getValue());
         }
-        return (int) numRowsValue;
+        return numRowsValue.getIntValue();
     }
 
     /** Return the number of logical output columns derived from the row count and value arguments. */

@@ -2783,8 +2783,8 @@ public:
         case EMPTY:
             return 0;
         case SINGLE: {
-            //only single value, so offset must start 0
-            if (offset == 0) {
+            // Both 0 and -1 select the only element, as they do in the SET and BITMAP forms.
+            if (offset == 0 || offset == -1) {
                 ret_bitmap->add(_sv);
                 return 1;
             } else {
@@ -2794,17 +2794,17 @@ public:
         default:
             break;
         }
+        // INT64_MIN cannot be negated in int64. Keep its magnitude unsigned before comparing.
+        const uint64_t distance = offset < 0 ? static_cast<uint64_t>(-(offset + 1)) + 1
+                                             : static_cast<uint64_t>(offset);
+        const uint64_t count_all = cardinality();
+        if (distance > count_all) {
+            return 0;
+        }
+        const uint64_t abs_offset = offset < 0 ? count_all - distance : distance;
         if (_type == BITMAP) {
-            if (std::abs(offset) > _bitmap->cardinality()) {
-                return 0;
-            }
-            int64_t abs_offset = offset;
-            if (offset < 0) {
-                abs_offset = _bitmap->cardinality() + offset;
-            }
-
             int64_t count = 0;
-            int64_t offset_count = 0;
+            uint64_t offset_count = 0;
             auto it = _bitmap->begin();
             for (; it != _bitmap->end() && offset_count < abs_offset; ++it) {
                 ++offset_count;
@@ -2814,14 +2814,6 @@ public:
             }
             return count;
         } else {
-            if (std::abs(offset) > _set.size() || limit <= 0) {
-                return 0;
-            }
-
-            int64_t abs_offset = offset;
-            if (offset < 0) {
-                abs_offset = _set.size() + offset;
-            }
             if (abs_offset >= _set.size()) {
                 return 0;
             }

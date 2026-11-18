@@ -83,25 +83,36 @@ void slice_array(ColumnArrayMutableData& dst, ColumnArrayExecutionData& src,
     for (size_t row = 0; row < src.offsets_ptr->size(); ++row) {
         size_t off = (*src.offsets_ptr)[row - 1];
         size_t len = (*src.offsets_ptr)[row] - off;
-        Int64 start = offset_column.get_int(row);
-        if (len == 0 || start == 0) {
+        const Int64 position = offset_column.get_int(row);
+        if (len == 0 || position == 0) {
             dst.offsets_ptr->push_back(cur);
             continue;
         }
-        if (start > 0 && start <= len) {
-            start += off - 1;
-        } else if (start < 0 && -start <= len) {
-            start += off + len;
+        size_t start;
+        if (position > 0 && std::cmp_less_equal(position, len)) {
+            start = off + static_cast<size_t>(position) - 1;
+        } else if (position < 0) {
+            // Negate after adding one so INT64_MIN has a valid unsigned magnitude.
+            const UInt64 distance = static_cast<UInt64>(-(position + 1)) + 1;
+            if (distance > len) {
+                dst.offsets_ptr->push_back(cur);
+                continue;
+            }
+            start = off + len - distance;
         } else {
             dst.offsets_ptr->push_back(cur);
             continue;
         }
-        Int64 end;
+        size_t end = off + len;
         if (length_column) {
-            Int64 size = length_column->get_int(row);
-            end = std::max((Int64)off, std::min((Int64)(off + len), start + size));
-        } else {
-            end = off + len;
+            const Int64 size = length_column->get_int(row);
+            // Nonpositive lengths produce an empty array. Do not add a signed length to start.
+            if (size <= 0) {
+                dst.offsets_ptr->push_back(cur);
+                continue;
+            }
+            // Clamp before addition. For [1, 2], position 2 and INT64_MAX length select [2].
+            end = start + std::min(static_cast<size_t>(size), end - start);
         }
         for (size_t pos = start; pos < end; ++pos) {
             if (src.nested_nullmap_data && src.nested_nullmap_data[pos]) {

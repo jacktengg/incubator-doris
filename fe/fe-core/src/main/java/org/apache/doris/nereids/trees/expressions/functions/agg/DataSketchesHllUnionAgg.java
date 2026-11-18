@@ -19,6 +19,7 @@ package org.apache.doris.nereids.trees.expressions.functions.agg;
 
 import org.apache.doris.catalog.FunctionSignature;
 import org.apache.doris.nereids.exceptions.AnalysisException;
+import org.apache.doris.nereids.rules.expression.rules.FoldConstantRuleOnFE;
 import org.apache.doris.nereids.trees.expressions.Expression;
 import org.apache.doris.nereids.trees.expressions.functions.ExplicitlyCastableSignature;
 import org.apache.doris.nereids.trees.expressions.functions.Function;
@@ -95,6 +96,9 @@ public class DataSketchesHllUnionAgg extends NotNullableAggregateFunction
             throw new AnalysisException(getName()
                     + " requires lg_max_k to be a constant integer: " + this.toSql());
         }
+        if (arity() == 2) {
+            checkLgMaxKValue(FoldConstantRuleOnFE.evaluateWithoutContext(getArgument(1)));
+        }
     }
 
     @Override
@@ -106,10 +110,15 @@ public class DataSketchesHllUnionAgg extends NotNullableAggregateFunction
         if (!(lgMaxK instanceof IntegerLikeLiteral)) {
             throw new AnalysisException(getName() + " requires lg_max_k to be a constant integer: " + this.toSql());
         }
-        long value = ((IntegerLikeLiteral) lgMaxK).getLongValue();
-        if (value < MIN_LG_MAX_K || value > MAX_LG_MAX_K) {
+        checkLgMaxKValue(lgMaxK);
+    }
+
+    private void checkLgMaxKValue(Expression lgMaxK) {
+        // Validate before coercion too; longValue can discard the high bits of LARGEINT.
+        if (lgMaxK instanceof IntegerLikeLiteral
+                && !((IntegerLikeLiteral) lgMaxK).isValueInRange(MIN_LG_MAX_K, MAX_LG_MAX_K)) {
             throw new AnalysisException(getName() + " requires lg_max_k to be between "
-                    + MIN_LG_MAX_K + " and " + MAX_LG_MAX_K + ", but was " + value);
+                    + MIN_LG_MAX_K + " and " + MAX_LG_MAX_K + ", but was " + lgMaxK.toSql());
         }
     }
 

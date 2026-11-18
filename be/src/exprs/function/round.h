@@ -20,6 +20,7 @@
 
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <memory>
 
@@ -302,7 +303,7 @@ public:
         return roundWithMode<tie_breaking_mode>(val, mode);
     }
 
-    static VectorType prepare(size_t scale) { return load1(scale); }
+    static VectorType prepare(T scale) { return load1(scale); }
 };
 
 /** Implementation of low-level round-off functions for floating-point values.
@@ -316,11 +317,39 @@ public:
     static inline void compute(const T* __restrict in, const typename Base::VectorType& scale,
                                T* __restrict out) {
         auto val = Base::load(in);
-
-        if (scale_mode == ScaleMode::Positive) {
+        if (!std::isfinite(val)) {
+            Base::store(out, val);
+            return;
+        }
+        if constexpr (scale_mode == ScaleMode::Positive) {
+            // A factor or product above the floating range cannot change a fractional digit.
+            if (!std::isfinite(scale) || !std::isfinite(val * scale)) {
+                Base::store(out, val);
+                return;
+            }
             val = Base::multiply(val, scale);
-        } else if (scale_mode == ScaleMode::Negative) {
+        } else if constexpr (scale_mode == ScaleMode::Negative) {
+            if (!std::isfinite(scale)) {
+                // For example, round(1, -309) is zero. Directed rounding may exceed DOUBLE.
+                if ((rounding_mode == RoundingMode::Ceil && val > 0) ||
+                    (rounding_mode == RoundingMode::Floor && val < 0)) {
+                    throw Exception(ErrorCode::ARITHMETIC_OVERFLOW_ERRROR,
+                                    "Arithmetic overflow in floating rounding result");
+                }
+                Base::store(out, std::copysign(T(0), val));
+                return;
+            }
             val = Base::divide(val, scale);
+            // A tiny nonzero quotient can underflow. Preserve its direction for FLOOR and CEIL.
+            if (val == 0 && *in != 0) {
+                if constexpr (rounding_mode == RoundingMode::Floor) {
+                    Base::store(out, *in < 0 ? -scale : T(0));
+                    return;
+                } else if constexpr (rounding_mode == RoundingMode::Ceil) {
+                    Base::store(out, *in > 0 ? scale : T(0));
+                    return;
+                }
+            }
         }
 
         val = Base::template apply<rounding_mode>(val);
@@ -329,6 +358,11 @@ public:
             val = Base::divide(val, scale);
         } else if (scale_mode == ScaleMode::Negative) {
             val = Base::multiply(val, scale);
+            // For example, ceil(1.7e308, -308) needs 2e308, which DOUBLE cannot store.
+            if (!std::isfinite(val)) {
+                throw Exception(ErrorCode::ARITHMETIC_OVERFLOW_ERRROR,
+                                "Arithmetic overflow in floating rounding result");
+            }
         }
 
         Base::store(out, val);
@@ -350,7 +384,7 @@ private:
     using Container = typename ColumnType::Container;
 
 public:
-    static NO_INLINE void apply(const Container& in, size_t scale, Container& out) {
+    static NO_INLINE void apply(const Container& in, T scale, Container& out) {
         auto mm_scale = Op::prepare(scale);
 
         const size_t data_count = std::tuple_size<Data>();
@@ -379,7 +413,7 @@ public:
         }
     }
 
-    static NO_INLINE void apply(const T& in, size_t scale, T& out) {
+    static NO_INLINE void apply(const T& in, T scale, T& out) {
         auto mm_scale = Op::prepare(scale);
         Op::compute(&in, mm_scale, &out);
     }
@@ -476,6 +510,19 @@ struct Dispatcher {
                     FloatRoundingImpl<T, rounding_mode, scale_mode, tie_breaking_mode>,
                     IntegerRoundingImpl<T, rounding_mode, scale_mode, tie_breaking_mode>>>;
 
+    static auto scale_factor(Int32 exponent) {
+        if constexpr (is_float_or_double(T) || T == TYPE_TIMEV2) {
+            // Keep the table lookup for common scales. 10^20 no longer fits in uint64,
+            // so larger floating factors must not use int_exp10's saturation.
+            if (exponent <= 19) {
+                return static_cast<double>(int_exp10(exponent));
+            }
+            return std::pow(10.0, exponent);
+        } else {
+            return int_exp10(exponent);
+        }
+    }
+
     // scale_arg: scale for function computation
     // result_scale: scale for result decimal, this scale is got from planner
     static ColumnPtr apply_vec_const(const IColumn* col_general, const Int16 scale_arg,
@@ -493,11 +540,11 @@ struct Dispatcher {
                     size_t scale = 1;
                     FunctionRoundingImpl<ScaleMode::Zero>::apply(col->get_data(), scale, vec_res);
                 } else if (scale_arg > 0) {
-                    size_t scale = int_exp10(scale_arg);
+                    auto scale = scale_factor(scale_arg);
                     FunctionRoundingImpl<ScaleMode::Positive>::apply(col->get_data(), scale,
                                                                      vec_res);
                 } else {
-                    size_t scale = int_exp10(-scale_arg);
+                    auto scale = scale_factor(-scale_arg);
                     FunctionRoundingImpl<ScaleMode::Negative>::apply(col->get_data(), scale,
                                                                      vec_res);
                 }
@@ -564,11 +611,11 @@ struct Dispatcher {
                     FunctionRoundingImpl<ScaleMode::Zero>::apply(col->get_data()[i], scale,
                                                                  vec_res[i]);
                 } else if (scale_arg > 0) {
-                    size_t scale = int_exp10(scale_arg);
+                    auto scale = scale_factor(scale_arg);
                     FunctionRoundingImpl<ScaleMode::Positive>::apply(col->get_data()[i], scale,
                                                                      vec_res[i]);
                 } else {
-                    size_t scale = int_exp10(-scale_arg);
+                    auto scale = scale_factor(-scale_arg);
                     FunctionRoundingImpl<ScaleMode::Negative>::apply(col->get_data()[i], scale,
                                                                      vec_res[i]);
                 }
@@ -670,11 +717,11 @@ struct Dispatcher {
                     size_t scale = 1;
                     FunctionRoundingImpl<ScaleMode::Zero>::apply(general_val, scale, vec_res[i]);
                 } else if (scale_arg > 0) {
-                    size_t scale = int_exp10(col_scale_i32.get_data()[i]);
+                    auto scale = scale_factor(col_scale_i32.get_data()[i]);
                     FunctionRoundingImpl<ScaleMode::Positive>::apply(general_val, scale,
                                                                      vec_res[i]);
                 } else {
-                    size_t scale = int_exp10(-col_scale_i32.get_data()[i]);
+                    auto scale = scale_factor(-col_scale_i32.get_data()[i]);
                     FunctionRoundingImpl<ScaleMode::Negative>::apply(general_val, scale,
                                                                      vec_res[i]);
                 }

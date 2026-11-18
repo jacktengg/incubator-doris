@@ -40,7 +40,8 @@
 namespace doris::cloud::config {
 
 std::map<std::string, Register::Field>* Register::_s_field_map = nullptr;
-std::map<std::string, std::function<bool()>>* RegisterConfValidator::_s_field_validator = nullptr;
+std::map<std::string, std::function<bool(const void*)>>* RegisterConfValidator::_s_field_validator =
+        nullptr;
 std::map<std::string, std::string>* full_conf_map = nullptr;
 std::shared_mutex mutable_string_config_lock;
 std::mutex conf_persist_lock;
@@ -319,18 +320,16 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& v) {
             continue;                                                                          \
         }                                                                                      \
         TYPE& ref_conf_value = *reinterpret_cast<TYPE*>((FIELD).storage);                      \
-        TYPE old_value = ref_conf_value;                                                       \
-        ref_conf_value = new_value;                                                            \
         if (RegisterConfValidator::_s_field_validator != nullptr) {                            \
             auto validator = RegisterConfValidator::_s_field_validator->find((FIELD).name);    \
             if (validator != RegisterConfValidator::_s_field_validator->end() &&               \
-                !(validator->second)()) {                                                      \
-                ref_conf_value = old_value;                                                    \
+                !(validator->second)(&new_value)) {                                            \
                 std::cerr << "validate " << (FIELD).name << "=" << new_value << " failed"      \
                           << std::endl;                                                        \
                 return false;                                                                  \
             }                                                                                  \
         }                                                                                      \
+        ref_conf_value = new_value;                                                            \
         if (FILL_CONF_MAP) {                                                                   \
             std::ostringstream oss;                                                            \
             oss << ref_conf_value;                                                             \
@@ -347,12 +346,10 @@ std::ostream& operator<<(std::ostream& out, const std::vector<T>& v) {
             return false;                                                                   \
         }                                                                                   \
         TYPE& ref_conf_value = *reinterpret_cast<TYPE*>((FIELD).storage);                   \
-        TYPE old_value = ref_conf_value;                                                    \
         if (RegisterConfValidator::_s_field_validator != nullptr) {                         \
             auto validator = RegisterConfValidator::_s_field_validator->find((FIELD).name); \
             if (validator != RegisterConfValidator::_s_field_validator->end() &&            \
-                !(validator->second)()) {                                                   \
-                ref_conf_value = old_value;                                                 \
+                !(validator->second)(&new_value)) {                                         \
                 std::cerr << "validate " << (FIELD).name << "=" << new_value << " failed"   \
                           << std::endl;                                                     \
                 return false;                                                               \

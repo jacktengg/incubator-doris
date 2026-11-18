@@ -17,6 +17,7 @@
 
 package org.apache.doris.transaction;
 
+import org.apache.doris.common.Config;
 import org.apache.doris.common.FeMetaVersion;
 import org.apache.doris.common.jmockit.Deencapsulation;
 import org.apache.doris.load.EtlStatus;
@@ -54,6 +55,28 @@ public class TransactionStateTest {
     private static String fileName = "./TransactionStateTest";
     private static String fileName2 = "./TransactionStateTest2";
     private static String fileName3 = "./TransactionStateTest3";
+
+    @Test
+    public void testLargeDefaultTimeoutKeepsPositiveMilliseconds() {
+        int originalTimeout = Config.stream_load_default_timeout_second;
+        int originalPrecommit = Config.stream_load_default_precommit_timeout_second;
+        try {
+            // This is the smallest positive second count whose int millisecond product is negative.
+            // No load, table, or clock wait is required. One in-memory transaction is sufficient.
+            Config.stream_load_default_timeout_second = 2147484;
+            Config.stream_load_default_precommit_timeout_second = 2147484;
+            TransactionState state = new TransactionState();
+            Assertions.assertEquals(2147484000L, state.getTimeoutMs());
+            state.setTransactionStatus(TransactionStatus.PRECOMMITTED);
+            state.setPreCommitTime(1);
+            Assertions.assertFalse(state.isTimeout(1));
+            Assertions.assertFalse(state.isTimeout(2147484001L));
+            Assertions.assertTrue(state.isTimeout(2147484002L));
+        } finally {
+            Config.stream_load_default_timeout_second = originalTimeout;
+            Config.stream_load_default_precommit_timeout_second = originalPrecommit;
+        }
+    }
 
     @AfterEach
     public void tearDown() {

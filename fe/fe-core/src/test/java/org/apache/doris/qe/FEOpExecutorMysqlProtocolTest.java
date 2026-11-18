@@ -207,6 +207,37 @@ public class FEOpExecutorMysqlProtocolTest {
         }
     }
 
+    @Test
+    public void testLargeForwardTimeoutStaysPositive() {
+        ConnectContext context = Mockito.spy(createContext());
+        // This is the first second count whose int millisecond product becomes negative.
+        Mockito.doReturn(2147484).when(context).getExecTimeoutS();
+        TestFEOpExecutor executor = new TestFEOpExecutor(context);
+        Assertions.assertEquals(Integer.MAX_VALUE, executor.thriftTimeoutMs);
+    }
+
+    @Test
+    public void testAffectedRowsRetainsRpcWidth() throws Exception {
+        ConnectContext context = createContext();
+        TMasterOpResult response = new TMasterOpResult();
+        // One RPC field reproduces the first positive int32 overflow. No rows are loaded.
+        response.setAffectedRows(2147483648L);
+        FEOpExecutor executor = new FEOpExecutor(new TNetworkAddress("127.0.0.1", 9010),
+                new OriginStatement("insert into t select 1", 0), context, false) {
+            @Override
+            protected TMasterOpRequest buildStmtForwardParams() {
+                return new TMasterOpRequest();
+            }
+
+            @Override
+            protected TMasterOpResult forward(TMasterOpRequest request) {
+                return response;
+            }
+        };
+        executor.execute();
+        Assertions.assertEquals(2147483648L, context.getReturnRows());
+    }
+
     private ConnectContext createContext() {
         ConnectContext context = new ConnectContext();
         context.setCurrentUserIdentity(UserIdentity.createAnalyzedUserIdentWithIp("alice", "%"));

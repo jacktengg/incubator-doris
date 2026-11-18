@@ -74,13 +74,12 @@ public class UtcTime extends ScalarFunction
     public FunctionSignature computeSignature(FunctionSignature signature) {
         signature = super.computeSignature(signature);
         if (arity() == 1 && getArgument(0) instanceof IntegerLikeLiteral) {
-            // prepareBeforeTypeCoercion folds a TINYINT or SMALLINT scale into a literal of that type, and a
-            // wider literal is read in full so that the range check rejects it instead of narrowing it
-            long scale = ((IntegerLikeLiteral) getArgument(0)).getLongValue();
-            if (scale < 0 || scale > 6) {
+            // Check the full literal before narrowing. For example, -2^64 is not precision zero.
+            IntegerLikeLiteral scale = (IntegerLikeLiteral) getArgument(0);
+            if (!scale.isValueInRange(0, 6)) {
                 throw new AnalysisException("scale must be between 0 and 6");
             }
-            return signature.withReturnType(TimeV2Type.of((int) scale));
+            return signature.withReturnType(TimeV2Type.of(scale.getIntValue()));
         }
 
         return signature;

@@ -286,7 +286,10 @@ public:
         }
 
         for (int i = 0; i < input_rows_count; ++i) {
-            index_data[i] = std::max(-pos_data[i], -strlen_data[i]);
+            // Negative positions beyond the string return empty. Check before negation:
+            // -INT_MIN cannot fit int32 and previously selected the entire string.
+            index_data[i] =
+                    pos_data[i] < -strlen_data[i] ? 0 : std::max(-pos_data[i], -strlen_data[i]);
         }
 
         block.insert({std::move(params1), int_type, "index"});

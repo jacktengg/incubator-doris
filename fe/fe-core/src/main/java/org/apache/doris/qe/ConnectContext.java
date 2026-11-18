@@ -878,7 +878,7 @@ public class ConnectContext {
         return backendSelectionProfile;
     }
 
-    public void updateReturnRows(int returnRows) {
+    public void updateReturnRows(long returnRows) {
         this.returnRows += returnRows;
     }
 

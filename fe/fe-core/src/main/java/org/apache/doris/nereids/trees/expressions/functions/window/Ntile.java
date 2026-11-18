@@ -102,7 +102,9 @@ public class Ntile extends WindowFunction implements LeafExpression, AlwaysNotNu
     }
 
     private void checkPositiveBucket(Expression bucket) {
-        if (!(bucket instanceof IntegerLikeLiteral) || ((IntegerLikeLiteral) bucket).getLongValue() <= 0) {
+        // The BE bucket is BIGINT. A wider negative literal must not wrap to a positive bucket.
+        if (!(bucket instanceof IntegerLikeLiteral)
+                || !((IntegerLikeLiteral) bucket).isValueInRange(1, Long.MAX_VALUE)) {
             throw new AnalysisException(
                 "The bucket parameter of NTILE must be a constant positive integer: " + this.toSql());
         }
