@@ -674,10 +674,14 @@ public abstract class RoutineLoadJob
 
     @Override
     public int getTimeout() {
-        int timeoutSec = (int) getMaxBatchIntervalS() * Config.routine_load_task_timeout_multiplier;
-        int realTimeoutSec = timeoutSec < Config.routine_load_task_min_timeout_sec
-                    ? Config.routine_load_task_min_timeout_sec : timeoutSec;
-        return realTimeoutSec;
+        return taskTimeoutSeconds(getMaxBatchIntervalS(), Config.routine_load_task_min_timeout_sec);
+    }
+
+    public static int taskTimeoutSeconds(long batchSeconds, int minimumSeconds) {
+        // The execution plan stores seconds in an i32. Bound the interval before the
+        // multiplication so a BIGINT interval cannot overflow a Java long either.
+        long seconds = Math.min(batchSeconds, Integer.MAX_VALUE) * Config.routine_load_task_timeout_multiplier;
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(seconds, minimumSeconds));
     }
 
     @Override
@@ -698,7 +702,10 @@ public abstract class RoutineLoadJob
     }
 
     public long getMaxBatchIntervalS() {
-        return maxBatchIntervalS;
+        // Historical metadata and ALTER logs can contain Long.MAX_VALUE seconds. BE consumers
+        // use int64 milliseconds, so cap the effective interval. Keep the stored value for SHOW
+        // and replay. New CREATE and ALTER statements reject values above this bound.
+        return Math.min(maxBatchIntervalS, CreateRoutineLoadInfo.MAX_BATCH_INTERVAL_SECONDS);
     }
 
     public long getMaxBatchRows() {
