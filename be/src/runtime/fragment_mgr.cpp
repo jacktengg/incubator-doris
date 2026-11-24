@@ -75,6 +75,7 @@
 #include "runtime/exec_env.h"
 #include "runtime/frontend_info.h"
 #include "runtime/query_context.h"
+#include "runtime/query_options_validation.h"
 #include "runtime/runtime_profile.h"
 #include "runtime/runtime_query_statistics_mgr.h"
 #include "runtime/runtime_state.h"
@@ -481,6 +482,10 @@ Status FragmentMgr::_get_or_create_query_ctx(const TPipelineFragmentParams& para
                                              const TPipelineFragmentParamsList& parent,
                                              QuerySource query_source,
                                              std::shared_ptr<QueryContext>& query_ctx) {
+    RETURN_IF_ERROR(validate_query_options(params.query_options));
+    if (params.fragment.__isset.query_cache_param) {
+        RETURN_IF_ERROR(validate_query_cache_parameters(params.fragment.query_cache_param));
+    }
     auto query_id = params.query_id;
     DBUG_EXECUTE_IF("FragmentMgr._get_query_ctx.failed", {
         return Status::InternalError("FragmentMgr._get_query_ctx.failed, query id {}",
@@ -1120,7 +1125,11 @@ Status FragmentMgr::exec_external_plan_fragment(const TScanOpenParams& params,
     exec_fragment_params.local_params.push_back(fragment_exec_params);
     TQueryOptions query_options;
     query_options.batch_size = params.batch_size;
-    query_options.execution_timeout = params.execution_timeout;
+    // An omitted external timeout has a generated value of zero. Keep the query-option default
+    // in that case. Copy explicit values so validation still rejects zero and negative timeouts.
+    if (params.__isset.execution_timeout) {
+        query_options.__set_execution_timeout(params.execution_timeout);
+    }
     query_options.mem_limit = params.mem_limit;
     query_options.__isset.mem_limit = params.__isset.mem_limit;
     query_options.query_type = TQueryType::EXTERNAL;

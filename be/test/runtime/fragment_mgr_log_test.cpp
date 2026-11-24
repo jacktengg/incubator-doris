@@ -19,6 +19,7 @@
 #include <gen_cpp/PaloInternalService_types.h>
 #include <gtest/gtest.h>
 
+#include <limits>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -130,14 +131,46 @@ TEST_F(FragmentMgrLogTest, ExternalRequestOmitsDescriptorCredentials) {
     instance_id.__set_lo(0xef01);
     std::vector<TScanColumnDesc> selected_columns;
 
-    const auto status = _fragment_mgr->exec_external_plan_fragment(
-            TScanOpenParams {}, query_plan, query_id, instance_id, &selected_columns);
+    TScanOpenParams params;
+    // Keep an explicit positive timeout for the log checks. ExternalRequestTimeoutPresence
+    // covers omission and rejection of explicitly invalid values.
+    params.__set_execution_timeout(60);
+    const auto status = _fragment_mgr->exec_external_plan_fragment(params, query_plan, query_id,
+                                                                   instance_id, &selected_columns);
     EXPECT_FALSE(status.ok());
     EXPECT_NE(std::string::npos, status.to_string().find("FragmentMgr._get_query_ctx.failed"));
     const auto log = messages();
     EXPECT_NE(std::string::npos, log.find("query_id=1234-5678, fragment_instance_id=abcd-ef01"));
     EXPECT_NE(std::string::npos, log.find("external exec_plan_fragment query_id=1234-5678"));
     EXPECT_EQ(std::string::npos, log.find("synthetic-"));
+}
+
+TEST_F(FragmentMgrLogTest, ExternalRequestTimeoutPresence) {
+    // No rows or query execution are needed. The existing debug point runs after option validation.
+    // An omitted optional timeout must reach it, while explicit zero and negative values must fail.
+    TQueryPlanInfo query_plan;
+    query_plan.__set_desc_tbl(credential_descriptors());
+    std::vector<TScanColumnDesc> selected_columns;
+    auto submit = [&](const TScanOpenParams& params) {
+        return _fragment_mgr->exec_external_plan_fragment(params, query_plan, TUniqueId {},
+                                                          TUniqueId {}, &selected_columns);
+    };
+    TScanOpenParams params;
+    ASSERT_FALSE(params.__isset.execution_timeout);
+    EXPECT_NE(std::string::npos,
+              submit(params).to_string().find("FragmentMgr._get_query_ctx.failed"));
+    for (int timeout : {1, std::numeric_limits<int32_t>::max()}) {
+        SCOPED_TRACE(timeout);
+        params.__set_execution_timeout(timeout);
+        EXPECT_NE(std::string::npos,
+                  submit(params).to_string().find("FragmentMgr._get_query_ctx.failed"));
+    }
+    for (int timeout : {-1, 0}) {
+        SCOPED_TRACE(timeout);
+        params.__set_execution_timeout(timeout);
+        EXPECT_NE(std::string::npos,
+                  submit(params).to_string().find("execution_timeout must be > 0"));
+    }
 }
 
 } // namespace doris
