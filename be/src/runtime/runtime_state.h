@@ -58,8 +58,11 @@ class ObjStorageFileSystem;
 } // namespace io
 class RuntimeFilter;
 
+int32_t timeout_ms_for_int32(int64_t seconds);
+
 inline int32_t get_execution_rpc_timeout_ms(int32_t execution_timeout_sec) {
-    return std::min(config::execution_max_rpc_timeout_sec, execution_timeout_sec) * 1000;
+    return timeout_ms_for_int32(
+            std::min(config::execution_max_rpc_timeout_sec, execution_timeout_sec));
 }
 
 class PipelineXLocalStateBase;
