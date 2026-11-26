@@ -834,7 +834,8 @@ public class Config extends ConfigBase {
     @ConfField public static String locale = "zh_CN.UTF-8";
 
     // default timeout of backup job
-    @ConfField(mutable = true, masterOnly = true)
+    // A negative duration expires a newly created task immediately.
+    @ConfField(minValue = "0", mutable = true, masterOnly = true)
     public static int backup_job_default_timeout_ms = 86400 * 1000; // 1 day
 
     /**
@@ -1724,7 +1725,9 @@ public class Config extends ConfigBase {
             + "to enable " + "cloud " + "restore " + "job.", varType = VariableAnnotation.EXPERIMENTAL)
     public static boolean enable_cloud_restore_job = false;
 
-    @ConfField(mutable = true, masterOnly = true, description = "During the cloud restore job, the maximum number of "
+    // For example, a batch size of -1 moves the snapshot or tablet cursor backwards.
+    @ConfField(minValue = "1", mutable = true, masterOnly = true,
+            description = "During the cloud restore job, the maximum number of "
             + "tablets created per create-tablets RPC. Default is " + "256.")
     public static int cloud_restore_create_tablet_batch_size = 256;
 
@@ -2924,22 +2927,32 @@ public class Config extends ConfigBase {
             + "password `*A00C34073A26B40AB4307650BFB9309D6BFA6999`")
     public static String initial_root_password = "";
 
-    @ConfField(mutable = true, masterOnly = true, description = "The maximum number of snapshots assigned to an "
+    // For example, a batch size of -1 moves the snapshot or tablet cursor backwards.
+    @ConfField(minValue = "1", mutable = true, masterOnly = true,
+            description = "The maximum number of snapshots assigned to an "
             + "upload task during the backup process. The default " + "value is 10.")
     public static int backup_upload_snapshot_batch_size = 10;
 
-    @ConfField(mutable = true, masterOnly = true, description = "The maximum number of snapshots assigned to a "
+    // For example, a batch size of -1 moves the snapshot or tablet cursor backwards.
+    @ConfField(minValue = "1", mutable = true, masterOnly = true,
+            description = "The maximum number of snapshots assigned to a "
             + "download task during the restore process. The " + "default value is 10.")
     public static int restore_download_snapshot_batch_size = 10;
 
-    @ConfField(mutable = true, masterOnly = true, description = "The maximum number of batched tasks per RPC assigned "
+    // AgentBatchTask requires a positive batch size before it splits RPC requests.
+    @ConfField(minValue = "1", mutable = true, masterOnly = true,
+            description = "The maximum number of batched tasks per RPC assigned "
             + "to each BE during the backup/restore process. The " + "default value is 10000.")
     public static int backup_restore_batch_task_num_per_rpc = 10000;
 
-    @ConfField(mutable = true, masterOnly = true, description = "The number of concurrent restore tasks per BE.")
+    // A nonpositive capacity sends no snapshot task and leaves the job waiting.
+    @ConfField(minValue = "1", mutable = true, masterOnly = true,
+            description = "The number of concurrent restore tasks per BE.")
     public static int restore_task_concurrency_per_be = 5000;
 
-    @ConfField(mutable = true, description = "The time after which a BE is considered unavailable if no heartbeat is "
+    // A negative duration expires a newly created task immediately.
+    @ConfField(minValue = "0", mutable = true,
+            description = "The time after which a BE is considered unavailable if no heartbeat is "
             + "received.")
     public static int agent_task_be_unavailable_heartbeat_timeout_second = 300;
 

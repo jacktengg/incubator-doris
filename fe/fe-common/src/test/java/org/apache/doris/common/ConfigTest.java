@@ -202,6 +202,77 @@ public class ConfigTest {
         }
     }
 
+    @Test
+    public void testBackupRestoreBoundsBeforeStartupAndRuntimeAssignment() throws Exception {
+        Config config = new Config();
+        // One property is enough to reproduce each failure. No worker pool or RPC is needed.
+        for (String name : new String[] {
+                "backup_restore_batch_task_num_per_rpc",
+                "backup_upload_snapshot_batch_size",
+                "restore_download_snapshot_batch_size",
+                "cloud_restore_create_tablet_batch_size",
+                "restore_task_concurrency_per_be",
+                "backup_job_default_timeout_ms",
+                "agent_task_be_unavailable_heartbeat_timeout_second"}) {
+            Field field = Config.class.getField(name);
+            Object original = field.get(null);
+            Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> config.init(configFile(name + "=-1\n").toString()), name);
+            Assertions.assertEquals(original, field.get(null), name);
+            if (field.getAnnotation(ConfigBase.ConfField.class).mutable()) {
+                Assertions.assertThrows(ConfigException.class,
+                        () -> ConfigBase.setMutableConfig(name, "-1"), name);
+                Assertions.assertEquals(original, field.get(null), name);
+            }
+        }
+    }
+
+    @Test
+    public void testBackupSnapshotBatchMinimum() throws Exception {
+        Config config = new Config();
+        int originalBatch = Config.backup_upload_snapshot_batch_size;
+        try {
+            Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> config.init(configFile("backup_upload_snapshot_batch_size=0\n").toString()));
+            config.init(configFile("backup_upload_snapshot_batch_size=1\n").toString());
+            Assertions.assertEquals(1, Config.backup_upload_snapshot_batch_size);
+        } finally {
+            Config.backup_upload_snapshot_batch_size = originalBatch;
+        }
+    }
+
+    @Test
+    public void testBackupRestoreZeroBounds() throws Exception {
+        Config config = new Config();
+        // Check zero independently of -1. A zero batch or concurrency cannot make progress.
+        for (String name : new String[] {
+                "backup_restore_batch_task_num_per_rpc",
+                "backup_upload_snapshot_batch_size",
+                "restore_download_snapshot_batch_size",
+                "cloud_restore_create_tablet_batch_size",
+                "restore_task_concurrency_per_be"}) {
+            Field field = Config.class.getField(name);
+            Object original = field.get(null);
+            Assertions.assertThrows(IllegalArgumentException.class,
+                    () -> config.init(configFile(name + "=0\n").toString()), name);
+            Assertions.assertEquals(original, field.get(null), name);
+        }
+        // Zero remains a valid timeout for these settings.
+        // Parse one property at a time. Do not construct the resource that it controls.
+        for (String name : new String[] {
+                "backup_job_default_timeout_ms",
+                "agent_task_be_unavailable_heartbeat_timeout_second"}) {
+            Field field = Config.class.getField(name);
+            Object original = field.get(null);
+            try {
+                config.init(configFile(name + "=0\n").toString());
+                Assertions.assertEquals(0, ((Number) field.get(null)).longValue(), name);
+            } finally {
+                field.set(null, original);
+            }
+        }
+    }
+
     private static Path configFile(String contents) throws Exception {
         Path file = Files.createTempFile("fe_ut_options_", ".conf");
         file.toFile().deleteOnExit();

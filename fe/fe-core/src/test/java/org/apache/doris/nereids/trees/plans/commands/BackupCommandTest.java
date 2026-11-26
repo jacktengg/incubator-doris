@@ -121,4 +121,15 @@ public class BackupCommandTest extends TestWithFeService {
         BackupCommand command4 = new BackupCommand(labelNameInfo, repoName, tableRefInfos, properties2, isExclude);
         Assertions.assertThrows(AnalysisException.class, () -> command4.validate(connectContext));
     }
+
+    @Test
+    public void testTimeoutCannotWrapToTenMinutes() {
+        // The old multiplication maps this positive number of seconds to 600000 milliseconds.
+        BackupCommand command = (BackupCommand) new NereidsParser().parseSingle(
+                "BACKUP SNAPSHOT test_db.test_snapshot TO test_repo "
+                        + "PROPERTIES (\"timeout\" = \"2305843009213694552\")");
+        Assertions.assertThrows(org.apache.doris.common.AnalysisException.class,
+                () -> org.apache.doris.common.jmockit.Deencapsulation.invoke(command, "analyzeProperties"));
+    }
+
 }

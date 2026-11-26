@@ -27,6 +27,7 @@ import org.apache.doris.datasource.InternalCatalog;
 import org.apache.doris.info.TableRefInfo;
 import org.apache.doris.mysql.privilege.AccessControllerManager;
 import org.apache.doris.mysql.privilege.PrivPredicate;
+import org.apache.doris.nereids.parser.NereidsParser;
 import org.apache.doris.nereids.trees.plans.commands.info.LabelNameInfo;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.utframe.TestWithFeService;
@@ -137,4 +138,15 @@ public class RestoreCommandTest extends TestWithFeService {
         Assertions.assertEquals(86400L * 1000, command.getTimeoutMs());
         Assertions.assertEquals("2025-06-12-11-15-20", command.getBackupTimestamp());
     }
+
+    @Test
+    public void testTimeoutCannotWrapToTenMinutes() {
+        // The old multiplication maps this positive number of seconds to 600000 milliseconds.
+        RestoreCommand command = (RestoreCommand) new NereidsParser().parseSingle(
+                "RESTORE SNAPSHOT test_db.test_snapshot FROM test_repo "
+                        + "PROPERTIES (\"timeout\" = \"2305843009213694552\", \"backup_timestamp\" = \"2025-06-12-11-15-20\")");
+        Assertions.assertThrows(org.apache.doris.common.AnalysisException.class,
+                () -> org.apache.doris.common.jmockit.Deencapsulation.invoke(command, "analyzeProperties"));
+    }
+
 }
